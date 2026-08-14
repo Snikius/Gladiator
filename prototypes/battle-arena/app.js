@@ -451,8 +451,8 @@ const drawArena = (snapshot, input) => {
     fatigue: 0,
   }));
   const activeActorId = snapshot?.lastAction?.actorId;
-  drawPixelFighter(context, 112, 165, 0, fighters[0], activeActorId === fighters[0].id);
-  drawPixelFighter(context, 208, 165, 1, fighters[1], activeActorId === fighters[1].id);
+  drawPixelFighter(context, 126, 165, 0, fighters[0], activeActorId === fighters[0].id);
+  drawPixelFighter(context, 194, 165, 1, fighters[1], activeActorId === fighters[1].id);
 
   const drawHud = (fighter, x, color) => {
     const ratio = Math.max(0, Math.min(1, fighter.health / fighter.maxHealth));
@@ -468,7 +468,7 @@ const drawArena = (snapshot, input) => {
   drawHud(fighters[1], 218, "#66a5ad");
 
   if (snapshot?.lastAction?.outcome === "hit" && snapshot.label !== "Итог боя") {
-    const targetX = snapshot.lastAction.targetId === fighters[0].id ? 103 : 219;
+    const targetX = snapshot.lastAction.targetId === fighters[0].id ? 117 : 205;
     context.fillStyle = "#f4d77f";
     context.fillRect(targetX, 132, 3, 3);
     context.fillRect(targetX - 4, 128, 2, 2);
@@ -491,7 +491,7 @@ const renderDomArena = (snapshot, input) => {
 
   fighters.forEach((fighter, index) => {
     const sprite = elements.pixelArena.querySelector(`[data-dom-fighter="${index}"]`);
-    sprite.classList.remove("attacking", "hit", "dodging", "blocking");
+    sprite.classList.remove("attacking", "missing", "achilles-leap", "hit", "dodging", "blocking");
     sprite.classList.toggle("active", snapshot?.lastAction?.actorId === fighter.id);
     sprite.classList.toggle("tired", fighter.fatigue >= 70 && fighter.health > 0);
     sprite.classList.toggle("defeated", fighter.health <= 0);
@@ -538,6 +538,8 @@ const renderDomArena = (snapshot, input) => {
     const actorSprite = elements.pixelArena.querySelector(`[data-dom-fighter="${actorIndex}"]`);
     const targetSprite = elements.pixelArena.querySelector(`[data-dom-fighter="${targetIndex}"]`);
     actorSprite?.classList.add("attacking");
+    if (action.attackType === "achilles-leap") actorSprite?.classList.add("achilles-leap");
+    if (action.outcome === "miss") actorSprite?.classList.add("missing");
     if (action.outcome === "hit") targetSprite?.classList.add("hit");
     if (action.outcome === "dodge") targetSprite?.classList.add("dodging");
     if (action.outcome === "block") targetSprite?.classList.add("blocking");
@@ -587,9 +589,15 @@ const renderArenaEvent = (snapshot, fighters) => {
       dodge: `ХОД ${snapshot.step} · УВОРОТ`,
       block: `ХОД ${snapshot.step} · БЛОК`,
     };
-    title = titles[action.outcome] || title;
-    detail = messages[action.outcome] || snapshot.label;
-    stateClass = action.outcome;
+    if (action.attackType === "achilles-leap") {
+      title = `ХОД ${snapshot.step} · ПРЫЖОК АХИЛЛА −${action.damage} HP`;
+      detail = `${actorName} наносит ${targetName} неблокируемый удар сверху с силой ×${action.strengthMultiplier}`;
+      stateClass = "achilles-leap";
+    } else {
+      title = titles[action.outcome] || title;
+      detail = messages[action.outcome] || snapshot.label;
+      stateClass = action.outcome;
+    }
   }
 
   elements.arenaEvent.className = "arena-event";
@@ -608,7 +616,9 @@ const renderSnapshot = (index) => {
   elements.arenaStep.textContent = `${snapshot.step} / ${currentResult.input.maxSteps}`;
   elements.battleCallout.textContent = snapshot.label;
   elements.battleCallout.className = "battle-callout";
-  if (snapshot.label !== "Итог боя" && snapshot.lastAction?.outcome) {
+  if (snapshot.label !== "Итог боя" && snapshot.lastAction?.attackType === "achilles-leap") {
+    elements.battleCallout.classList.add("achilles-leap");
+  } else if (snapshot.label !== "Итог боя" && snapshot.lastAction?.outcome) {
     elements.battleCallout.classList.add(snapshot.lastAction.outcome);
   }
   if (snapshot.outcome?.type === "victory") elements.battleCallout.classList.add("victory");

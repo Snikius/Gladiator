@@ -776,14 +776,14 @@ a.button {
 }
 
 .dom-fighter-one {
-  left: 31%;
+  left: 36%;
   animation: fighter-idle-left 1600ms steps(4, end) infinite;
 }
 
 .dom-fighter-two {
   --team: #4f8b99;
   --team-light: #76b6b6;
-  right: 31%;
+  right: 36%;
   transform: scaleX(-1);
   animation: fighter-idle-right 1600ms steps(4, end) infinite;
 }
@@ -1064,11 +1064,64 @@ a.button {
 }
 
 .dom-fighter-one.attacking {
-  animation: attack-from-left 900ms steps(5, end);
+  animation: attack-from-left 980ms steps(6, end);
 }
 
 .dom-fighter-two.attacking {
-  animation: attack-from-right 900ms steps(5, end);
+  animation: attack-from-right 980ms steps(6, end);
+}
+
+.dom-fighter.attacking .fighter-arm {
+  animation: attack-arm 980ms steps(5, end);
+}
+
+.dom-fighter.attacking .fighter-weapon,
+.dom-fighter.attacking .fighter-weapon-guard {
+  animation: weapon-thrust 980ms steps(6, end);
+}
+
+.dom-fighter.attacking .leg-left {
+  animation: attack-front-step 980ms steps(5, end);
+}
+
+.dom-fighter.attacking .leg-right {
+  animation: attack-back-leg 980ms steps(5, end);
+}
+
+.dom-fighter-one.attacking.achilles-leap {
+  animation: achilles-leap-left 1100ms steps(8, end);
+}
+
+.dom-fighter-two.attacking.achilles-leap {
+  animation: achilles-leap-right 1100ms steps(8, end);
+}
+
+.dom-fighter.attacking.achilles-leap .fighter-arm {
+  animation: achilles-overhead-arm 1100ms steps(7, end);
+}
+
+.dom-fighter.attacking.achilles-leap .fighter-weapon,
+.dom-fighter.attacking.achilles-leap .fighter-weapon-guard {
+  animation: achilles-overhead-weapon 1100ms steps(7, end);
+}
+
+.dom-fighter.attacking.achilles-leap .leg-left {
+  animation: achilles-front-leg 1100ms steps(7, end);
+}
+
+.dom-fighter.attacking.achilles-leap .leg-right {
+  animation: achilles-back-leg 1100ms steps(7, end);
+}
+
+.dom-fighter.attacking.missing .fighter-weapon,
+.dom-fighter.attacking.missing .fighter-weapon-guard {
+  animation: weapon-miss 980ms steps(6, end);
+}
+
+.dom-fighter.attacking.missing .fighter-head,
+.dom-fighter.attacking.missing .fighter-helmet,
+.dom-fighter.attacking.missing .fighter-plume {
+  animation: miss-head 980ms steps(5, end);
 }
 
 .dom-fighter-one.hit {
@@ -1088,6 +1141,10 @@ a.button {
   animation: wound-cut 750ms steps(4, end);
 }
 
+.dom-fighter.hit .fighter-leg {
+  animation: hit-leg-stagger 700ms steps(4, end);
+}
+
 .dom-fighter-one.dodging {
   animation: dodge-left 900ms steps(4, end);
 }
@@ -1096,8 +1153,29 @@ a.button {
   animation: dodge-right 900ms steps(4, end);
 }
 
+.dom-fighter.dodging .leg-left {
+  animation: dodge-front-leg 900ms steps(4, end);
+}
+
+.dom-fighter.dodging .leg-right {
+  animation: dodge-back-leg 900ms steps(4, end);
+}
+
 .dom-fighter.blocking .fighter-shield {
   animation: shield-block 850ms steps(4, end);
+}
+
+.dom-fighter.blocking .fighter-body,
+.dom-fighter.blocking .fighter-armor {
+  animation: body-brace 850ms steps(4, end);
+}
+
+.dom-fighter.blocking .leg-left {
+  animation: block-front-leg 850ms steps(4, end);
+}
+
+.dom-fighter.blocking .leg-right {
+  animation: block-back-leg 850ms steps(4, end);
 }
 
 .dom-fighter.tired {
@@ -1142,11 +1220,11 @@ a.button {
 }
 
 .pixel-impact.target-one {
-  left: 31.5%;
+  left: 36.5%;
 }
 
 .pixel-impact.target-two {
-  right: 31.5%;
+  right: 36.5%;
 }
 
 .pixel-impact i {
@@ -1276,6 +1354,16 @@ a.button {
   border-color: var(--sand-light);
 }
 
+.arena-event.achilles-leap {
+  background: rgba(53, 28, 14, 0.96);
+  border-color: #f2d187;
+  box-shadow: 0 0 max(5px, 0.8vw) rgba(242, 209, 135, 0.7), max(2px, 0.3vw) max(2px, 0.3vw) 0 #17100d;
+}
+
+.arena-event.achilles-leap strong {
+  color: #ffe4a3;
+}
+
 @keyframes fighter-idle-left {
   0%, 100% { transform: translateY(var(--stance-y)) rotate(var(--stance-angle)); }
   50% { transform: translateY(calc(var(--stance-y) - 2%)) rotate(var(--stance-angle)); }
@@ -1308,12 +1396,96 @@ a.button {
 
 @keyframes attack-from-left {
   0%, 100% { transform: translateX(0); }
-  35%, 65% { transform: translateX(52%); }
+  18% { transform: translateX(-8%) translateY(2%); }
+  42%, 68% { transform: translateX(72%) translateY(-2%); }
+  82% { transform: translateX(18%); }
 }
 
 @keyframes attack-from-right {
   0%, 100% { transform: translateX(0) scaleX(-1); }
-  35%, 65% { transform: translateX(-52%) scaleX(-1); }
+  18% { transform: translateX(8%) translateY(2%) scaleX(-1); }
+  42%, 68% { transform: translateX(-72%) translateY(-2%) scaleX(-1); }
+  82% { transform: translateX(-18%) scaleX(-1); }
+}
+
+@keyframes attack-arm {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  18% { transform: translateX(-10%) rotate(-8deg); }
+  42%, 68% { transform: translateX(24%) rotate(5deg); }
+}
+
+@keyframes weapon-thrust {
+  0%, 100% { transform: rotate(-7deg) translateX(0); }
+  18% { transform: rotate(-15deg) translateX(-8%); }
+  42%, 68% { transform: rotate(2deg) translateX(22%); }
+  82% { transform: rotate(-3deg) translateX(6%); }
+}
+
+@keyframes weapon-miss {
+  0%, 100% { transform: rotate(-7deg) translateX(0); }
+  18% { transform: rotate(-17deg) translateX(-8%); }
+  42% { transform: rotate(3deg) translateX(25%); }
+  68% { transform: rotate(17deg) translateX(38%); }
+  84% { transform: rotate(5deg) translateX(12%); }
+}
+
+@keyframes attack-front-step {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  24% { transform: translate(-20%, -6%) rotate(-5deg); }
+  48%, 70% { transform: translate(38%, -3%) rotate(7deg); }
+}
+
+@keyframes attack-back-leg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  24% { transform: translate(-12%, 0) rotate(-5deg); }
+  48%, 70% { transform: translate(13%, 3%) rotate(-8deg); }
+}
+
+@keyframes achilles-leap-left {
+  0%, 100% { transform: translate(0, 0); }
+  16% { transform: translate(-10%, 4%) rotate(-4deg); }
+  38% { transform: translate(46%, -58%) rotate(-12deg); }
+  58% { transform: translate(92%, -40%) rotate(10deg); }
+  72% { transform: translate(86%, 2%) rotate(7deg); }
+  86% { transform: translate(24%, 0); }
+}
+
+@keyframes achilles-leap-right {
+  0%, 100% { transform: translate(0, 0) scaleX(-1); }
+  16% { transform: translate(10%, 4%) scaleX(-1) rotate(-4deg); }
+  38% { transform: translate(-46%, -58%) scaleX(-1) rotate(-12deg); }
+  58% { transform: translate(-92%, -40%) scaleX(-1) rotate(10deg); }
+  72% { transform: translate(-86%, 2%) scaleX(-1) rotate(7deg); }
+  86% { transform: translate(-24%, 0) scaleX(-1); }
+}
+
+@keyframes achilles-overhead-arm {
+  0%, 100% { transform: rotate(0deg); }
+  18%, 40% { transform: translate(-18%, -28%) rotate(-76deg); }
+  58%, 72% { transform: translate(25%, 8%) rotate(52deg); }
+}
+
+@keyframes achilles-overhead-weapon {
+  0%, 100% { transform: rotate(-7deg); }
+  18%, 40% { transform: translate(-22%, -40%) rotate(-82deg); }
+  58%, 72% { transform: translate(32%, 32%) rotate(54deg); }
+}
+
+@keyframes achilles-front-leg {
+  0%, 100% { transform: rotate(0deg); }
+  24%, 54% { transform: translate(24%, -12%) rotate(48deg); }
+  72% { transform: translate(36%, 4%) rotate(8deg); }
+}
+
+@keyframes achilles-back-leg {
+  0%, 100% { transform: rotate(0deg); }
+  24%, 54% { transform: translate(-20%, 10%) rotate(-42deg); }
+  72% { transform: translate(8%, 3%) rotate(-10deg); }
+}
+
+@keyframes miss-head {
+  0%, 48%, 100% { transform: rotate(0deg); }
+  68%, 82% { transform: rotate(8deg) translateY(5%); }
 }
 
 @keyframes hit-left {
@@ -1338,6 +1510,12 @@ a.button {
   25%, 70% { opacity: 1; transform: rotate(24deg) scaleY(1); }
 }
 
+@keyframes hit-leg-stagger {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  30% { transform: translateX(-22%) rotate(-7deg); }
+  58% { transform: translateX(12%) rotate(5deg); }
+}
+
 @keyframes dodge-left {
   0%, 100% { transform: translateX(0); }
   30%, 60% { transform: translateX(-38%) translateY(-7%); }
@@ -1348,9 +1526,34 @@ a.button {
   30%, 60% { transform: translateX(38%) translateY(-7%) scaleX(-1); }
 }
 
+@keyframes dodge-front-leg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30%, 60% { transform: translate(-28%, -7%) rotate(-11deg); }
+}
+
+@keyframes dodge-back-leg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30%, 60% { transform: translate(25%, 4%) rotate(10deg); }
+}
+
 @keyframes shield-block {
   0%, 100% { transform: translateX(0); filter: brightness(1); }
   30%, 60% { transform: translateX(35%); filter: brightness(1.7); }
+}
+
+@keyframes body-brace {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  30%, 60% { transform: translateX(-7%) rotate(-2deg); filter: brightness(1.18); }
+}
+
+@keyframes block-front-leg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30%, 60% { transform: translate(24%, 3%) rotate(9deg); }
+}
+
+@keyframes block-back-leg {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30%, 60% { transform: translate(-24%, 2%) rotate(-9deg); }
 }
 
 @keyframes event-reveal {
@@ -1414,6 +1617,12 @@ a.button {
   border-color: #a77d37;
 }
 
+.battle-callout.achilles-leap {
+  color: #ffe4a3;
+  background: #351c0e;
+  border-color: #d79b42;
+}
+
 .battle-callout.draw {
   color: var(--sand-light);
 }
@@ -1435,7 +1644,15 @@ a.button {
   .dom-fighter,
   .fighter-plume,
   .fighter-cape,
+  .fighter-head,
+  .fighter-helmet,
+  .fighter-body,
+  .fighter-armor,
+  .fighter-arm,
+  .fighter-leg,
   .fighter-shield,
+  .fighter-weapon,
+  .fighter-weapon-guard,
   .pixel-impact,
   .arena-event {
     animation: none !important;

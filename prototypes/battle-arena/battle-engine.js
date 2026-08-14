@@ -119,6 +119,11 @@ const PERK_DEFINITIONS = [
     name: "Любимец неудач",
     description: "После собственного промаха получает +4 поддержки: публика оценила старание.",
   },
+  {
+    id: "achilles-leap",
+    name: "Прыжок Ахилла",
+    description: "С шансом 10% заменяет атаку ударом сверху: +50% силы, нельзя заблокировать или увернуться.",
+  },
 ];
 
 const TEMPORARY_PERK_DEFINITIONS = [
@@ -335,6 +340,26 @@ const PERK_IMPLEMENTATIONS = {
       api.activate("Публика поддержала красивый, но неудачный замах");
       api.enqueue({ type: "support", fighterId: api.ownerId, value: 4, reason: "perk:lovable-loser" });
       return data;
+    },
+  },
+  "achilles-leap": {
+    beforeAction(data, api) {
+      if (data.actorId !== api.ownerId || data.action !== "attack") return data;
+      const activationChance = 0.1;
+      const activationRoll = round(api.random(), 6);
+      if (activationRoll >= activationChance) {
+        return { ...data, achillesLeapChance: activationChance, achillesLeapRoll: activationRoll };
+      }
+      api.activate("Прыжок Ахилла: неблокируемый удар сверху с бонусом +50% к силе");
+      return {
+        ...data,
+        attackType: "achilles-leap",
+        strengthMultiplier: 1.5,
+        unblockable: true,
+        undodgeable: true,
+        achillesLeapChance: activationChance,
+        achillesLeapRoll: activationRoll,
+      };
     },
   },
 };
@@ -693,6 +718,34 @@ class BattleEngine {
   resolveAction(data) {
     const actor = this.getFighter(data.actorId);
     const target = this.getFighter(data.targetId);
+    const fatigueEfficiency = clamp(1 - actor.fatigue / 160, 0.35, 1);
+    const strengthMultiplier = data.strengthMultiplier || 1;
+    const effectiveStrength = actor.strength * fatigueEfficiency * strengthMultiplier;
+
+    if (data.attackType === "achilles-leap") {
+      const damage = Math.max(
+        1,
+        Math.round(
+          (effectiveStrength + actor.equipment.weaponPower) * (0.45 + this.random() * 0.35)
+            - target.equipment.armor * 0.6,
+        ),
+      );
+      const traumaChance = clamp(0.03 + (damage / target.maxHealth) * 0.42, 0.03, 0.45);
+      return {
+        ...data,
+        outcome: "hit",
+        weights: { miss: 0, dodge: 0, block: 0, hit: 1 },
+        actorFatigueBefore: actor.fatigue,
+        targetFatigueBefore: target.fatigue,
+        effectiveStrength: round(effectiveStrength),
+        damage,
+        traumaChance: round(traumaChance, 4),
+        traumaRoll: round(this.random(), 6),
+        outcomeRoll: null,
+        totalOutcomeWeight: 1,
+      };
+    }
+
     const missWeight = 9 + actor.fatigue * 0.32;
     const dodgeWeight = clamp(9 + target.initiative * 0.1 - target.fatigue * 0.08, 4, 32);
     const blockWeight = clamp(10 + target.equipment.armor * 0.85 - target.fatigue * 0.09, 4, 34);
@@ -705,8 +758,6 @@ class BattleEngine {
     ];
     const selectedOutcome = weightedPick(weights, this.random);
     const outcome = selectedOutcome.outcome;
-    const fatigueEfficiency = clamp(1 - actor.fatigue / 160, 0.35, 1);
-    const effectiveStrength = actor.strength * fatigueEfficiency;
     const damage = outcome === "hit"
       ? Math.max(
           1,
@@ -1137,6 +1188,9 @@ class BattleEngine {
   describeAction(action) {
     const actor = this.getFighter(action.actorId).name;
     const target = this.getFighter(action.targetId).name;
+    if (action.attackType === "achilles-leap") {
+      return `${actor} выполняет Прыжок Ахилла и ранит ${target} на ${action.damage}`;
+    }
     const labels = {
       miss: `${actor} промахивается`,
       dodge: `${target} уклоняется от атаки ${actor}`,

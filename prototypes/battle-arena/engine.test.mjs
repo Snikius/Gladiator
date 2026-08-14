@@ -12,7 +12,7 @@ const {
 } = globalThis.GladiatorBattle;
 
 assert.deepEqual(ARENA_TYPES.map((arena) => arena.id), ["normal", "sand"]);
-assert.equal(PERK_DEFINITIONS.length, 9, "В прототипе должно быть девять постоянных перков");
+assert.equal(PERK_DEFINITIONS.length, 10, "В прототипе должно быть десять постоянных перков");
 assert.equal(TEMPORARY_PERK_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
 assert.equal(INJURY_DEFINITIONS.length, 5, "Нужно пять стартовых травм");
 
@@ -107,6 +107,33 @@ assert.equal(
   guaranteedTurnEvent?.data.runtimeAfter.guaranteedNextTurn,
   false,
   "Гарантированный ход должен расходоваться после перехвата выбора",
+);
+
+let achillesResult;
+let achillesAction;
+for (let seedIndex = 0; seedIndex < 100 && !achillesAction; seedIndex += 1) {
+  const achillesInput = createDefaultBattleInput();
+  achillesInput.seed = `achilles-${seedIndex}`;
+  achillesInput.maxSteps = 40;
+  achillesInput.fighters[0].base.health = 300;
+  achillesInput.fighters[0].perks = ["achilles-leap"];
+  achillesInput.fighters[1].base.health = 300;
+  achillesInput.fighters[1].perks = [];
+  achillesResult = new BattleEngine(achillesInput).simulate();
+  achillesAction = achillesResult.snapshots
+    .map((snapshot) => snapshot.lastAction)
+    .find((action) => action?.attackType === "achilles-leap");
+}
+assert.ok(achillesAction, "Прыжок Ахилла должен активироваться при броске ниже 10%");
+assert.equal(achillesAction.outcome, "hit", "Прыжок Ахилла всегда должен попадать");
+assert.equal(achillesAction.strengthMultiplier, 1.5, "Прыжок Ахилла должен давать +50% силы");
+assert.equal(achillesAction.unblockable, true, "Прыжок Ахилла нельзя заблокировать");
+assert.equal(achillesAction.undodgeable, true, "От Прыжка Ахилла нельзя увернуться");
+assert.ok(achillesAction.achillesLeapRoll < 0.1, "Активация должна соответствовать шансу 10%");
+assert.deepEqual(
+  achillesAction.weights,
+  { miss: 0, dodge: 0, block: 0, hit: 1 },
+  "Особый удар не должен попадать в обычный выбор промаха, блока или уворота",
 );
 
 const slotsInput = createDefaultBattleInput();
