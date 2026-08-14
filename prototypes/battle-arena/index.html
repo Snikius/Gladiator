@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Gladiator — прототип боевой арены</title>
+    <link rel="stylesheet" href="./styles.css?v=11" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">GLADIATOR / DEBUG BUILD</p>
+        <h1>Прототип боевой арены</h1>
+      </div>
+      <div class="build-badge">RULESET 0.4</div>
+    </header>
+
+    <main class="layout">
+      <aside class="setup-panel panel">
+        <form id="setup-form">
+          <div class="section-heading">
+            <span>01</span>
+            <div>
+              <h2>Настройка боя</h2>
+              <p>Все значения можно менять до запуска.</p>
+            </div>
+          </div>
+
+          <div class="form-grid compact-grid">
+            <label>
+              <span>Seed</span>
+              <input id="seed" name="seed" type="text" value="arena-001" />
+            </label>
+            <label>
+              <span>Максимум шагов</span>
+              <input id="max-steps" name="maxSteps" type="number" min="1" max="500" value="80" />
+            </label>
+          </div>
+
+          <fieldset>
+            <legend>Боевая арена</legend>
+            <label>
+              <span>Тип арены</span>
+              <select id="arena-type" name="arenaType"></select>
+            </label>
+            <div class="form-grid compact-grid">
+              <label>
+                <span>Множитель I</span>
+                <input id="arena-multiplier-1" type="number" min="0.1" max="3" step="0.1" value="1" />
+              </label>
+              <label>
+                <span>Множитель II</span>
+                <input id="arena-multiplier-2" type="number" min="0.1" max="3" step="0.1" value="1" />
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="fighters-setup">
+            <fieldset class="fighter-setup fighter-one" data-fighter-form="0">
+              <legend>Боец I</legend>
+              <label>
+                <span>Имя</span>
+                <input data-field="name" type="text" value="Маркус" />
+              </label>
+              <div class="form-grid stats-input-grid">
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="125" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="48" /></label>
+              </div>
+              <p class="sublegend">Экипировка</p>
+              <div class="form-grid stats-input-grid">
+                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="14" /></label>
+                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="12" /></label>
+                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="11" /></label>
+              </div>
+              <div class="perk-list" data-perks="0"></div>
+            </fieldset>
+
+            <fieldset class="fighter-setup fighter-two" data-fighter-form="1">
+              <legend>Боец II</legend>
+              <label>
+                <span>Имя</span>
+                <input data-field="name" type="text" value="Тит" />
+              </label>
+              <div class="form-grid stats-input-grid">
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="112" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="68" /></label>
+              </div>
+              <p class="sublegend">Экипировка</p>
+              <div class="form-grid stats-input-grid">
+                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="11" /></label>
+                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="8" /></label>
+                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="7" /></label>
+              </div>
+              <div class="perk-list" data-perks="1"></div>
+            </fieldset>
+          </div>
+
+          <div class="form-actions">
+            <button class="button primary" type="submit">▶ Начать симуляцию</button>
+            <button class="button secondary" id="restore-defaults" type="button">Сбросить</button>
+          </div>
+        </form>
+      </aside>
+
+      <section class="debug-workspace">
+        <section class="arena-panel panel">
+          <div class="arena-meta">
+            <div>
+              <span class="meta-label">АРЕНА</span>
+              <strong id="arena-name">Песчаная арена</strong>
+            </div>
+            <div>
+              <span class="meta-label">SEED</span>
+              <strong id="arena-seed">arena-001</strong>
+            </div>
+            <div>
+              <span class="meta-label">ШАГ</span>
+              <strong id="arena-step">0 / 80</strong>
+            </div>
+          </div>
+
+          <div class="canvas-frame">
+            <canvas id="arena-canvas" width="320" height="180" aria-label="Пиксельная боевая арена"></canvas>
+            <div id="pixel-arena" class="pixel-arena normal" aria-hidden="true">
+              <div class="pixel-sky"></div>
+              <div class="pixel-stands">
+                <i class="banner banner-left"></i>
+                <i class="banner banner-right"></i>
+                <div class="crowd-pixels"></div>
+              </div>
+              <div class="pixel-wall">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <div class="pixel-ground"></div>
+              <div class="pixel-health pixel-health-one">
+                <i></i><span>МАРКУС</span>
+                <dl class="arena-fighter-stats" data-arena-stats="0"></dl>
+                <div class="arena-active-effects" data-arena-effects="0"></div>
+              </div>
+              <div class="pixel-health pixel-health-two">
+                <i></i><span>ТИТ</span>
+                <dl class="arena-fighter-stats" data-arena-stats="1"></dl>
+                <div class="arena-active-effects" data-arena-effects="1"></div>
+              </div>
+              <div class="dom-fighter dom-fighter-one" data-dom-fighter="0">
+                <i class="fighter-shadow"></i>
+                <i class="fighter-cape"></i>
+                <i class="fighter-head"></i>
+                <i class="fighter-helmet"></i>
+                <i class="fighter-plume"></i>
+                <i class="fighter-body"></i>
+                <i class="fighter-armor"></i>
+                <i class="fighter-arm"></i>
+                <i class="fighter-leg leg-left"></i>
+                <i class="fighter-leg leg-right"></i>
+                <i class="fighter-shield"></i>
+                <i class="fighter-weapon"></i>
+                <i class="fighter-weapon-guard"></i>
+              </div>
+              <div class="dom-fighter dom-fighter-two" data-dom-fighter="1">
+                <i class="fighter-shadow"></i>
+                <i class="fighter-cape"></i>
+                <i class="fighter-head"></i>
+                <i class="fighter-helmet"></i>
+                <i class="fighter-plume"></i>
+                <i class="fighter-body"></i>
+                <i class="fighter-armor"></i>
+                <i class="fighter-arm"></i>
+                <i class="fighter-leg leg-left"></i>
+                <i class="fighter-leg leg-right"></i>
+                <i class="fighter-shield"></i>
+                <i class="fighter-weapon"></i>
+                <i class="fighter-weapon-guard"></i>
+              </div>
+              <div class="pixel-impact" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <div id="arena-event" class="arena-event idle">
+                <strong>ОЖИДАНИЕ БОЯ</strong>
+                <span>Настройте бойцов и запустите симуляцию</span>
+              </div>
+            </div>
+            <div class="canvas-noise"></div>
+          </div>
+
+          <div id="battle-callout" class="battle-callout idle">
+            Настройте бойцов и запустите симуляцию
+          </div>
+
+          <div class="timeline" id="timeline" hidden>
+            <button class="icon-button" id="previous-step" type="button" title="Предыдущий шаг">◀</button>
+            <button class="icon-button play-button" id="play-pause" type="button" title="Пауза или продолжение">Ⅱ</button>
+            <input id="step-slider" type="range" min="0" max="0" value="0" />
+            <button class="icon-button" id="next-step" type="button" title="Следующий шаг">▶</button>
+            <span id="snapshot-label">Начальное состояние</span>
+          </div>
+        </section>
+
+        <section class="numbers-panel panel" hidden aria-hidden="true">
+          <div class="section-heading horizontal-heading">
+            <span>02</span>
+            <div>
+              <h2>Динамические показатели</h2>
+              <p>Точные числа выбранного шага.</p>
+            </div>
+          </div>
+          <div id="fighter-numbers" class="fighter-numbers"></div>
+        </section>
+
+        <section id="result-panel" class="result-panel panel" hidden>
+          <div class="result-header">
+            <div>
+              <p class="eyebrow">РЕЗУЛЬТАТ</p>
+              <h2 id="result-title">—</h2>
+              <p id="result-description"></p>
+            </div>
+            <button class="button secondary" id="download-battle" type="button">↓ Сохранить JSON</button>
+          </div>
+          <div id="fighter-outcomes" class="fighter-outcomes"></div>
+        </section>
+
+        <section id="statistics-panel" class="statistics-panel panel" hidden>
+          <div class="section-heading horizontal-heading">
+            <span>03</span>
+            <div>
+              <h2>Статистика боя</h2>
+              <p>Агрегированные технические показатели.</p>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table id="statistics-table"></table>
+          </div>
+        </section>
+
+        <section id="log-panel" class="log-panel panel" hidden>
+          <div class="log-toolbar">
+            <div class="section-heading horizontal-heading">
+              <span>04</span>
+              <div>
+                <h2>Технический лог</h2>
+                <p id="log-summary">Все фазы, хуки, броски и изменения.</p>
+              </div>
+            </div>
+            <div class="log-actions">
+              <input id="log-filter" type="search" placeholder="Фильтр лога" />
+              <label class="toggle"><input id="key-events-only" type="checkbox" /> Только события боя</label>
+            </div>
+          </div>
+          <div id="battle-log" class="battle-log"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./battle-engine.js?v=11"></script>
+    <script src="./app.js?v=11"></script>
+  </body>
+</html>

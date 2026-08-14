@@ -48,7 +48,9 @@ interface FighterInput {
     charisma: number;
   };
   equipment: EquipmentRef[];
-  perks: PerkRef[];
+  perks: readonly PerkRef[];
+  temporaryPerks: readonly PerkRef[];
+  injuries: readonly PerkRef[];
 }
 
 interface ArenaInput {
@@ -62,6 +64,13 @@ interface PerkRef {
   params?: Record<string, unknown>;
 }
 
+type BattleExtensionKind =
+  | "perk"
+  | "temporary-perk"
+  | "injury"
+  | "arena-perk"
+  | "equipment-perk";
+
 interface EquipmentRef {
   id: string;
   params?: Record<string, unknown>;
@@ -71,6 +80,18 @@ interface EquipmentRef {
 Экипировка при инициализации преобразуется в модификаторы и, при необходимости,
 в перки. Множитель арены участвует в расчёте динамической поддержки соответствующего
 бойца, но сам поддержкой не является.
+
+`perks` содержит не более трёх уникальных постоянных перков бойца. `temporaryPerks`
+и `injuries` используют тот же интерфейс перехватчиков, но передаются отдельными
+списками для сохранения семантики входных данных. Эти списки не ограничены по
+размеру; одинаковые элементы допускаются и применяются последовательно, поэтому
+простые модификаторы складываются.
+
+При нормализации каждому элементу назначается детерминированный `instanceId`,
+составленный из вида расширения, владельца, позиции во входном списке и `id`
+определения. Два одинаковых эффекта остаются двумя независимыми экземплярами.
+Прототип `0.3` использует строковый `id` как сокращённую форму `{ id }`; публичный
+TypeScript-контракт сохраняет объектную форму для будущих параметров экземпляра.
 
 ## 3. Состояние боя
 
@@ -95,29 +116,46 @@ interface BattleState {
 interface ArenaBattleState {
   type: string;
   supportMultipliers: [number, number];
-  activePerks: ActivePerkState[];
+  activeExtensions: ActiveExtensionState[];
 }
 
 interface FighterBattleState {
   id: string;
+  battleBase: {
+    strength: number;
+    health: number;
+    charisma: number;
+  };
   health: number;
+  maxHealth: number;
   strength: number;
   support: number;
   initiative: number;
   fatigue: number;
-  activePerks: ActivePerkState[];
+  activeExtensions: ActiveExtensionState[];
+  traumas: TraumaState[];
 }
 
-interface ActivePerkState {
-  id: string;
+interface ActiveExtensionState {
+  instanceId: string;
+  definitionId: string;
+  kind: BattleExtensionKind;
   params?: Record<string, unknown>;
+  runtime: PerkRuntimeState;
   stacks?: number;
   remainingActions?: number;
 }
+
+interface TraumaState {
+  type: string;
+  source: "starting-injury" | "battle" | "outcome";
+  step: number;
+}
 ```
 
-Начальные динамические характеристики рассчитываются из базовых характеристик,
-экипировки, перков и параметров арены. `seed` и единый `RandomSource` обязательны:
+`battleBase` — модифицированная копия базовых характеристик только для текущего боя.
+Она не изменяет постоянные данные гладиатора. Начальные динамические характеристики
+рассчитываются из `battleBase`, экипировки, расширений и параметров арены. `seed` и единый `RandomSource` обязательны:
 одинаковые входные данные и версия правил должны давать одинаковый результат.
 
 ## 4. Цикл движка
@@ -125,7 +163,12 @@ interface ActivePerkState {
 Движок выполняет фиксированные фазы:
 
 ```text
-Инициализация динамического состояния
+Нормализация входа и создание экземпляров расширений
+→ инициализация динамического состояния
+→ временные эффекты
+→ стартовые травмы
+→ постоянные перки
+→ финальный пересчёт начальных показателей
 → начало боя
 → выбор действующего бойца
 → выбор действия
@@ -144,6 +187,10 @@ interface ActivePerkState {
 Нулевое здоровье означает стандартное поражение, а не смерть. После определения
 результата боя отдельный `OutcomeResolver` рассчитывает выживание и итоговые травмы.
 
+Временные эффекты и стартовые травмы применяются до первого шага и не считаются
+действиями бойца. Модуль боя не управляет их межбоевым жизненным циклом: он только
+использует переданные экземпляры в текущей симуляции.
+
 Один шаг соответствует одному полностью обработанному действию бойца. Чтобы избежать
 бесконечного боя, движок завершает симуляцию по `maxSteps`. Если на этом шаге
 победитель отсутствует, результатом становится ничья. Значение лимита по умолчанию
@@ -161,54 +208,61 @@ interface BattlePhase<Input, Output> {
 }
 ```
 
-### Интерфейс перка
+### Общий интерфейс расширения
 
-`BattlePerk` содержит отдельный необязательный метод для каждой точки встраивания.
-Наличие метода означает, что перк подписан на этот шаг:
+Постоянный перк, временный эффект и травма используют один контракт `BattlePerk`.
+Он содержит отдельный необязательный метод для каждой точки встраивания. Наличие
+метода означает, что экземпляр подписан на этот шаг:
 
 ```ts
-interface BattlePerk {
+interface PerkRuntimeState {
+  activations: number;
+  used?: boolean;
+  [key: string]: unknown;
+}
+
+interface BattlePerk<Runtime extends PerkRuntimeState = PerkRuntimeState> {
   readonly id: string;
   readonly priority: number;
 
-  beforeInitialize?(data: InitializeData, api: PerkBattleApi): InitializeData;
-  afterInitialize?(data: InitializedData, api: PerkBattleApi): InitializedData;
+  beforeInitialize?(data: InitializeData, api: PerkBattleApi, runtime: Runtime): InitializeData;
+  afterInitialize?(data: InitializedData, api: PerkBattleApi, runtime: Runtime): InitializedData;
 
-  beforeBattleStart?(data: BattleStartData, api: PerkBattleApi): BattleStartData;
-  afterBattleStart?(data: BattleStartedData, api: PerkBattleApi): BattleStartedData;
+  beforeBattleStart?(data: BattleStartData, api: PerkBattleApi, runtime: Runtime): BattleStartData;
+  afterBattleStart?(data: BattleStartedData, api: PerkBattleApi, runtime: Runtime): BattleStartedData;
 
-  beforeSelectActor?(data: SelectActorData, api: PerkBattleApi): SelectActorData;
-  afterSelectActor?(data: ActorSelectedData, api: PerkBattleApi): ActorSelectedData;
+  beforeSelectActor?(data: SelectActorData, api: PerkBattleApi, runtime: Runtime): SelectActorData;
+  afterSelectActor?(data: ActorSelectedData, api: PerkBattleApi, runtime: Runtime): ActorSelectedData;
 
-  beforeSelectAction?(data: SelectActionData, api: PerkBattleApi): SelectActionData;
-  afterSelectAction?(data: ActionSelectedData, api: PerkBattleApi): ActionSelectedData;
+  beforeSelectAction?(data: SelectActionData, api: PerkBattleApi, runtime: Runtime): SelectActionData;
+  afterSelectAction?(data: ActionSelectedData, api: PerkBattleApi, runtime: Runtime): ActionSelectedData;
 
-  beforeAction?(data: ActionData, api: PerkBattleApi): ActionData;
-  afterAction?(data: ActionResultData, api: PerkBattleApi): ActionResultData;
+  beforeAction?(data: ActionData, api: PerkBattleApi, runtime: Runtime): ActionData;
+  afterAction?(data: ActionResultData, api: PerkBattleApi, runtime: Runtime): ActionResultData;
 
-  beforeApplyEffects?(data: EffectsData, api: PerkBattleApi): EffectsData;
-  afterApplyEffects?(data: EffectsResultData, api: PerkBattleApi): EffectsResultData;
+  beforeApplyEffects?(data: EffectsData, api: PerkBattleApi, runtime: Runtime): EffectsData;
+  afterApplyEffects?(data: EffectsResultData, api: PerkBattleApi, runtime: Runtime): EffectsResultData;
 
-  beforeRecalculateSupport?(data: SupportData, api: PerkBattleApi): SupportData;
-  afterRecalculateSupport?(data: SupportResultData, api: PerkBattleApi): SupportResultData;
+  beforeRecalculateSupport?(data: SupportData, api: PerkBattleApi, runtime: Runtime): SupportData;
+  afterRecalculateSupport?(data: SupportResultData, api: PerkBattleApi, runtime: Runtime): SupportResultData;
 
-  beforeRecalculateInitiative?(data: InitiativeData, api: PerkBattleApi): InitiativeData;
-  afterRecalculateInitiative?(data: InitiativeResultData, api: PerkBattleApi): InitiativeResultData;
+  beforeRecalculateInitiative?(data: InitiativeData, api: PerkBattleApi, runtime: Runtime): InitiativeData;
+  afterRecalculateInitiative?(data: InitiativeResultData, api: PerkBattleApi, runtime: Runtime): InitiativeResultData;
 
-  beforeRecalculateStrength?(data: StrengthData, api: PerkBattleApi): StrengthData;
-  afterRecalculateStrength?(data: StrengthResultData, api: PerkBattleApi): StrengthResultData;
+  beforeRecalculateStrength?(data: StrengthData, api: PerkBattleApi, runtime: Runtime): StrengthData;
+  afterRecalculateStrength?(data: StrengthResultData, api: PerkBattleApi, runtime: Runtime): StrengthResultData;
 
-  beforeDefeatCheck?(data: DefeatCheckData, api: PerkBattleApi): DefeatCheckData;
-  afterDefeatCheck?(data: DefeatResultData, api: PerkBattleApi): DefeatResultData;
+  beforeDefeatCheck?(data: DefeatCheckData, api: PerkBattleApi, runtime: Runtime): DefeatCheckData;
+  afterDefeatCheck?(data: DefeatResultData, api: PerkBattleApi, runtime: Runtime): DefeatResultData;
 
-  beforeStepLimitCheck?(data: StepLimitData, api: PerkBattleApi): StepLimitData;
-  afterStepLimitCheck?(data: StepLimitResultData, api: PerkBattleApi): StepLimitResultData;
+  beforeStepLimitCheck?(data: StepLimitData, api: PerkBattleApi, runtime: Runtime): StepLimitData;
+  afterStepLimitCheck?(data: StepLimitResultData, api: PerkBattleApi, runtime: Runtime): StepLimitResultData;
 
-  beforeOutcome?(data: OutcomeData, api: PerkBattleApi): OutcomeData;
-  afterOutcome?(data: OutcomeResultData, api: PerkBattleApi): OutcomeResultData;
+  beforeOutcome?(data: OutcomeData, api: PerkBattleApi, runtime: Runtime): OutcomeData;
+  afterOutcome?(data: OutcomeResultData, api: PerkBattleApi, runtime: Runtime): OutcomeResultData;
 
-  beforeBattleFinish?(data: BattleFinishData, api: PerkBattleApi): BattleFinishData;
-  afterBattleFinish?(data: BattleFinishedData, api: PerkBattleApi): BattleFinishedData;
+  beforeBattleFinish?(data: BattleFinishData, api: PerkBattleApi, runtime: Runtime): BattleFinishData;
+  afterBattleFinish?(data: BattleFinishedData, api: PerkBattleApi, runtime: Runtime): BattleFinishedData;
 }
 ```
 
@@ -216,6 +270,11 @@ interface BattlePerk {
 данные того же этапа и может изменить выбор, вероятность, действие, результат или
 набор эффектов. Например, `afterSelectActor` получает уже выбранного бойца и может
 вернуть другого, а `beforeAction` может заменить обычный удар действием перка.
+
+`runtime` — изменяемое состояние конкретного экземпляра в пределах одной симуляции.
+Оно создаётся заново вместе с экземпляром движка, не разделяется между одинаковыми
+перками и не записывается обратно в постоянные данные гладиатора. Перк может хранить
+в нём счётчики, флаги одноразового использования или подготовленную реакцию.
 
 ### Порядок выполнения
 
@@ -229,8 +288,14 @@ interface BattlePerk {
 → фиксация итогового результата в BattleState
 ```
 
-Результат одного перка становится входом следующего. Перехватчики сортируются по
-`priority`, затем по `perkId`, поэтому порядок остаётся воспроизводимым.
+Результат одного экземпляра становится входом следующего. Перехватчики сортируются
+по `priority`, затем по `definitionId` и `instanceId`, поэтому порядок остаётся
+воспроизводимым даже при нескольких одинаковых эффектах.
+
+Для текущего прототипа используются диапазоны приоритетов: временные эффекты — `50`,
+стартовые травмы — `60`, постоянные перки — `100`. Это не запрещает конкретному
+определению задать иной приоритет, если ему действительно нужно встроиться раньше
+или позже.
 
 Пример перка, меняющего уже выбранного следующего бойца:
 
@@ -239,7 +304,11 @@ class ExtraTurnPerk implements BattlePerk {
   readonly id = "extra-turn";
   readonly priority = 100;
 
-  afterSelectActor(data: ActorSelectedData, api: PerkBattleApi): ActorSelectedData {
+  afterSelectActor(
+    data: ActorSelectedData,
+    api: PerkBattleApi,
+    runtime: PerkRuntimeState,
+  ): ActorSelectedData {
     if (api.ownerId === null || !api.canActivate(this.id)) return data;
 
     return {
@@ -258,6 +327,8 @@ class ExtraTurnPerk implements BattlePerk {
 ```ts
 interface PerkBattleApi {
   readonly ownerId: string | null;
+  readonly extensionType: BattleExtensionKind;
+  readonly instanceId: string;
   readonly state: ReadonlyBattleState;
   random(): number;
   canActivate(perkId: string): boolean;
@@ -266,7 +337,8 @@ interface PerkBattleApi {
 }
 ```
 
-Преобразованные данные фиксирует движок, а очередь дополнительных эффектов применяет
+Во время `beforeInitialize` простые расширения обычно возвращают изменённую боевую
+копию характеристик. Преобразованные данные фиксирует движок, а очередь дополнительных эффектов применяет
 только `EffectResolver`. Это сохраняет единый порядок изменений, упрощает
 журналирование и не позволяет перкам незаметно повредить состояние движка.
 
@@ -287,12 +359,14 @@ interface BattleResult {
   schemaVersion: number;
   rulesetVersion: string;
   seed: string | number;
+  input: BattleInput;
   outcome: BattleOutcome;
   steps: number;
   fighters: [FighterBattleResult, FighterBattleResult];
   finalArenaState: ArenaBattleState;
   statistics: BattleStatistics;
   events: BattleEvent[];
+  snapshots: BattleSnapshot[];
 }
 
 type BattleOutcome =
@@ -312,11 +386,12 @@ interface FighterBattleResult {
   battleOutcome: "victory" | "defeat" | "draw";
   survived: boolean;
   finalState: FighterBattleState;
+  startingInjuries: PerkRef[];
   newTraumas: PerkRef[];
+  finalTraumas: TraumaState[];
 }
 
-interface BattleStatistics {
-  byFighter: Record<string, {
+type BattleStatistics = Record<string, {
     actions: number;
     hits: number;
     misses: number;
@@ -325,17 +400,35 @@ interface BattleStatistics {
     damageDealt: number;
     damageReceived: number;
     traumasReceived: number;
-    perkCounters: Record<string, number>;
-  }>;
-}
+    fatigueGained: number;
+    perkActivations: number;
+    maxConsecutiveActions: number;
+    extensionCounters?: Record<string, number>;
+}>;
 
 interface BattleEvent {
   sequence: number;
   step: number;
   type: string;
+  phase: string;
+  message: string;
   actorId?: string;
   targetId?: string;
-  payload?: Record<string, unknown>;
+  extensionType?: BattleExtensionKind;
+  instanceId?: string;
+  data: Record<string, unknown>;
+}
+
+interface BattleSnapshot {
+  index: number;
+  step: number;
+  label: string;
+  status: "running" | "finished";
+  outcome: BattleOutcome | null;
+  arena: ArenaBattleState;
+  fighters: readonly FighterBattleState[];
+  lastAction?: ActionResultData;
+  eventSequence: number;
 }
 ```
 
@@ -343,10 +436,29 @@ interface BattleEvent {
 `battleOutcome = "draw"`. Последним элементом журнала становится событие завершения
 боя с итогом и причиной `step_limit`.
 
-`BattleEvent[]` — упорядоченный семантический журнал для повтора боя, отладки и
-сбора статистики. Мобильный UI не должен показывать внутренние числа напрямую:
-отдельный слой представления преобразует события и состояния в текст вроде
-«тяжело дышит» или «едва стоит».
+`BattleEvent[]` — упорядоченный технический журнал для отладки, статистики и
+восстановления причин каждого изменения. Активации общего hook-конвейера могут
+сохраняться с типами `perk.hook` и `perk.activated`; поля `extensionType` и
+`instanceId` отличают постоянный перк от временного эффекта или травмы и различают
+повторяющиеся экземпляры.
+
+Для каждого вызова hook журнал сохраняет `runtimeBefore` и `runtimeAfter`. Поэтому
+одноразовые и отложенные механики можно воспроизвести и отладить без доступа к
+внутреннему объекту экземпляра.
+
+Поле `perkActivations` в статистике прототипа сохранено как совместимое имя, но
+считает активации всех видов расширений. При переходе к детализации по экземплярам
+используется `extensionCounters`.
+
+`BattleSnapshot[]` содержит начальное состояние, состояние после каждого полностью
+обработанного действия и финальное состояние. Поэтому движок рассчитывает бой сразу,
+а мобильный UI может показывать один ход каждые несколько секунд, ставить повтор на
+паузу и переходить к произвольному шагу без повторного расчёта.
+
+Обычный мобильный UI не должен показывать внутренние числа напрямую: отдельный слой
+представления преобразует события и состояния в текст вроде «тяжело дышит» или
+«едва стоит». Отладочный прототип намеренно показывает точные значения и активные
+расширения непосредственно на арене.
 
 ## 7. Состав модуля
 
