@@ -39,7 +39,7 @@ const weightedPick = (items, random) => {
 
 const normalizeInput = (input) => ({
   schemaVersion: 1,
-  rulesetVersion: "prototype-0.4",
+  rulesetVersion: "prototype-0.5",
   seed: String(input.seed || "gladiator-prototype"),
   maxSteps: clamp(Number(input.maxSteps) || 80, 1, 500),
   arena: {
@@ -62,6 +62,9 @@ const normalizeInput = (input) => ({
       armor: clamp(Number(fighter.equipment?.armor) || 0, 0, 50),
       weight: clamp(Number(fighter.equipment?.weight) || 0, 0, 50),
     },
+    equipmentType: EQUIPMENT_TYPE_DEFINITIONS.some((type) => type.id === fighter.equipmentType)
+      ? fighter.equipmentType
+      : "murmillo",
     perks: [...new Set((fighter.perks || []).filter(Boolean))].slice(0, 3),
     temporaryPerks: (fighter.temporaryPerks || []).filter(Boolean),
     injuries: (fighter.injuries || []).filter(Boolean),
@@ -71,6 +74,36 @@ const normalizeInput = (input) => ({
 const ARENA_TYPES = [
   { id: "normal", name: "Обычная арена" },
   { id: "sand", name: "Песчаная арена" },
+];
+
+const EQUIPMENT_TYPE_DEFINITIONS = [
+  {
+    id: "murmillo",
+    name: "Мурмиллон",
+    weapon: "Гладиус и большой скутум",
+    beats: "thraex",
+    specializationPerk: "murmillo-specialization",
+    bonuses: { weaponPower: 2, armor: 8, weight: 6 },
+    description: "Тяжёлый стиль: +2 оружия, +8 брони, +6 веса; первый полученный удар блокируется. Силен против Фракийца.",
+  },
+  {
+    id: "thraex",
+    name: "Фракиец",
+    weapon: "Изогнутая сика и малая пармула",
+    beats: "retiarius",
+    specializationPerk: "thraex-specialization",
+    bonuses: { weaponPower: 5, armor: 3, weight: 2 },
+    description: "Подвижный стиль: +5 оружия, +3 брони, +2 веса; попадание ускоряет следующий выбор хода. Силен против Ретиария.",
+  },
+  {
+    id: "retiarius",
+    name: "Ретиарий",
+    weapon: "Сеть и трезубец",
+    beats: "murmillo",
+    specializationPerk: "retiarius-specialization",
+    bonuses: { weaponPower: 7, armor: -3, weight: -4 },
+    description: "Дальний стиль: +7 оружия, −3 брони, −4 веса; сеть один раз крадёт ход врага. Силен против Мурмиллона.",
+  },
 ];
 
 const PERK_DEFINITIONS = [
@@ -229,6 +262,108 @@ const applyInitializationModifiers = (data, api, modifiers, message) => {
   fighters[fighterIndex] = fighter;
   api.activate(message);
   return { ...data, fighters };
+};
+
+const applyEquipmentSpecialization = (data, api, equipmentTypeId) => {
+  const fighterIndex = data.fighters.findIndex((fighter) => fighter.id === api.ownerId);
+  const definition = EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === equipmentTypeId);
+  if (fighterIndex < 0 || !definition) return data;
+
+  const fighter = clone(data.fighters[fighterIndex]);
+  const opponent = data.fighters.find((candidate) => candidate.id !== api.ownerId);
+  const hasMatchupAdvantage = opponent?.equipmentType === definition.beats;
+  fighter.equipment.weaponPower = clamp(
+    round(fighter.equipment.weaponPower + definition.bonuses.weaponPower), 0, 75,
+  );
+  fighter.equipment.armor = clamp(
+    round(fighter.equipment.armor + definition.bonuses.armor), 0, 75,
+  );
+  fighter.equipment.weight = clamp(
+    round(fighter.equipment.weight + definition.bonuses.weight), 0, 75,
+  );
+  fighter.equipmentPerks = [definition.specializationPerk];
+  fighter.matchup = {
+    opponentEquipmentType: opponent?.equipmentType || null,
+    advantage: hasMatchupAdvantage,
+    strengthMultiplier: hasMatchupAdvantage ? 1.15 : 1,
+    initiativeBonus: hasMatchupAdvantage ? 10 : 0,
+  };
+  if (hasMatchupAdvantage) {
+    fighter.base.strength = round(fighter.base.strength * fighter.matchup.strengthMultiplier);
+    fighter.strength = fighter.base.strength;
+    fighter.initiativeEquipmentBonus = fighter.matchup.initiativeBonus;
+  }
+
+  const fighters = [...data.fighters];
+  fighters[fighterIndex] = fighter;
+  api.activate(
+    hasMatchupAdvantage
+      ? `${definition.name}: преимущество экипировки даёт ×1.15 к силе и +10 инициативы`
+      : `${definition.name}: применены бонусы специализации экипировки`,
+  );
+  return { ...data, fighters };
+};
+
+const EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS = {
+  "murmillo-specialization": {
+    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "murmillo"),
+    afterAction(data, api, runtime) {
+      if (runtime.shieldWallUsed || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      runtime.shieldWallUsed = true;
+      api.activate("Стена скутума: первое попадание превращено в блок");
+      return {
+        ...data,
+        outcome: "block",
+        damage: 0,
+        traumaChance: 0,
+        equipmentReaction: "murmillo-shield-wall",
+      };
+    },
+  },
+  "thraex-specialization": {
+    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "thraex"),
+    afterAction(data, api, runtime) {
+      if (data.actorId !== api.ownerId || data.outcome !== "hit") return data;
+      runtime.initiativeSurge = true;
+      api.emit("perk.state.changed", "Фракиец подготовил рывок инициативы", {
+        initiativeSurge: true,
+      });
+      return data;
+    },
+    beforeSelectActor(data, api, runtime) {
+      if (!runtime.initiativeSurge) return data;
+      runtime.initiativeSurge = false;
+      api.activate("Рывок Фракийца: вес инициативы следующего выбора увеличен в 1.5 раза");
+      return {
+        ...data,
+        candidates: data.candidates.map((candidate) => (
+          candidate.fighterId === api.ownerId
+            ? { ...candidate, weight: round(candidate.weight * 1.5), reason: "thraex-initiative-surge" }
+            : candidate
+        )),
+      };
+    },
+  },
+  "retiarius-specialization": {
+    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "retiarius"),
+    afterSelectActor(data, api, runtime) {
+      if (runtime.netUsed || data.actorId === api.ownerId) return data;
+      runtime.netUsed = true;
+      api.activate("Сеть Ретиария: ход противника перехвачен");
+      api.enqueue({
+        type: "fatigue",
+        fighterId: data.actorId,
+        value: 6,
+        reason: "equipment-perk:retiarius-net",
+      });
+      return {
+        ...data,
+        originalActorId: data.actorId,
+        actorId: api.ownerId,
+        reason: "equipment-perk:retiarius-net",
+      };
+    },
+  },
 };
 
 const PERK_IMPLEMENTATIONS = {
@@ -469,6 +604,7 @@ const createDefaultBattleInput = () => ({
       name: "Маркус",
       base: { strength: 62, health: 125, charisma: 48 },
       equipment: { weaponPower: 14, armor: 12, weight: 11 },
+      equipmentType: "murmillo",
       perks: ["cornered-beast"],
       temporaryPerks: [],
       injuries: [],
@@ -478,6 +614,7 @@ const createDefaultBattleInput = () => ({
       name: "Тит",
       base: { strength: 54, health: 112, charisma: 68 },
       equipment: { weaponPower: 11, armor: 8, weight: 7 },
+      equipmentType: "thraex",
       perks: ["strong-bones"],
       temporaryPerks: [],
       injuries: [],
@@ -521,6 +658,13 @@ class BattleEngine {
           });
         });
       };
+      const equipmentType = EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === fighter.equipmentType);
+      addExtensions(
+        equipmentType ? [equipmentType.specializationPerk] : [],
+        EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS,
+        "equipment-perk",
+        40,
+      );
       addExtensions(fighter.temporaryPerks, TEMPORARY_PERK_IMPLEMENTATIONS, "temporary-perk", 50);
       addExtensions(fighter.injuries, INJURY_IMPLEMENTATIONS, "injury", 60);
       addExtensions(fighter.perks, PERK_IMPLEMENTATIONS, "perk", 100);
@@ -554,6 +698,10 @@ class BattleEngine {
         name: fighter.name,
         base: clone(fighter.base),
         equipment: clone(fighter.equipment),
+        equipmentType: fighter.equipmentType,
+        equipmentPerks: [],
+        matchup: null,
+        initiativeEquipmentBonus: 0,
         maxHealth: fighter.base.health,
         health: fighter.base.health,
         strength: fighter.base.strength,
@@ -901,7 +1049,11 @@ class BattleEngine {
           const legPenalty = fighter.traumas.filter((trauma) => trauma.type === "leg").length * 9;
           return {
             ...data,
-            initiative: round(Math.max(1, 15 + data.support * 0.55 + data.strength * 0.25 - data.fatigue * 0.45 - legPenalty)),
+            initiative: round(Math.max(
+              1,
+              15 + data.support * 0.55 + data.strength * 0.25 - data.fatigue * 0.45
+                - legPenalty + (fighter.initiativeEquipmentBonus || 0),
+            )),
           };
         },
       );
@@ -1182,6 +1334,9 @@ class BattleEngine {
       weaponPower: round(fighter.equipment.weaponPower),
       armor: round(fighter.equipment.armor),
       equipmentWeight: round(fighter.equipment.weight),
+      equipmentType: fighter.equipmentType,
+      equipmentPerks: clone(fighter.equipmentPerks || []),
+      matchup: clone(fighter.matchup),
     };
   }
 
@@ -1220,7 +1375,7 @@ const createBattleLogExport = (result, exportedAt = new Date().toISOString()) =>
   format: "gladiator.battle-log",
   formatVersion: 1,
   exportedAt,
-  prototype: "battle-arena-0.4",
+  prototype: "battle-arena-0.5",
   replay: {
     mode: "state-after-event",
     eventCount: result.events.length,
@@ -1234,6 +1389,7 @@ const createBattleLogExport = (result, exportedAt = new Date().toISOString()) =>
 globalThis.GladiatorBattle = {
   ARENA_TYPES,
   BattleEngine,
+  EQUIPMENT_TYPE_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,

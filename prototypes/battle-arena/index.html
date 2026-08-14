@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=18" />
   </head>
   <body>
     <header class="topbar">
@@ -13,7 +13,7 @@
         <p class="eyebrow">GLADIATOR / DEBUG BUILD</p>
         <h1>Прототип боевой арены</h1>
       </div>
-      <div class="build-badge">RULESET 0.4</div>
+      <div class="build-badge">RULESET 0.5</div>
     </header>
 
     <main class="layout">
@@ -63,6 +63,11 @@
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Маркус" />
               </label>
+              <label class="equipment-type-field">
+                <span>Тип экипировки</span>
+                <select data-field="equipmentType"></select>
+                <small data-equipment-description></small>
+              </label>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="125" /></label>
@@ -82,6 +87,11 @@
               <label>
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Тит" />
+              </label>
+              <label class="equipment-type-field">
+                <span>Тип экипировки</span>
+                <select data-field="equipmentType"></select>
+                <small data-equipment-description></small>
               </label>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
@@ -255,7 +265,7 @@
       </section>
     </main>
 
-    <script src="./battle-engine.js?v=17"></script>
-    <script src="./app.js?v=17"></script>
+    <script src="./battle-engine.js?v=18"></script>
+    <script src="./app.js?v=18"></script>
   </body>
 </html>

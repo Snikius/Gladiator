@@ -258,6 +258,16 @@ input[type="range"] {
   margin-top: 13px;
 }
 
+.equipment-type-field small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-transform: none;
+}
+
 .perk-slot {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
@@ -747,6 +757,12 @@ a.button {
   border-color: #a8483e;
 }
 
+.arena-active-effects b.equipment {
+  color: #ffe4a3;
+  background: rgba(77, 49, 20, 0.92);
+  border-color: #d79b42;
+}
+
 .arena-active-effects b.more {
   color: var(--sand-light);
   background: rgba(23, 16, 13, 0.92);
@@ -1052,6 +1068,98 @@ a.button {
   box-shadow: 12px -2px 0 -1px #d1a95c;
 }
 
+.dom-fighter.equipment-murmillo .fighter-shield {
+  top: 24%; left: -24%; width: 52%; height: 51%;
+  border-radius: 4% 22% 22% 4%;
+}
+
+.dom-fighter.equipment-murmillo .fighter-weapon {
+  width: 92%; height: 6%;
+  background: #e4d6a6;
+  box-shadow: 0 4px 0 #704327;
+}
+
+.dom-fighter.equipment-thraex .fighter-cape { width: 34%; height: 38%; }
+
+.dom-fighter.equipment-thraex .fighter-helmet {
+  top: -2%; height: 14%;
+  box-shadow: 0 -7px 0 #d1a95c, inset -5px 0 0 #704327;
+}
+
+.dom-fighter.equipment-thraex .fighter-plume {
+  top: -20%; height: 22%; transform: rotate(-12deg);
+}
+
+.dom-fighter.equipment-thraex .fighter-shield {
+  top: 34%; left: -8%; width: 34%; height: 31%; border-radius: 8%;
+}
+
+.dom-fighter.equipment-thraex .fighter-leg {
+  box-shadow: 0 6px 0 #a66a2b, 0 12px 0 #d1a95c, 0 18px 0 #704327;
+}
+
+.dom-fighter.equipment-thraex .fighter-weapon {
+  top: 27%; width: 78%; height: 7%;
+  background: #e4d6a6;
+  box-shadow: 0 4px 0 #704327;
+  transform: rotate(-16deg);
+}
+
+.dom-fighter.equipment-thraex .fighter-weapon::after {
+  top: -110%; right: -22%; width: 30%; height: 300%;
+  background: #f2e6bd;
+  clip-path: polygon(0 42%, 55% 35%, 100% 0, 83% 48%, 55% 72%, 0 62%);
+}
+
+.dom-fighter.equipment-retiarius .fighter-helmet,
+.dom-fighter.equipment-retiarius .fighter-plume,
+.dom-fighter.equipment-retiarius .fighter-cape,
+.dom-fighter.equipment-retiarius .fighter-weapon-guard { display: none; }
+
+.dom-fighter.equipment-retiarius .fighter-head { top: 3%; }
+
+.dom-fighter.equipment-retiarius .fighter-body {
+  background: #8c5540;
+  box-shadow: inset 0 6px 0 #c78650, inset 0 -7px 0 #4b2c21;
+}
+
+.dom-fighter.equipment-retiarius .fighter-armor {
+  top: 23%; left: 15%; width: 24%; height: 33%;
+  background: #a66a2b;
+  border-color: #d1a95c;
+  transform: skewY(-8deg);
+}
+
+.dom-fighter.equipment-retiarius .fighter-armor::before,
+.dom-fighter.equipment-retiarius .fighter-armor::after { display: none; }
+
+.dom-fighter.equipment-retiarius .fighter-shield {
+  top: 19%; left: -47%; width: 68%; height: 58%;
+  opacity: 0.75;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 7%, #d1a95c 8% 10%, transparent 11% 18%),
+    repeating-linear-gradient(-45deg, transparent 0 7%, #d1a95c 8% 10%, transparent 11% 18%);
+  border: max(1px, 0.14vw) solid #d1a95c;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.dom-fighter.equipment-retiarius .fighter-shield::before,
+.dom-fighter.equipment-retiarius .fighter-shield::after { display: none; }
+
+.dom-fighter.equipment-retiarius .fighter-weapon {
+  top: 29%; width: 185%; height: 4%;
+  background: #704327;
+  box-shadow: 0 3px 0 #3e241b;
+  transform: rotate(-5deg);
+}
+
+.dom-fighter.equipment-retiarius .fighter-weapon::after {
+  top: -210%; right: -24%; width: 27%; height: 520%;
+  background: #e4d6a6;
+  clip-path: polygon(0 42%, 55% 42%, 55% 0, 72% 0, 72% 37%, 84% 37%, 84% 5%, 100% 5%, 100% 95%, 84% 95%, 84% 63%, 72% 63%, 72% 100%, 55% 100%, 55% 58%, 0 58%);
+}
+
 .dom-fighter.active::before {
   content: "";
   position: absolute;
@@ -1086,6 +1194,22 @@ a.button {
 
 .dom-fighter.attacking .leg-right {
   animation: attack-back-leg 980ms steps(5, end);
+}
+
+.dom-fighter.attacking:not(.achilles-leap).equipment-murmillo .fighter-weapon {
+  animation: murmillo-heavy-strike 980ms steps(6, end);
+}
+
+.dom-fighter.attacking:not(.achilles-leap).equipment-thraex .fighter-weapon {
+  animation: thraex-sica-slash 900ms steps(6, end);
+}
+
+.dom-fighter.attacking:not(.achilles-leap).equipment-retiarius .fighter-weapon {
+  animation: retiarius-trident-thrust 900ms steps(6, end);
+}
+
+.dom-fighter.attacking:not(.achilles-leap).equipment-retiarius .fighter-shield {
+  animation: retiarius-net-swing 900ms steps(5, end);
 }
 
 .dom-fighter-one.attacking.achilles-leap {
@@ -1439,6 +1563,32 @@ a.button {
   0%, 100% { transform: translate(0, 0) rotate(0deg); }
   24% { transform: translate(-12%, 0) rotate(-5deg); }
   48%, 70% { transform: translate(13%, 3%) rotate(-8deg); }
+}
+
+@keyframes murmillo-heavy-strike {
+  0%, 100% { transform: rotate(-7deg) translateX(0); }
+  18% { transform: rotate(-28deg) translate(-12%, -15%); }
+  48%, 70% { transform: rotate(12deg) translate(25%, 12%); }
+}
+
+@keyframes thraex-sica-slash {
+  0%, 100% { transform: rotate(-16deg) translateX(0); }
+  20% { transform: rotate(-48deg) translate(-18%, -15%); }
+  48%, 68% { transform: rotate(38deg) translate(31%, 19%); }
+  82% { transform: rotate(5deg) translateX(8%); }
+}
+
+@keyframes retiarius-trident-thrust {
+  0%, 100% { transform: rotate(-5deg) translateX(0); }
+  18% { transform: rotate(-12deg) translateX(-18%); }
+  45%, 72% { transform: rotate(1deg) translateX(43%); }
+  84% { transform: rotate(-3deg) translateX(12%); }
+}
+
+@keyframes retiarius-net-swing {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  24% { transform: rotate(-18deg) scale(0.9); }
+  52%, 72% { transform: rotate(20deg) scale(1.08); }
 }
 
 @keyframes achilles-leap-left {

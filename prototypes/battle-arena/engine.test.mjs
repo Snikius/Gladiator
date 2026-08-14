@@ -4,6 +4,7 @@ import "./battle-engine.js";
 const {
   ARENA_TYPES,
   BattleEngine,
+  EQUIPMENT_TYPE_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,
@@ -12,6 +13,11 @@ const {
 } = globalThis.GladiatorBattle;
 
 assert.deepEqual(ARENA_TYPES.map((arena) => arena.id), ["normal", "sand"]);
+assert.deepEqual(
+  EQUIPMENT_TYPE_DEFINITIONS.map((type) => [type.id, type.beats]),
+  [["murmillo", "thraex"], ["thraex", "retiarius"], ["retiarius", "murmillo"]],
+  "Типы экипировки должны образовывать замкнутый цикл преимуществ",
+);
 assert.equal(PERK_DEFINITIONS.length, 10, "В прототипе должно быть десять постоянных перков");
 assert.equal(TEMPORARY_PERK_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
 assert.equal(INJURY_DEFINITIONS.length, 5, "Нужно пять стартовых травм");
@@ -20,6 +26,55 @@ const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
+const defaultMurmillo = first.snapshots[0].fighters[0];
+assert.equal(defaultMurmillo.equipmentType, "murmillo");
+assert.deepEqual(
+  {
+    weaponPower: defaultMurmillo.weaponPower,
+    armor: defaultMurmillo.armor,
+    weight: defaultMurmillo.equipmentWeight,
+  },
+  { weaponPower: 16, armor: 20, weight: 17 },
+  "Специализация Мурмиллона должна изменить боевую копию экипировки",
+);
+assert.equal(defaultMurmillo.matchup.advantage, true, "Мурмиллон должен иметь преимущество против Фракийца");
+assert.equal(defaultMurmillo.matchup.strengthMultiplier, 1.15);
+assert.equal(defaultMurmillo.matchup.initiativeBonus, 10);
+assert.ok(
+  first.events.some((event) => event.type === "perk.activated"
+    && event.data.perkId === "murmillo-specialization"
+    && event.data.extensionType === "equipment-perk"),
+  "Тип экипировки должен создавать отдельный перк специализации",
+);
+assert.ok(
+  first.events.some((event) => event.type === "perk.activated"
+    && event.data.perkId === "murmillo-specialization"
+    && event.message.includes("Стена скутума")),
+  "Мурмиллон должен один раз превратить попадание в блок",
+);
+
+const equipmentMechanicsInput = createDefaultBattleInput();
+equipmentMechanicsInput.seed = "equipment-mechanics";
+equipmentMechanicsInput.maxSteps = 80;
+equipmentMechanicsInput.fighters[0].base.health = 300;
+equipmentMechanicsInput.fighters[0].equipmentType = "thraex";
+equipmentMechanicsInput.fighters[0].perks = [];
+equipmentMechanicsInput.fighters[1].base.health = 300;
+equipmentMechanicsInput.fighters[1].equipmentType = "retiarius";
+equipmentMechanicsInput.fighters[1].perks = [];
+const equipmentMechanics = new BattleEngine(equipmentMechanicsInput).simulate();
+assert.ok(
+  equipmentMechanics.events.some((event) => event.type === "perk.activated"
+    && event.data.perkId === "thraex-specialization"
+    && event.message.includes("вес инициативы")),
+  "Фракиец должен расходовать рывок инициативы после попадания",
+);
+assert.ok(
+  equipmentMechanics.events.some((event) => event.type === "perk.activated"
+    && event.data.perkId === "retiarius-specialization"
+    && event.message.includes("ход противника перехвачен")),
+  "Ретиарий должен один раз перехватить ход сетью",
+);
 assert.ok(first.steps > 0, "Бой должен содержать хотя бы один шаг");
 assert.ok(first.events.some((event) => event.type === "phase.start"), "В логе должны быть начала фаз");
 assert.ok(first.events.some((event) => event.type === "phase.finish"), "В логе должны быть результаты фаз");
@@ -153,7 +208,7 @@ temporaryInput.fighters[0].injuries = ["leg-damage", "arm-damage", "head-damage"
 const temporaryResult = new BattleEngine(temporaryInput).simulate();
 const initialFighter = temporaryResult.snapshots[0].fighters[0];
 assert.equal(initialFighter.maxHealth, 151, "Временные эффекты должны суммировать здоровье");
-assert.equal(initialFighter.strength, 55.25, "Травма руки должна примениться после бонусов к силе");
+assert.equal(initialFighter.strength, 63.15, "Травма руки должна примениться после экипировки и временных бонусов");
 assert.equal(initialFighter.support, 52, "Харизма и травма головы должны менять поддержку");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");
 assert.equal(initialFighter.traumas.length, 2, "Рука и нога должны стать стартовыми травмами");

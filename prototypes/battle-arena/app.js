@@ -4,6 +4,7 @@
 const {
   ARENA_TYPES,
   BattleEngine,
+  EQUIPMENT_TYPE_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,
@@ -69,6 +70,8 @@ const formatNumber = (value, digits = 2) => Number(value).toLocaleString("ru-RU"
 const percent = (value) => `${formatNumber(value * 100, 2)}%`;
 
 const arenaName = (arenaId) => ARENA_TYPES.find((arena) => arena.id === arenaId)?.name || arenaId;
+const equipmentType = (typeId) => EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === typeId);
+const equipmentTypeName = (typeId) => equipmentType(typeId)?.name || typeId;
 const perkName = (perkId) => PERK_DEFINITIONS.find((perk) => perk.id === perkId)?.name || perkId;
 const effectDefinitions = {
   temporaryPerks: TEMPORARY_PERK_DEFINITIONS,
@@ -100,6 +103,12 @@ const populateMenus = () => {
   elements.arenaType.innerHTML = ARENA_TYPES
     .map((arena) => `<option value="${arena.id}">${escapeHtml(arena.name)}</option>`)
     .join("");
+
+  document.querySelectorAll('[data-field="equipmentType"]').forEach((select) => {
+    select.innerHTML = EQUIPMENT_TYPE_DEFINITIONS.map((type) => (
+      `<option value="${type.id}">${escapeHtml(type.name)} · ${escapeHtml(type.weapon)}</option>`
+    )).join("");
+  });
 
   document.querySelectorAll("[data-perks]").forEach((container) => {
     const fighterIndex = Number(container.dataset.perks);
@@ -142,6 +151,12 @@ const populateMenus = () => {
 };
 
 const renderPerkSlotDescriptions = () => {
+  document.querySelectorAll('[data-field="equipmentType"]').forEach((select) => {
+    const definition = equipmentType(select.value);
+    select.closest("label").querySelector("[data-equipment-description]").textContent =
+      definition?.description || "Тип экипировки не выбран";
+  });
+
   document.querySelectorAll("[data-perk-slot]").forEach((select) => {
     const perk = PERK_DEFINITIONS.find((item) => item.id === select.value);
     select.closest(".perk-slot").querySelector("[data-perk-description]").textContent =
@@ -179,6 +194,7 @@ const setFormFromInput = (input) => {
     const fighter = input.fighters[index];
     const values = {
       name: fighter.name,
+      equipmentType: fighter.equipmentType,
       strength: fighter.base.strength,
       health: fighter.base.health,
       charisma: fighter.base.charisma,
@@ -217,6 +233,7 @@ const readFighter = (index) => {
       armor: Number(read("armor")),
       weight: Number(read("weight")),
     },
+    equipmentType: read("equipmentType"),
     perks: [...new Set(
       [...document.querySelectorAll(`[data-fighter-perk="${index}"]`)]
         .map((select) => select.value)
@@ -284,6 +301,7 @@ const renderNumbers = (snapshot) => {
         ${meterRow("Инициатива", fighter.initiative, 150, "initiative")}
         ${meterRow("Усталость", fighter.fatigue, 150, "fatigue")}
         <p class="equipment-line">
+          ТИП ${escapeHtml(equipmentTypeName(fighter.equipmentType)).toUpperCase()} ·
           ХАРИЗМА ${base.charisma} · МНОЖИТЕЛЬ АРЕНЫ ${formatNumber(multiplier)} ·
           ОРУЖИЕ +${fighter.weaponPower} · БРОНЯ ${fighter.armor} · ВЕС ${fighter.equipmentWeight}
         </p>
@@ -486,12 +504,15 @@ const renderDomArena = (snapshot, input) => {
     health: fighter.base.health,
     maxHealth: fighter.base.health,
     fatigue: 0,
+    equipmentType: fighter.equipmentType,
   }));
   elements.pixelArena.className = `pixel-arena ${snapshot?.arena?.type || input.arena.type}`;
 
   fighters.forEach((fighter, index) => {
     const sprite = elements.pixelArena.querySelector(`[data-dom-fighter="${index}"]`);
     sprite.classList.remove("attacking", "missing", "achilles-leap", "hit", "dodging", "blocking");
+    sprite.classList.remove("equipment-murmillo", "equipment-thraex", "equipment-retiarius");
+    sprite.classList.add(`equipment-${fighter.equipmentType || "murmillo"}`);
     sprite.classList.toggle("active", snapshot?.lastAction?.actorId === fighter.id);
     sprite.classList.toggle("tired", fighter.fatigue >= 70 && fighter.health > 0);
     sprite.classList.toggle("defeated", fighter.health <= 0);
@@ -511,6 +532,10 @@ const renderDomArena = (snapshot, input) => {
       ["ТРВ", fighter.traumas?.length || 0],
     ].map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
     const effects = [
+      ...(fighter.equipmentPerks?.length ? [{
+        type: "equipment",
+        name: `Специализация: ${equipmentTypeName(fighter.equipmentType)}`,
+      }] : []),
       ...(fighter.temporaryPerks || []).map((effectId) => ({
         type: "temporary",
         name: effectName("temporaryPerks", effectId),
@@ -874,6 +899,8 @@ const renderPreview = () => {
       weaponPower: fighter.equipment.weaponPower,
       armor: fighter.equipment.armor,
       equipmentWeight: fighter.equipment.weight,
+      equipmentType: fighter.equipmentType,
+      equipmentPerks: [],
       perks: fighter.perks,
       temporaryPerks: fighter.temporaryPerks,
       injuries: fighter.injuries,
