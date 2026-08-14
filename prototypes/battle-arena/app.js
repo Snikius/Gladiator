@@ -465,7 +465,7 @@ const drawArena = (snapshot, input) => {
   drawHud(fighters[0], 9, "#d75343");
   drawHud(fighters[1], 218, "#66a5ad");
 
-  if (snapshot?.lastAction?.outcome === "hit") {
+  if (snapshot?.lastAction?.outcome === "hit" && snapshot.label !== "Итог боя") {
     const targetX = snapshot.lastAction.targetId === fighters[0].id ? 103 : 219;
     context.fillStyle = "#f4d77f";
     context.fillRect(targetX, 132, 3, 3);
@@ -543,7 +543,7 @@ const renderDomArena = (snapshot, input) => {
 
   const impact = elements.pixelArena.querySelector(".pixel-impact");
   impact.className = "pixel-impact";
-  if (snapshot?.lastAction?.outcome === "hit") {
+  if (snapshot?.lastAction?.outcome === "hit" && snapshot.label !== "Итог боя") {
     const targetIndex = fighters.findIndex((fighter) => fighter.id === snapshot.lastAction.targetId);
     void impact.offsetWidth;
     impact.classList.add("visible", targetIndex === 0 ? "target-one" : "target-two");
