@@ -435,6 +435,12 @@ input[type="range"] {
   box-shadow: 3px 3px 0 var(--shadow);
 }
 
+a.button {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+}
+
 .button:active,
 .icon-button:active {
   transform: translate(2px, 2px);
@@ -455,6 +461,8 @@ input[type="range"] {
 }
 
 .arena-panel {
+  justify-self: center;
+  width: min(94%, 1000px);
   overflow: hidden;
 }
 
@@ -757,6 +765,8 @@ input[type="range"] {
 .dom-fighter {
   --team: #b9473f;
   --team-light: #e06a54;
+  --stance-y: 0%;
+  --stance-angle: 0deg;
   position: absolute;
   z-index: 5;
   bottom: 8.5%;
@@ -767,6 +777,7 @@ input[type="range"] {
 
 .dom-fighter-one {
   left: 31%;
+  animation: fighter-idle-left 1600ms steps(4, end) infinite;
 }
 
 .dom-fighter-two {
@@ -774,6 +785,7 @@ input[type="range"] {
   --team-light: #76b6b6;
   right: 31%;
   transform: scaleX(-1);
+  animation: fighter-idle-right 1600ms steps(4, end) infinite;
 }
 
 .dom-fighter i {
@@ -836,6 +848,8 @@ input[type="range"] {
   height: 15%;
   background: var(--team-light);
   box-shadow: -5px 3px 0 var(--team), 5px 3px 0 var(--team), 0 -4px 0 var(--team-light);
+  transform-origin: bottom center;
+  animation: plume-idle 900ms steps(3, end) infinite;
 }
 
 .fighter-cape {
@@ -846,6 +860,8 @@ input[type="range"] {
   height: 47%;
   background: #71342f;
   box-shadow: inset 7px 0 0 #9e443a, 5px 6px 0 #4e2826;
+  transform-origin: top right;
+  animation: cape-idle 1300ms steps(3, end) infinite;
 }
 
 .fighter-cape::before {
@@ -1085,11 +1101,12 @@ input[type="range"] {
 }
 
 .dom-fighter.tired {
-  transform: translateY(5%) rotate(2deg);
+  --stance-y: 5%;
+  --stance-angle: 2deg;
 }
 
 .dom-fighter-two.tired {
-  transform: scaleX(-1) translateY(5%) rotate(2deg);
+  --stance-angle: -2deg;
 }
 
 .dom-fighter.defeated {
@@ -1100,6 +1117,14 @@ input[type="range"] {
 
 .dom-fighter-two.defeated {
   transform: scaleX(-1) rotate(79deg) scale(0.82);
+}
+
+.dom-fighter-one.defeated {
+  animation: defeated-breath-left 2200ms steps(2, end) infinite;
+}
+
+.dom-fighter-two.defeated {
+  animation: defeated-breath-right 2200ms steps(2, end) infinite;
 }
 
 .pixel-impact {
@@ -1161,13 +1186,13 @@ input[type="range"] {
 .arena-event {
   position: absolute;
   z-index: 10;
-  top: 34%;
-  left: 21%;
+  top: 32%;
+  left: 18%;
   display: grid;
   place-items: center;
-  width: 58%;
-  min-height: 13%;
-  padding: clamp(3px, 0.6vw, 9px);
+  width: 64%;
+  min-height: 16%;
+  padding: clamp(5px, 0.8vw, 12px);
   color: #f2dfb6;
   background: rgba(23, 16, 13, 0.9);
   border: max(1px, 0.2vw) solid rgba(242, 209, 135, 0.72);
@@ -1185,27 +1210,100 @@ input[type="range"] {
 
 .arena-event strong {
   color: var(--sand-light);
-  font-size: clamp(6px, 0.75vw, 11px);
-  letter-spacing: 0.08em;
+  font-size: clamp(7px, 0.9vw, 14px);
+  letter-spacing: 0.1em;
 }
 
 .arena-event span {
   margin-top: max(1px, 0.2vw);
-  font-size: clamp(5px, 0.68vw, 10px);
+  font-size: clamp(6px, 0.76vw, 12px);
   line-height: 1.25;
 }
 
-.arena-event.hit,
-.arena-event.victory {
+.arena-event.hit {
+  color: #ffd4c8;
+  background: rgba(82, 12, 16, 0.94);
   border-color: #d75343;
+  box-shadow: max(3px, 0.4vw) max(3px, 0.4vw) 0 rgba(56, 6, 9, 0.88), inset 0 0 0 max(1px, 0.12vw) #8d1720;
+}
+
+.arena-event.hit strong {
+  color: #ff8c77;
+}
+
+.arena-event.miss {
+  color: #f0d9ad;
+  background: rgba(58, 44, 29, 0.95);
+  border-color: #b98a4f;
+}
+
+.arena-event.miss strong {
+  color: #e9b565;
 }
 
 .arena-event.dodge {
+  color: #d2f2f1;
+  background: rgba(20, 51, 59, 0.95);
   border-color: #66a5ad;
 }
 
+.arena-event.dodge strong {
+  color: #8dd4d5;
+}
+
 .arena-event.block {
+  color: #fff0bd;
+  background: rgba(69, 51, 20, 0.95);
   border-color: #d1a95c;
+}
+
+.arena-event.block strong {
+  color: #f2d187;
+}
+
+.arena-event.victory {
+  color: #e1f7ce;
+  background: rgba(24, 61, 29, 0.95);
+  border-color: var(--success);
+}
+
+.arena-event.victory strong {
+  color: #bce89d;
+}
+
+.arena-event.draw {
+  background: rgba(58, 49, 34, 0.95);
+  border-color: var(--sand-light);
+}
+
+@keyframes fighter-idle-left {
+  0%, 100% { transform: translateY(var(--stance-y)) rotate(var(--stance-angle)); }
+  50% { transform: translateY(calc(var(--stance-y) - 2%)) rotate(var(--stance-angle)); }
+}
+
+@keyframes fighter-idle-right {
+  0%, 100% { transform: scaleX(-1) translateY(var(--stance-y)) rotate(var(--stance-angle)); }
+  50% { transform: scaleX(-1) translateY(calc(var(--stance-y) - 2%)) rotate(var(--stance-angle)); }
+}
+
+@keyframes plume-idle {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(5deg) translateY(-3%); }
+}
+
+@keyframes cape-idle {
+  0%, 100% { transform: skewY(0deg) scaleX(1); }
+  50% { transform: skewY(3deg) scaleX(0.94); }
+}
+
+@keyframes defeated-breath-left {
+  0%, 100% { transform: rotate(79deg) scale(0.82); }
+  50% { transform: rotate(78deg) scale(0.84, 0.82); }
+}
+
+@keyframes defeated-breath-right {
+  0%, 100% { transform: scaleX(-1) rotate(79deg) scale(0.82); }
+  50% { transform: scaleX(-1) rotate(78deg) scale(0.84, 0.82); }
 }
 
 @keyframes attack-from-left {
@@ -1292,6 +1390,30 @@ input[type="range"] {
   color: var(--success);
 }
 
+.battle-callout.hit {
+  color: #ff9b87;
+  background: #321114;
+  border-color: #a93034;
+}
+
+.battle-callout.miss {
+  color: #e9b565;
+  background: #2c2218;
+  border-color: #8f693b;
+}
+
+.battle-callout.dodge {
+  color: #8dd4d5;
+  background: #132a30;
+  border-color: #477f8c;
+}
+
+.battle-callout.block {
+  color: #f2d187;
+  background: #302615;
+  border-color: #a77d37;
+}
+
 .battle-callout.draw {
   color: var(--sand-light);
 }
@@ -1311,10 +1433,12 @@ input[type="range"] {
 
 @media (prefers-reduced-motion: reduce) {
   .dom-fighter,
+  .fighter-plume,
+  .fighter-cape,
   .fighter-shield,
   .pixel-impact,
   .arena-event {
-    animation-duration: 1ms !important;
+    animation: none !important;
   }
 }
 
@@ -1601,6 +1725,21 @@ th {
   white-space: pre-wrap;
 }
 
+.log-entry-payload h4 {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--sand-light);
+  background: #17110e;
+  border-top: 1px solid #3e3024;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.log-entry-payload pre {
+  max-height: 360px;
+}
+
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: 1fr;
@@ -1609,6 +1748,10 @@ th {
   .setup-panel {
     position: static;
     max-height: none;
+  }
+
+  .arena-panel {
+    width: 96%;
   }
 
   .fighters-setup {
@@ -1625,6 +1768,10 @@ th {
 
   .layout {
     padding: 8px;
+  }
+
+  .arena-panel {
+    width: 100%;
   }
 
   .fighters-setup,

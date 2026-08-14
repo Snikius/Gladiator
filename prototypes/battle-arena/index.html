@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <header class="topbar">
@@ -217,7 +217,7 @@
               <h2 id="result-title">—</h2>
               <p id="result-description"></p>
             </div>
-            <button class="button secondary" id="download-battle" type="button">↓ Сохранить JSON</button>
+            <a class="button secondary" id="download-battle" href="#" download>↓ Скачать полный лог</a>
           </div>
           <div id="fighter-outcomes" class="fighter-outcomes"></div>
         </section>
@@ -247,6 +247,7 @@
             <div class="log-actions">
               <input id="log-filter" type="search" placeholder="Фильтр лога" />
               <label class="toggle"><input id="key-events-only" type="checkbox" /> Только события боя</label>
+              <a class="button secondary" id="download-log" href="#" download>↓ Скачать JSON</a>
             </div>
           </div>
           <div id="battle-log" class="battle-log"></div>
@@ -254,7 +255,7 @@
       </section>
     </main>
 
-    <script src="./battle-engine.js?v=12"></script>
-    <script src="./app.js?v=12"></script>
+    <script src="./battle-engine.js?v=15"></script>
+    <script src="./app.js?v=15"></script>
   </body>
 </html>

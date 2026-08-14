@@ -417,6 +417,32 @@ interface BattleEvent {
   extensionType?: BattleExtensionKind;
   instanceId?: string;
   data: Record<string, unknown>;
+  state: BattleReplayState;
+}
+
+interface BattleReplayState {
+  schemaVersion: 1;
+  eventSequence: number;
+  step: number;
+  phase: string;
+  status: "running" | "finished";
+  outcome: BattleOutcome | null;
+  arena: ArenaBattleState;
+  fighters: readonly FighterBattleState[];
+  pendingEffects: readonly BattleEffect[];
+  lastAction?: ActionResultData;
+  turn: {
+    lastActorId: string | null;
+    consecutiveActions: number;
+  };
+  extensions: readonly {
+    id: string;
+    instanceId: string;
+    extensionType: BattleExtensionKind;
+    ownerId: string;
+    priority: number;
+    runtime: PerkRuntimeState;
+  }[];
 }
 
 interface BattleSnapshot {
@@ -441,6 +467,17 @@ interface BattleSnapshot {
 сохраняться с типами `perk.hook` и `perk.activated`; поля `extensionType` и
 `instanceId` отличают постоянный перк от временного эффекта или травмы и различают
 повторяющиеся экземпляры.
+
+Каждое событие содержит `state` со снимком **после записи события**. Это основной
+контракт для event-level replay: состояние конкретного события восстанавливается
+без повторного расчёта боя и не зависит от последующих мутаций объектов движка.
+В состояние входят очередь эффектов и runtime всех экземпляров расширений, поэтому
+журнал пригоден для отладки отложенных механик и реализации «машины времени».
+
+Скачиваемый журнал использует формат `gladiator.battle-log`, версию формата `1` и
+режим replay `state-after-event`. Он включает вход, итог, статистику, события и
+пошаговые снимки; события являются источником точного состояния, а снимки — быстрым
+индексом для обычного показа боя по действиям.
 
 Для каждого вызова hook журнал сохраняет `runtimeBefore` и `runtimeAfter`. Поэтому
 одноразовые и отложенные механики можно воспроизвести и отладить без доступа к

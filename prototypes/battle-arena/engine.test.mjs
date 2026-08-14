@@ -7,6 +7,7 @@ const {
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,
+  createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
 
@@ -23,6 +24,31 @@ assert.ok(first.steps > 0, "Бой должен содержать хотя бы
 assert.ok(first.events.some((event) => event.type === "phase.start"), "В логе должны быть начала фаз");
 assert.ok(first.events.some((event) => event.type === "phase.finish"), "В логе должны быть результаты фаз");
 assert.equal(first.snapshots.length, first.steps + 2, "Нужны начальный, пошаговые и итоговый снимки");
+assert.ok(
+  first.events.every((event) => event.state?.eventSequence === event.sequence),
+  "Каждое событие должно содержать состояние системы после этого события",
+);
+assert.ok(
+  first.events.every((event) => event.state.step === event.step && event.state.phase === event.phase),
+  "Состояние события должно соответствовать его шагу и фазе",
+);
+assert.ok(
+  first.events.every((event) => Array.isArray(event.state.extensions)),
+  "Состояние события должно включать runtime всех расширений",
+);
+assert.equal(first.events.at(-1).state.status, "finished", "Последнее событие должно содержать финальное состояние");
+assert.notEqual(
+  first.events[0].state.fighters[1].health,
+  first.events.at(-1).state.fighters[1].health,
+  "Ранние состояния журнала не должны изменяться вместе с финальным состоянием",
+);
+const exportedLog = createBattleLogExport(first, "2026-01-01T00:00:00.000Z");
+assert.equal(exportedLog.format, "gladiator.battle-log");
+assert.equal(exportedLog.formatVersion, 1);
+assert.equal(exportedLog.replay.mode, "state-after-event");
+assert.equal(exportedLog.replay.eventCount, first.events.length);
+assert.equal(exportedLog.replay.lastSequence, first.events.at(-1).sequence);
+assert.doesNotThrow(() => JSON.stringify(exportedLog), "Полный журнал должен сериализоваться в JSON");
 
 const drawInput = createDefaultBattleInput();
 drawInput.seed = "forced-draw";

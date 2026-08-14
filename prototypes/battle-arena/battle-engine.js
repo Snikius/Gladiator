@@ -1076,6 +1076,34 @@ class BattleEngine {
     });
   }
 
+  captureSystemState() {
+    if (!this.state) return null;
+    return {
+      schemaVersion: 1,
+      eventSequence: this.sequence,
+      step: this.state.step,
+      phase: this.currentPhase,
+      status: this.state.status,
+      outcome: clone(this.state.outcome),
+      arena: clone(this.state.arena),
+      fighters: clone(this.state.fighters),
+      pendingEffects: clone(this.state.pendingEffects),
+      lastAction: clone(this.lastAction),
+      turn: {
+        lastActorId: this.lastActorId,
+        consecutiveActions: this.consecutiveActions,
+      },
+      extensions: this.extensions.map((extension) => ({
+        id: extension.id,
+        instanceId: extension.instanceId,
+        extensionType: extension.extensionType,
+        ownerId: extension.ownerId,
+        priority: extension.priority,
+        runtime: clone(extension.runtime),
+      })),
+    };
+  }
+
   emit(type, message, data = {}) {
     this.sequence += 1;
     this.events.push({
@@ -1087,6 +1115,7 @@ class BattleEngine {
       ...(data.extensionType ? { extensionType: data.extensionType } : {}),
       ...(data.instanceId ? { instanceId: data.instanceId } : {}),
       data: clone(data),
+      state: this.captureSystemState(),
     });
   }
 
@@ -1133,12 +1162,28 @@ class BattleEngine {
   }
 }
 
+const createBattleLogExport = (result, exportedAt = new Date().toISOString()) => ({
+  format: "gladiator.battle-log",
+  formatVersion: 1,
+  exportedAt,
+  prototype: "battle-arena-0.4",
+  replay: {
+    mode: "state-after-event",
+    eventCount: result.events.length,
+    firstSequence: result.events[0]?.sequence ?? null,
+    lastSequence: result.events.at(-1)?.sequence ?? null,
+    description: "Каждое событие содержит полное состояние системы после записи события.",
+  },
+  ...clone(result),
+});
+
 globalThis.GladiatorBattle = {
   ARENA_TYPES,
   BattleEngine,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,
+  createBattleLogExport,
   createDefaultBattleInput,
 };
 })();

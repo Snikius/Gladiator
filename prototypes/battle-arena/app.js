@@ -7,6 +7,7 @@ const {
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   TEMPORARY_PERK_DEFINITIONS,
+  createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
 
@@ -38,6 +39,7 @@ const elements = {
   resultDescription: document.querySelector("#result-description"),
   fighterOutcomes: document.querySelector("#fighter-outcomes"),
   downloadBattle: document.querySelector("#download-battle"),
+  downloadLog: document.querySelector("#download-log"),
   statisticsPanel: document.querySelector("#statistics-panel"),
   statisticsTable: document.querySelector("#statistics-table"),
   logPanel: document.querySelector("#log-panel"),
@@ -574,11 +576,18 @@ const renderArenaEvent = (snapshot, fighters) => {
     const actorName = actor?.name || "Боец";
     const targetName = target?.name || "противник";
     const messages = {
-      hit: `${actorName} наносит ${action.damage} урона бойцу ${targetName}`,
-      miss: `${actorName} атакует, но промахивается`,
-      dodge: `${targetName} уклоняется от атаки ${actorName}`,
-      block: `${targetName} блокирует атаку ${actorName}`,
+      hit: `${targetName} ранен: ${actorName} наносит ${action.damage} урона`,
+      miss: `${actorName} не попадает по бойцу ${targetName}`,
+      dodge: `${targetName} полностью уклоняется от атаки ${actorName}`,
+      block: `${targetName} принимает удар ${actorName} на блок`,
     };
+    const titles = {
+      hit: `ХОД ${snapshot.step} · РАНЕНИЕ −${action.damage} HP`,
+      miss: `ХОД ${snapshot.step} · ПРОМАХ`,
+      dodge: `ХОД ${snapshot.step} · УВОРОТ`,
+      block: `ХОД ${snapshot.step} · БЛОК`,
+    };
+    title = titles[action.outcome] || title;
     detail = messages[action.outcome] || snapshot.label;
     stateClass = action.outcome;
   }
@@ -599,8 +608,36 @@ const renderSnapshot = (index) => {
   elements.arenaStep.textContent = `${snapshot.step} / ${currentResult.input.maxSteps}`;
   elements.battleCallout.textContent = snapshot.label;
   elements.battleCallout.className = "battle-callout";
+  if (snapshot.label !== "Итог боя" && snapshot.lastAction?.outcome) {
+    elements.battleCallout.classList.add(snapshot.lastAction.outcome);
+  }
   if (snapshot.outcome?.type === "victory") elements.battleCallout.classList.add("victory");
   if (snapshot.outcome?.type === "draw") elements.battleCallout.classList.add("draw");
+  renderNumbers(snapshot);
+  drawArena(snapshot, currentResult.input);
+};
+
+const renderEventState = (event) => {
+  if (!currentResult || !event?.state) return;
+  const state = event.state;
+  const snapshot = {
+    step: state.step,
+    label: state.status === "finished" ? "Итог боя" : `Событие #${event.sequence}`,
+    status: state.status,
+    outcome: state.outcome,
+    lastAction: state.lastAction,
+    arena: state.arena,
+    fighters: state.fighters,
+  };
+  elements.snapshotLabel.textContent = `EVENT #${event.sequence} · ${event.phase} / ${event.type}`;
+  elements.arenaStep.textContent = `${state.step} / ${currentResult.input.maxSteps}`;
+  elements.battleCallout.textContent = `#${event.sequence} · ${event.message}`;
+  elements.battleCallout.className = "battle-callout";
+  if (snapshot.label !== "Итог боя" && snapshot.lastAction?.outcome) {
+    elements.battleCallout.classList.add(snapshot.lastAction.outcome);
+  }
+  if (state.outcome?.type === "victory") elements.battleCallout.classList.add("victory");
+  if (state.outcome?.type === "draw") elements.battleCallout.classList.add("draw");
   renderNumbers(snapshot);
   drawArena(snapshot, currentResult.input);
 };
@@ -745,7 +782,7 @@ const renderLog = () => {
   const events = currentResult.events.filter((event) => {
     if (onlyKey && !keyEventTypes.has(event.type)) return false;
     if (!query) return true;
-    return `${event.type} ${event.phase} ${event.message} ${JSON.stringify(event.data)}`
+    return `${event.type} ${event.phase} ${event.message} ${JSON.stringify(event.data)} ${JSON.stringify(event.state)}`
       .toLocaleLowerCase("ru-RU")
       .includes(query);
   });
@@ -755,14 +792,19 @@ const renderLog = () => {
     if (keyEventTypes.has(event.type)) classes.push("key-event");
     if (event.type.startsWith("perk.")) classes.push("perk-event");
     return `
-      <details class="${classes.join(" ")}" data-step="${event.step}">
+      <details class="${classes.join(" ")}" data-sequence="${event.sequence}">
         <summary>
           <span>#${event.sequence}</span>
           <span>S${event.step}</span>
           <span class="log-type">${escapeHtml(event.phase)} / ${escapeHtml(event.type)}</span>
           <span>${escapeHtml(event.message)}</span>
         </summary>
-        <pre>${escapeHtml(JSON.stringify(event.data, null, 2))}</pre>
+        <div class="log-entry-payload">
+          <h4>Данные события</h4>
+          <pre>${escapeHtml(JSON.stringify(event.data, null, 2))}</pre>
+          <h4>Состояние после события</h4>
+          <pre>${escapeHtml(JSON.stringify(event.state, null, 2))}</pre>
+        </div>
       </details>
     `;
   }).join("") || "<p class=\"battle-callout\">События не найдены</p>";
@@ -770,28 +812,26 @@ const renderLog = () => {
   elements.battleLog.querySelectorAll("details").forEach((entry) => {
     entry.addEventListener("toggle", () => {
       if (!entry.open) return;
-      const step = Number(entry.dataset.step);
-      const snapshotIndex = currentResult.snapshots.findLastIndex((snapshot) => snapshot.step <= step);
-      if (snapshotIndex >= 0) renderSnapshot(snapshotIndex);
+      const sequence = Number(entry.dataset.sequence);
+      const event = currentResult.events.find((item) => item.sequence === sequence);
+      renderEventState(event);
     });
   });
   elements.logPanel.hidden = false;
 };
 
-const downloadBattle = () => {
+const downloadBattle = (event) => {
   if (!currentResult) return;
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    prototype: "battle-arena-0.1",
-    ...currentResult,
-  };
+  const payload = createBattleLogExport(currentResult);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = event.currentTarget;
   link.href = url;
-  link.download = `battle-${currentResult.seed}-${Date.now()}.json`.replace(/[^a-zA-Z0-9._-]/g, "-");
-  link.click();
-  URL.revokeObjectURL(url);
+  link.download = `battle-log-${currentResult.seed}-${Date.now()}.json`.replace(/[^a-zA-Z0-9._-]/g, "-");
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+    link.removeAttribute("href");
+  }, 1000);
 };
 
 const resetResults = () => {
@@ -902,6 +942,7 @@ elements.playPause.addEventListener("click", () => {
   }
 });
 elements.downloadBattle.addEventListener("click", downloadBattle);
+elements.downloadLog.addEventListener("click", downloadBattle);
 elements.logFilter.addEventListener("input", renderLog);
 elements.keyEventsOnly.addEventListener("change", renderLog);
 })();
