@@ -1,0 +1,61 @@
+# OS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+*~
+
+# Local AI/codebase indexes
+.claude/index/
+.codebase-index/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+*.pid
+tmp/
+temp/
+.cache/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Build output and dependencies
+build/
+dist/
+out/
+bin/
+obj/
+node_modules/
+coverage/
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+__pycache__/
+*.py[cod]
+
+# Local crash dumps
+*.dmp
+*.stackdump
