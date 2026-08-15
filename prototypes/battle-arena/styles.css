@@ -85,6 +85,29 @@ select {
   white-space: nowrap;
 }
 
+.topbar-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-link {
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--ink-soft);
+  border: 2px solid var(--line);
+  box-shadow: 4px 4px 0 var(--shadow);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbar-link:hover {
+  color: var(--sand-light);
+  border-color: var(--sand);
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
@@ -2131,6 +2154,11 @@ th {
 @media (max-width: 700px) {
   .topbar {
     padding: 14px;
+  }
+
+  .topbar-links {
+    align-items: flex-end;
+    flex-direction: column-reverse;
   }
 
   .layout {
