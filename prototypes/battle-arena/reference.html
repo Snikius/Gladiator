@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Gladiator — справочник</title>
+    <link rel="stylesheet" href="./reference.css?v=2" />
+  </head>
+  <body>
+    <header class="reference-topbar">
+      <div>
+        <p class="eyebrow">GLADIATOR / CODEX</p>
+        <h1>Справочник гладиатора</h1>
+      </div>
+      <nav class="topnav" aria-label="Навигация прототипа">
+        <a href="./index.html">← Боевая арена</a>
+        <span>RULESET 0.6 DRAFT</span>
+      </nav>
+    </header>
+
+    <main class="reference-shell">
+      <section class="reference-hero">
+        <div>
+          <p class="eyebrow">НЕЗАВИСИМАЯ СТРАНИЦА · БЕЗ СИМУЛЯЦИИ</p>
+          <h2>Всё, что может изменить бой</h2>
+          <p>Классы, классовое оружие, доспехи, постоянные и временные перки, травмы и эффекты редкого снаряжения.</p>
+        </div>
+        <dl id="catalog-counters" class="catalog-counters"></dl>
+      </section>
+
+      <section class="catalog-controls" aria-label="Фильтры справочника">
+        <label class="search-control">
+          <span>Поиск</span>
+          <input id="catalog-search" type="search" placeholder="Название, эффект или ID…" autocomplete="off" />
+        </label>
+        <label>
+          <span>Раздел</span>
+          <select id="catalog-section">
+            <option value="all">Все разделы</option>
+            <option value="class">Классы</option>
+            <option value="weapon-set">Оружие</option>
+            <option value="armor-set">Доспехи</option>
+            <option value="weapon-item">Предметы оружия</option>
+            <option value="armor-item">Предметы доспехов</option>
+            <option value="fighter">Перки бойца</option>
+            <option value="temporary">Временные эффекты</option>
+            <option value="injury">Травмы</option>
+            <option value="technique">Классовые приёмы</option>
+            <option value="weapon">Перки оружия</option>
+            <option value="armor">Перки доспехов</option>
+          </select>
+        </label>
+        <label>
+          <span>Класс</span>
+          <select id="catalog-class"><option value="all">Все классы</option></select>
+        </label>
+        <button id="reset-filters" type="button">Сбросить</button>
+      </section>
+
+      <section class="quality-panel">
+        <div class="section-title">
+          <span>00</span>
+          <div><h2>Качество снаряжения</h2><p>Обычная атака не является перком и доступна всегда.</p></div>
+        </div>
+        <div id="quality-grid" class="quality-grid"></div>
+      </section>
+
+      <div id="catalog-root" class="catalog-root"></div>
+      <section id="empty-state" class="empty-state" hidden>
+        <strong>Ничего не найдено</strong>
+        <span>Измените поисковый запрос или сбросьте фильтры.</span>
+      </section>
+    </main>
+
+    <script src="./reference-data.js?v=2"></script>
+    <script src="./reference.js?v=2"></script>
+  </body>
+</html>
