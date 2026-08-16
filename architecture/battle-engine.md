@@ -53,28 +53,31 @@ interface FighterInput {
     armor: number;
     weight: number;
   };
-  perks: readonly PerkRef[];
-  temporaryPerks: readonly PerkRef[];
-  injuries: readonly PerkRef[];
+  perks: readonly BattleModifierRef[];
+  buffs: readonly BattleModifierRef[];
+  injuries: readonly BattleModifierRef[];
 }
 
 interface ArenaInput {
   type: string;
   supportMultipliers: readonly [number, number];
-  perks?: PerkRef[];
+  modifiers?: BattleModifierRef[];
 }
 
-interface PerkRef {
+interface BattleModifierRef {
   id: string;
   params?: Record<string, unknown>;
 }
 
-type BattleExtensionKind =
+type BattleModifierKind =
   | "perk"
-  | "temporary-perk"
+  | "buff"
+  | "debuff"
   | "injury"
-  | "arena-perk"
-  | "equipment-perk";
+  | "status"
+  | "arena"
+  | "equipment"
+  | "class-technique";
 
 ```
 
@@ -85,14 +88,18 @@ type BattleExtensionKind =
 не участвует в расчётах. Множитель арены участвует в расчёте динамической поддержки соответствующего
 бойца, но сам поддержкой не является.
 
-`perks` содержит не более трёх уникальных постоянных перков бойца. `temporaryPerks`
-и `injuries` используют тот же интерфейс перехватчиков, но передаются отдельными
+`perks` содержит не более трёх уникальных постоянных перков бойца. `buffs`
+и `injuries` используют тот же интерфейс `BattleModifier`, но передаются отдельными
 списками для сохранения семантики входных данных. Эти списки не ограничены по
 размеру; одинаковые элементы допускаются и применяются последовательно, поэтому
 простые модификаторы складываются.
 
+Поле прототипа `temporaryPerks` считается устаревшим. При переходе на целевой
+контракт его элементы нормализуются в `buffs` или `debuffs` согласно `kind`
+определения в реестре модификаторов.
+
 При нормализации каждому элементу назначается детерминированный `instanceId`,
-составленный из вида расширения, владельца, позиции во входном списке и `id`
+составленный из вида модификатора, владельца, позиции во входном списке и `id`
 определения. Два одинаковых эффекта остаются двумя независимыми экземплярами.
 Прототип `0.3` использует строковый `id` как сокращённую форму `{ id }`; публичный
 TypeScript-контракт сохраняет объектную форму для будущих параметров экземпляра.
@@ -120,7 +127,7 @@ interface BattleState {
 interface ArenaBattleState {
   type: string;
   supportMultipliers: [number, number];
-  activeExtensions: ActiveExtensionState[];
+  activeModifiers: ActiveBattleModifierState[];
 }
 
 interface FighterBattleState {
@@ -149,16 +156,16 @@ interface FighterBattleState {
   support: number;
   initiative: number;
   fatigue: number;
-  activeExtensions: ActiveExtensionState[];
+  activeModifiers: ActiveBattleModifierState[];
   traumas: TraumaState[];
 }
 
-interface ActiveExtensionState {
+interface ActiveBattleModifierState {
   instanceId: string;
   definitionId: string;
-  kind: BattleExtensionKind;
+  kind: BattleModifierKind;
   params?: Record<string, unknown>;
-  runtime: PerkRuntimeState;
+  runtime: BattleModifierRuntime;
   stacks?: number;
   remainingActions?: number;
 }
@@ -172,7 +179,7 @@ interface TraumaState {
 
 `battleBase` — модифицированная копия базовых характеристик только для текущего боя.
 Она не изменяет постоянные данные гладиатора. Начальные динамические характеристики
-рассчитываются из `battleBase`, типа бойца, модифицированной экипировки, расширений
+рассчитываются из `battleBase`, типа бойца, модифицированной экипировки, модификаторов
 и параметров арены. `equipmentType` и созданный из него `equipment-perk` входят в
 состояние и replay-снимки. `seed` и единый `RandomSource` обязательны:
 одинаковые входные данные и версия правил должны давать одинаковый результат.
@@ -182,7 +189,7 @@ interface TraumaState {
 Движок выполняет фиксированные фазы:
 
 ```text
-Нормализация входа и создание экземпляров расширений
+Нормализация входа и создание экземпляров `BattleModifier`
 → инициализация динамического состояния
 → специализации типов бойцов / equipment-perk
 → временные эффекты
@@ -216,7 +223,7 @@ interface TraumaState {
 победитель отсутствует, результатом становится ничья. Значение лимита по умолчанию
 задаётся конфигурацией правил.
 
-## 5. Расширение перками
+## 5. Модификаторы арены
 
 Цикл строится как набор объектов-фаз, а не как один большой метод. Каждая фаза
 принимает свои данные и возвращает результат:
@@ -228,84 +235,154 @@ interface BattlePhase<Input, Output> {
 }
 ```
 
-### Общий интерфейс расширения
+### Базовая сущность
 
-Постоянный перк, специализация типа бойца, временный эффект и травма используют
-один контракт `BattlePerk`.
-Он содержит отдельный необязательный метод для каждой точки встраивания. Наличие
-метода означает, что экземпляр подписан на этот шаг:
+Общим родителем механик является `BattleModifier`. Это нейтральный контракт,
+поэтому его используют постоянные перки, травмы, бафы, дебафы, состояния, эффекты
+арены, снаряжение и классовые приёмы.
+
+В русской документации и интерфейсе `BattleModifier` называется
+**модификатором арены**. «Арена» здесь означает весь контекст текущего боя, а не
+только параметры локации.
+
+Определение модификатора неизменно и может переиспользоваться между боями. Живой
+экземпляр создаётся отдельно для конкретного владельца и боя:
 
 ```ts
-interface PerkRuntimeState {
+interface BattleModifierInstance<Runtime extends BattleModifierRuntime = BattleModifierRuntime> {
+  readonly instanceId: string;
+  readonly definition: BattleModifier<Runtime>;
+  readonly kind: BattleModifierKind;
+  readonly ownerId: string | null;
+  readonly sourceId: string | null;
+  readonly params: Readonly<Record<string, unknown>>;
+  runtime: Runtime;
+  status: "active" | "suspended" | "removed";
+}
+```
+
+`kind` сохраняет доменный смысл, но не меняет способ выполнения. Например, травма
+имеет `kind = "injury"`, а классовый приём — `kind = "class-technique"`; оба могут
+подписаться на одинаковый hook.
+
+Определение содержит отдельный необязательный метод для каждой точки встраивания.
+Наличие метода означает подписку на этот шаг:
+
+```ts
+interface BattleModifierRuntime {
   activations: number;
   used?: boolean;
   [key: string]: unknown;
 }
 
-interface BattlePerk<Runtime extends PerkRuntimeState = PerkRuntimeState> {
+interface BattleModifier<Runtime extends BattleModifierRuntime = BattleModifierRuntime> {
   readonly id: string;
+  readonly kind: BattleModifierKind;
   readonly priority: number;
+  createRuntime(params: Readonly<Record<string, unknown>>): Runtime;
 
-  beforeInitialize?(data: InitializeData, api: PerkBattleApi, runtime: Runtime): InitializeData;
-  afterInitialize?(data: InitializedData, api: PerkBattleApi, runtime: Runtime): InitializedData;
+  beforeInitialize?(data: InitializeData, api: BattleModifierApi, runtime: Runtime): InitializeData;
+  afterInitialize?(data: InitializedData, api: BattleModifierApi, runtime: Runtime): InitializedData;
 
-  beforeBattleStart?(data: BattleStartData, api: PerkBattleApi, runtime: Runtime): BattleStartData;
-  afterBattleStart?(data: BattleStartedData, api: PerkBattleApi, runtime: Runtime): BattleStartedData;
+  beforeBattleStart?(data: BattleStartData, api: BattleModifierApi, runtime: Runtime): BattleStartData;
+  afterBattleStart?(data: BattleStartedData, api: BattleModifierApi, runtime: Runtime): BattleStartedData;
 
-  beforeSelectActor?(data: SelectActorData, api: PerkBattleApi, runtime: Runtime): SelectActorData;
-  afterSelectActor?(data: ActorSelectedData, api: PerkBattleApi, runtime: Runtime): ActorSelectedData;
+  beforeSelectActor?(data: SelectActorData, api: BattleModifierApi, runtime: Runtime): SelectActorData;
+  afterSelectActor?(data: ActorSelectedData, api: BattleModifierApi, runtime: Runtime): ActorSelectedData;
 
-  beforeSelectAction?(data: SelectActionData, api: PerkBattleApi, runtime: Runtime): SelectActionData;
-  afterSelectAction?(data: ActionSelectedData, api: PerkBattleApi, runtime: Runtime): ActionSelectedData;
+  beforeSelectAction?(data: SelectActionData, api: BattleModifierApi, runtime: Runtime): SelectActionData;
+  afterSelectAction?(data: ActionSelectedData, api: BattleModifierApi, runtime: Runtime): ActionSelectedData;
 
-  beforeAction?(data: ActionData, api: PerkBattleApi, runtime: Runtime): ActionData;
-  afterAction?(data: ActionResultData, api: PerkBattleApi, runtime: Runtime): ActionResultData;
+  beforeAction?(data: ActionData, api: BattleModifierApi, runtime: Runtime): ActionData;
+  afterAction?(data: ActionResultData, api: BattleModifierApi, runtime: Runtime): ActionResultData;
 
-  beforeApplyEffects?(data: EffectsData, api: PerkBattleApi, runtime: Runtime): EffectsData;
-  afterApplyEffects?(data: EffectsResultData, api: PerkBattleApi, runtime: Runtime): EffectsResultData;
+  beforeApplyEffects?(data: EffectsData, api: BattleModifierApi, runtime: Runtime): EffectsData;
+  afterApplyEffects?(data: EffectsResultData, api: BattleModifierApi, runtime: Runtime): EffectsResultData;
 
-  beforeRecalculateSupport?(data: SupportData, api: PerkBattleApi, runtime: Runtime): SupportData;
-  afterRecalculateSupport?(data: SupportResultData, api: PerkBattleApi, runtime: Runtime): SupportResultData;
+  beforeRecalculateSupport?(data: SupportData, api: BattleModifierApi, runtime: Runtime): SupportData;
+  afterRecalculateSupport?(data: SupportResultData, api: BattleModifierApi, runtime: Runtime): SupportResultData;
 
-  beforeRecalculateInitiative?(data: InitiativeData, api: PerkBattleApi, runtime: Runtime): InitiativeData;
-  afterRecalculateInitiative?(data: InitiativeResultData, api: PerkBattleApi, runtime: Runtime): InitiativeResultData;
+  beforeRecalculateInitiative?(data: InitiativeData, api: BattleModifierApi, runtime: Runtime): InitiativeData;
+  afterRecalculateInitiative?(data: InitiativeResultData, api: BattleModifierApi, runtime: Runtime): InitiativeResultData;
 
-  beforeRecalculateStrength?(data: StrengthData, api: PerkBattleApi, runtime: Runtime): StrengthData;
-  afterRecalculateStrength?(data: StrengthResultData, api: PerkBattleApi, runtime: Runtime): StrengthResultData;
+  beforeRecalculateStrength?(data: StrengthData, api: BattleModifierApi, runtime: Runtime): StrengthData;
+  afterRecalculateStrength?(data: StrengthResultData, api: BattleModifierApi, runtime: Runtime): StrengthResultData;
 
-  beforeDefeatCheck?(data: DefeatCheckData, api: PerkBattleApi, runtime: Runtime): DefeatCheckData;
-  afterDefeatCheck?(data: DefeatResultData, api: PerkBattleApi, runtime: Runtime): DefeatResultData;
+  beforeDefeatCheck?(data: DefeatCheckData, api: BattleModifierApi, runtime: Runtime): DefeatCheckData;
+  afterDefeatCheck?(data: DefeatResultData, api: BattleModifierApi, runtime: Runtime): DefeatResultData;
 
-  beforeStepLimitCheck?(data: StepLimitData, api: PerkBattleApi, runtime: Runtime): StepLimitData;
-  afterStepLimitCheck?(data: StepLimitResultData, api: PerkBattleApi, runtime: Runtime): StepLimitResultData;
+  beforeStepLimitCheck?(data: StepLimitData, api: BattleModifierApi, runtime: Runtime): StepLimitData;
+  afterStepLimitCheck?(data: StepLimitResultData, api: BattleModifierApi, runtime: Runtime): StepLimitResultData;
 
-  beforeOutcome?(data: OutcomeData, api: PerkBattleApi, runtime: Runtime): OutcomeData;
-  afterOutcome?(data: OutcomeResultData, api: PerkBattleApi, runtime: Runtime): OutcomeResultData;
+  beforeOutcome?(data: OutcomeData, api: BattleModifierApi, runtime: Runtime): OutcomeData;
+  afterOutcome?(data: OutcomeResultData, api: BattleModifierApi, runtime: Runtime): OutcomeResultData;
 
-  beforeBattleFinish?(data: BattleFinishData, api: PerkBattleApi, runtime: Runtime): BattleFinishData;
-  afterBattleFinish?(data: BattleFinishedData, api: PerkBattleApi, runtime: Runtime): BattleFinishedData;
+  beforeBattleFinish?(data: BattleFinishData, api: BattleModifierApi, runtime: Runtime): BattleFinishData;
+  afterBattleFinish?(data: BattleFinishedData, api: BattleModifierApi, runtime: Runtime): BattleFinishedData;
 }
 ```
 
 Все данные конкретного шага передаются в соответствующий метод. Метод возвращает
 данные того же этапа и может изменить выбор, вероятность, действие, результат или
 набор эффектов. Например, `afterSelectActor` получает уже выбранного бойца и может
-вернуть другого, а `beforeAction` может заменить обычный удар действием перка.
+вернуть другого, а `beforeAction` может заменить обычный удар особым действием.
 
 `runtime` — изменяемое состояние конкретного экземпляра в пределах одной симуляции.
-Оно создаётся заново вместе с экземпляром движка, не разделяется между одинаковыми
-перками и не записывается обратно в постоянные данные гладиатора. Перк может хранить
-в нём счётчики, флаги одноразового использования или подготовленную реакцию.
+Оно создаётся заново вместе с экземпляром, не разделяется между одинаковыми
+модификаторами и не записывается обратно в постоянные данные гладиатора. Модификатор
+может хранить в нём счётчики, флаги одноразового использования или подготовленную
+реакцию.
+
+### Менеджер модификаторов арены
+
+`BattleModifierManager` — единственная сущность, которая управляет живыми
+модификаторами. Движок и фазы не перебирают перки или травмы самостоятельно.
+
+```ts
+interface BattleModifierManager {
+  create(
+    ref: BattleModifierRef,
+    kind: BattleModifierKind,
+    ownerId: string | null,
+    sourceId?: string | null,
+  ): BattleModifierInstance;
+
+  add(instance: BattleModifierInstance): void;
+  suspend(instanceId: string): void;
+  resume(instanceId: string): void;
+  remove(instanceId: string): void;
+
+  runBefore<P extends BattlePhaseId>(phase: P, data: PhaseInput<P>): PhaseInput<P>;
+  runAfter<P extends BattlePhaseId>(phase: P, data: PhaseOutput<P>): PhaseOutput<P>;
+  snapshot(): readonly ActiveBattleModifierState[];
+}
+```
+
+Менеджер:
+
+- разрешает `id` через реестр определений;
+- создаёт отдельный runtime для каждого экземпляра;
+- индексирует модификаторы по реализованным hook-методам;
+- сортирует их по `priority`, `definition.id` и `instanceId`;
+- пропускает результат одного модификатора во вход следующего;
+- фиксирует hook, активацию и изменение runtime в журнале;
+- добавляет, приостанавливает и удаляет модификаторы только на безопасной границе фазы.
+
+Модификатор не меняет список активных модификаторов во время его обхода. Для этого
+он ставит в очередь `AddBattleModifierEffect`, `SuspendBattleModifierEffect` или
+`RemoveBattleModifierEffect`, а менеджер применяет команды после завершения текущего
+hook-конвейера.
 
 ### Порядок выполнения
 
-Для каждой фазы `HookPipeline` выполняет один и тот же алгоритм:
+Для каждой фазы `BattleModifierManager` через внутренний `HookPipeline` выполняет
+один и тот же алгоритм:
 
 ```text
 исходные данные фазы
-→ все before-методы перков
+→ все before-методы модификаторов арены
 → стандартный расчёт фазы
-→ все after-методы перков
+→ все after-методы модификаторов арены
 → фиксация итогового результата в BattleState
 ```
 
@@ -318,17 +395,19 @@ interface BattlePerk<Runtime extends PerkRuntimeState = PerkRuntimeState> {
 определению задать иной приоритет, если ему действительно нужно встроиться раньше
 или позже.
 
-Пример перка, меняющего уже выбранного следующего бойца:
+Пример модификатора-перка, меняющего уже выбранного следующего бойца:
 
 ```ts
-class ExtraTurnPerk implements BattlePerk {
+class ExtraTurnModifier implements BattleModifier {
   readonly id = "extra-turn";
+  readonly kind = "perk" as const;
   readonly priority = 100;
+  createRuntime = (): BattleModifierRuntime => ({ activations: 0 });
 
   afterSelectActor(
     data: ActorSelectedData,
-    api: PerkBattleApi,
-    runtime: PerkRuntimeState,
+    api: BattleModifierApi,
+    runtime: BattleModifierRuntime,
   ): ActorSelectedData {
     if (api.ownerId === null || !api.canActivate(this.id)) return data;
 
@@ -341,36 +420,36 @@ class ExtraTurnPerk implements BattlePerk {
 }
 ```
 
-Перки не получают прямой изменяемый `BattleState`. Через ограниченный `PerkBattleApi`
-они читают снимок состояния, используют общий генератор случайных чисел и добавляют
-дополнительные команды-эффекты в очередь:
+Модификаторы не получают прямой изменяемый `BattleState`. Через ограниченный
+`BattleModifierApi` они читают снимок состояния, используют общий генератор
+случайных чисел и добавляют команды-эффекты в очередь:
 
 ```ts
-interface PerkBattleApi {
+interface BattleModifierApi {
   readonly ownerId: string | null;
-  readonly extensionType: BattleExtensionKind;
+  readonly kind: BattleModifierKind;
   readonly instanceId: string;
   readonly state: ReadonlyBattleState;
   random(): number;
-  canActivate(perkId: string): boolean;
+  canActivate(modifierId: string): boolean;
   enqueue(effect: BattleEffect): void;
   emit(event: BattleEvent): void;
 }
 ```
 
-Во время `beforeInitialize` простые расширения обычно возвращают изменённую боевую
+Во время `beforeInitialize` простые модификаторы обычно возвращают изменённую боевую
 копию характеристик. Преобразованные данные фиксирует движок, а очередь дополнительных эффектов применяет
 только `EffectResolver`. Это сохраняет единый порядок изменений, упрощает
-журналирование и не позволяет перкам незаметно повредить состояние движка.
+журналирование и не позволяет модификаторам незаметно повредить состояние движка.
 
 Для реакций и дополнительных действий устанавливается лимит, защищающий от
 бесконечных цепочек перков.
 
 Основные ООП-принципы:
 
-- композиция фаз и перков вместо глубокой иерархии наследования;
+- композиция фаз и модификаторов вместо глубокой иерархии наследования;
 - одна ответственность у движка, фазы, обработчика эффектов и сборщика статистики;
-- новые перки добавляются реализацией интерфейса без изменения ядра;
+- новые перки, травмы и бафы добавляются реализацией `BattleModifier` без изменения ядра;
 - генератор случайных чисел, реестры и стратегии расчёта передаются как зависимости.
 
 ## 6. Выходные данные
@@ -407,8 +486,8 @@ interface FighterBattleResult {
   battleOutcome: "victory" | "defeat" | "draw";
   survived: boolean;
   finalState: FighterBattleState;
-  startingInjuries: PerkRef[];
-  newTraumas: PerkRef[];
+  startingInjuries: BattleModifierRef[];
+  newTraumas: BattleModifierRef[];
   finalTraumas: TraumaState[];
 }
 
@@ -422,9 +501,10 @@ type BattleStatistics = Record<string, {
     damageReceived: number;
     traumasReceived: number;
     fatigueGained: number;
-    perkActivations: number;
+    modifierActivations: number;
+    perkActivations?: number; // legacy-поле прототипа
     maxConsecutiveActions: number;
-    extensionCounters?: Record<string, number>;
+    modifierCounters?: Record<string, number>;
 }>;
 
 interface BattleEvent {
@@ -435,7 +515,7 @@ interface BattleEvent {
   message: string;
   actorId?: string;
   targetId?: string;
-  extensionType?: BattleExtensionKind;
+  modifierKind?: BattleModifierKind;
   instanceId?: string;
   data: Record<string, unknown>;
   state: BattleReplayState;
@@ -456,13 +536,13 @@ interface BattleReplayState {
     lastActorId: string | null;
     consecutiveActions: number;
   };
-  extensions: readonly {
+  modifiers: readonly {
     id: string;
     instanceId: string;
-    extensionType: BattleExtensionKind;
-    ownerId: string;
+    kind: BattleModifierKind;
+    ownerId: string | null;
     priority: number;
-    runtime: PerkRuntimeState;
+    runtime: BattleModifierRuntime;
   }[];
 }
 
@@ -484,16 +564,15 @@ interface BattleSnapshot {
 боя с итогом и причиной `step_limit`.
 
 `BattleEvent[]` — упорядоченный технический журнал для отладки, статистики и
-восстановления причин каждого изменения. Активации общего hook-конвейера могут
-сохраняться с типами `perk.hook` и `perk.activated`; поля `extensionType` и
-`instanceId` отличают постоянный перк от специализации экипировки, временного
-эффекта или травмы и различают
-повторяющиеся экземпляры.
+восстановления причин каждого изменения. Активации общего hook-конвейера
+сохраняются с типами `modifier.hook`, `modifier.activated` и
+`modifier.runtime.changed`; поля `modifierKind` и `instanceId` отличают перк от
+бафа, травмы, снаряжения или состояния и различают повторяющиеся экземпляры.
 
 Каждое событие содержит `state` со снимком **после записи события**. Это основной
 контракт для event-level replay: состояние конкретного события восстанавливается
 без повторного расчёта боя и не зависит от последующих мутаций объектов движка.
-В состояние входят очередь эффектов и runtime всех экземпляров расширений, поэтому
+В состояние входят очередь эффектов и runtime всех экземпляров `BattleModifier`, поэтому
 журнал пригоден для отладки отложенных механик и реализации «машины времени».
 
 Скачиваемый журнал использует формат `gladiator.battle-log`, версию формата `1` и
@@ -505,9 +584,9 @@ interface BattleSnapshot {
 одноразовые и отложенные механики можно воспроизвести и отладить без доступа к
 внутреннему объекту экземпляра.
 
-Поле `perkActivations` в статистике прототипа сохранено как совместимое имя, но
-считает активации всех видов расширений. При переходе к детализации по экземплярам
-используется `extensionCounters`.
+Поле `perkActivations` остаётся только legacy-полем прототипа. Целевой контракт
+использует `modifierActivations` и `modifierCounters`, которые считают все виды
+модификаторов арены.
 
 `BattleSnapshot[]` содержит начальное состояние, состояние после каждого полностью
 обработанного действия и финальное состояние. Поэтому движок рассчитывает бой сразу,
@@ -517,7 +596,7 @@ interface BattleSnapshot {
 Обычный мобильный UI не должен показывать внутренние числа напрямую: отдельный слой
 представления преобразует события и состояния в текст вроде «тяжело дышит» или
 «едва стоит». Отладочный прототип намеренно показывает точные значения и активные
-расширения непосредственно на арене.
+модификаторы непосредственно на арене.
 
 ## 7. Состав модуля
 
@@ -527,12 +606,12 @@ battle/
 ├─ engine/       BattleEngine, BattleContext, основной цикл
 ├─ phases/       стандартные фазы боя
 ├─ effects/      команды и EffectResolver
-├─ perks/        интерфейсы, реестр и HookPipeline
+├─ modifiers/    BattleModifier, BattleModifierManager, реестр и HookPipeline
 ├─ random/       seeded RandomSource
 ├─ result/       OutcomeResolver и сбор результата
 └─ statistics/   BattleEvent и StatsCollector
 ```
 
 Формулы характеристик должны находиться в фазах или отдельных стратегиях расчёта,
-а не в `BattleEngine`. Сам движок отвечает только за порядок, расширение и целостность
+а не в `BattleEngine`. Сам движок отвечает только за порядок, перехватываемость и целостность
 симуляции.
