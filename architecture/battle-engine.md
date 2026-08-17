@@ -2,6 +2,10 @@
 
 Статус: короткий предварительный драфт. Конкретные формулы боя пока не фиксируются.
 
+Контракт `fighterClass` + `weaponSet` + `armorSet` ниже является целевым для
+версии `0.6`. Прототип `0.5` пока использует совместимое legacy-поле
+`equipmentType`; план миграции описан в спеках классов и снаряжения.
+
 ## 1. Назначение
 
 Модуль боя — независимый от мобильного интерфейса движок, который:
@@ -16,12 +20,17 @@
 
 ```ts
 interface BattleEngine {
+  validate(input: BattleInput): BattleValidationResult;
   simulate(input: BattleInput): BattleResult;
 }
 ```
 
 На первом этапе бой рассчитывается целиком синхронно. Анимация и показ событий
 игроку выполняются снаружи по журналу уже рассчитанного боя.
+
+`simulate()` запускается только для валидного входа. Несовместимые классы, пустые
+слоты, недопустимое качество или лишние перки снаряжения возвращаются через
+`validate()` структурированными ошибками и не создают частичное состояние боя.
 
 ## 2. Входные данные
 
@@ -40,18 +49,34 @@ interface BattleInput {
   };
 }
 
+type FighterClassId =
+  | "murmillo"
+  | "thraex"
+  | "retiarius"
+  | "secutor"
+  | "hoplomachus";
+
+type EquipmentQuality = "common" | "good" | "rare" | "named";
+
+interface EquipmentInstanceRef {
+  instanceId: string;
+  definitionId: string;
+  quality: EquipmentQuality;
+  statValues: Record<string, number>;
+  additionalPerkIds: readonly string[];
+}
+
 interface FighterInput {
   id: string;
+  fighterClass: FighterClassId;
   base: {
     strength: number;
     health: number;
     charisma: number;
   };
-  equipmentType: "murmillo" | "thraex" | "retiarius";
   equipment: {
-    weaponPower: number;
-    armor: number;
-    weight: number;
+    weaponSet: EquipmentInstanceRef;
+    armorSet: EquipmentInstanceRef;
   };
   perks: readonly BattleModifierRef[];
   buffs: readonly BattleModifierRef[];
@@ -70,6 +95,16 @@ interface BattleModifierRef {
   params?: Record<string, unknown>;
 }
 
+interface BattleValidationResult {
+  valid: boolean;
+  errors: readonly {
+    code: string;
+    fighterId?: string;
+    path: string;
+    details?: Record<string, unknown>;
+  }[];
+}
+
 type BattleModifierKind =
   | "perk"
   | "buff"
@@ -82,11 +117,15 @@ type BattleModifierKind =
 
 ```
 
-Экипировка при инициализации преобразуется в модификаторы и, при необходимости,
-в перки. Выбранный `equipmentType` автоматически создаёт временный экземпляр
-`equipment-perk`, который может перехватывать те же фазы, что и постоянный перк.
-В прототипе тип также задаёт цикл преимуществ и визуальный скин, но визуальный слой
-не участвует в расчётах. Множитель арены участвует в расчёте динамической поддержки соответствующего
+Перед инициализацией движок разрешает определения двух комплектов и проверяет, что
+их слоты и `classId` совпадают с `fighterClass`. Тип оружия всегда создаёт один
+`equipment-perk` классового приёма. Редкое или именное оружие обязано создать от
+одного до двух дополнительных перков, а редкие или именные доспехи — ровно один.
+Обычная атака остаётся стандартным действием ядра и не создаёт экземпляр перка.
+Полный контракт описан в
+[`combat-spec/10-equipment-loadouts.md`](../combat-spec/10-equipment-loadouts.md).
+
+Множитель арены участвует в расчёте динамической поддержки соответствующего
 бойца, но сам поддержкой не является.
 
 `perks` содержит не более пяти уникальных постоянных перков бойца. `buffs`,
@@ -137,19 +176,13 @@ interface ArenaBattleState {
 
 interface FighterBattleState {
   id: string;
-  equipmentType: "murmillo" | "thraex" | "retiarius";
+  fighterClass: FighterClassId;
+  classMatchup: ClassMatchupState;
   equipment: {
-    weaponPower: number;
-    armor: number;
-    weight: number;
+    weaponSet: ResolvedEquipmentState;
+    armorSet: ResolvedEquipmentState;
   };
   equipmentPerks: readonly string[];
-  matchup: {
-    opponentEquipmentType: "murmillo" | "thraex" | "retiarius" | null;
-    advantage: boolean;
-    strengthMultiplier: number;
-    initiativeBonus: number;
-  } | null;
   battleBase: {
     strength: number;
     health: number;
@@ -163,6 +196,25 @@ interface FighterBattleState {
   fatigue: number;
   activeModifiers: ActiveBattleModifierState[];
   traumas: TraumaState[];
+}
+
+interface ResolvedEquipmentState {
+  instanceId: string;
+  definitionId: string;
+  equipmentTypeId: string;
+  slot: "weapon" | "armor";
+  classId: FighterClassId;
+  quality: EquipmentQuality;
+  appliedStats: Record<string, number>;
+  classTechniquePerkId?: string;
+  additionalPerkIds: readonly string[];
+}
+
+interface ClassMatchupState {
+  opponentClass: FighterClassId;
+  relation: "advantage" | "disadvantage" | "neutral";
+  strengthMultiplier: number;
+  initiativeBonus: number;
 }
 
 interface ActiveBattleModifierState {
@@ -184,9 +236,10 @@ interface TraumaState {
 
 `battleBase` — модифицированная копия базовых характеристик только для текущего боя.
 Она не изменяет постоянные данные гладиатора. Начальные динамические характеристики
-рассчитываются из `battleBase`, типа бойца, модифицированной экипировки, модификаторов
-и параметров арены. `equipmentType` и созданный из него `equipment-perk` входят в
-состояние и replay-снимки. `seed` и единый `RandomSource` обязательны:
+рассчитываются из `battleBase`, класса бойца, двух разрешённых комплектов,
+модификаторов арены и параметров арены. `fighterClass`, качество, определения комплектов и
+созданные из них `equipment-perk` входят в состояние и replay-снимки. `seed` и
+единый `RandomSource` обязательны:
 одинаковые входные данные и версия правил должны давать одинаковый результат.
 
 ## 4. Цикл движка
@@ -195,8 +248,10 @@ interface TraumaState {
 
 ```text
 Нормализация входа и создание экземпляров `BattleModifier`
+→ разрешение и валидация двух комплектов снаряжения
 → инициализация динамического состояния
-→ специализации типов бойцов / equipment-perk
+→ применение матрицы соотношений классов
+→ классовый оружейный приём и дополнительные equipment-perk
 → временные эффекты
 → стартовые травмы
 → постоянные перки
@@ -395,8 +450,10 @@ hook-конвейера.
 по `priority`, затем по `definitionId` и `instanceId`, поэтому порядок остаётся
 воспроизводимым даже при нескольких одинаковых эффектах.
 
-Для текущего прототипа используются диапазоны приоритетов: специализации экипировки — `40`,
-временные эффекты — `50`, стартовые травмы — `60`, постоянные перки — `100`. Это не запрещает конкретному
+Для текущего прототипа используются диапазоны приоритетов: эффекты снаряжения —
+`40`, временные эффекты — `50`, стартовые травмы — `60`, постоянные перки — `100`.
+Внутри снаряжения классовый оружейный приём идёт раньше дополнительных перков. Это
+не запрещает конкретному
 определению задать иной приоритет, если ему действительно нужно встроиться раньше
 или позже.
 
