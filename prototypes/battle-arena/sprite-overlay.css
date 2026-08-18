@@ -81,8 +81,10 @@ output { color: var(--sand-light); text-align: right; }
 .preview-controls { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 10px; margin-top: 16px; }
 .preview-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .preview-controls select { min-height: 34px; padding: 6px 8px; color: var(--text); background: #17110e; border: 1px solid var(--line); font: 12px "Courier New", monospace; }
-.preview-controls .mirror-control { display: flex; align-items: center; gap: 8px; padding-top: 18px; }
-.mirror-control input { width: 16px; height: 16px; margin: 0; accent-color: var(--sand); }
+.preview-controls .mirror-control,
+.preview-controls .auto-cycle-control { display: flex; align-items: center; gap: 8px; padding-top: 18px; }
+.mirror-control input,
+.auto-cycle-control input { width: 16px; height: 16px; margin: 0; accent-color: var(--sand); }
 .preview-controls button { align-self: end; min-height: 34px; border: 1px solid var(--line); }
 .preview-stage-wrap { display: grid; gap: 8px; justify-items: center; }
 #sprite-preview-canvas { display: block; width: min(100%, 288px); height: auto; background: #050607; border: 2px solid var(--sand); image-rendering: pixelated; image-rendering: crisp-edges; }

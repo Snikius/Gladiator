@@ -11,6 +11,7 @@ const bodySelect = document.querySelector("#preview-body");
 const weaponSelect = document.querySelector("#preview-weapon");
 const stateSelect = document.querySelector("#preview-state");
 const mirrored = document.querySelector("#preview-mirrored");
+const autoCycle = document.querySelector("#preview-auto-cycle");
 const playButton = document.querySelector("#preview-play");
 const frameLabel = document.querySelector("#preview-frame-label");
 
@@ -44,6 +45,23 @@ const images = new Map();
 let playing = true;
 let startedAt = performance.now();
 let pausedAt = 0;
+let stateCycleTimer = null;
+
+const resetAnimationClock = () => {
+  startedAt = performance.now();
+  pausedAt = 0;
+};
+
+const scheduleStateCycle = () => {
+  window.clearTimeout(stateCycleTimer);
+  stateCycleTimer = null;
+  if (!autoCycle.checked) return;
+  stateCycleTimer = window.setTimeout(() => {
+    stateSelect.selectedIndex = (stateSelect.selectedIndex + 1) % stateSelect.options.length;
+    resetAnimationClock();
+    scheduleStateCycle();
+  }, 4000);
+};
 
 const getImage = (assetId) => {
   const assetPath = ASSETS[assetId];
@@ -146,8 +164,10 @@ buttons.forEach((button) => {
 });
 
 [bodySelect, weaponSelect, stateSelect, mirrored].forEach((control) => {
-  control.addEventListener("change", () => { startedAt = performance.now(); pausedAt = 0; });
+  control.addEventListener("change", resetAnimationClock);
 });
+stateSelect.addEventListener("change", scheduleStateCycle);
+autoCycle.addEventListener("change", scheduleStateCycle);
 bodySelect.addEventListener("change", syncCompatibleWeapons);
 playButton.addEventListener("click", () => {
   if (playing) {
@@ -162,5 +182,6 @@ playButton.addEventListener("click", () => {
 
 setWeaponOpacity();
 syncCompatibleWeapons();
+scheduleStateCycle();
 requestAnimationFrame(renderPreview);
 })();
