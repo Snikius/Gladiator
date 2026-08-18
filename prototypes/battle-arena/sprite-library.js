@@ -30,7 +30,9 @@ const ANIMATION_SPRITE_ROWS = Object.freeze({
   attack: Object.freeze({ row: 3, frames: SIX_FRAMES, fps: 12, loop: false }),
   "defense.block": Object.freeze({ row: 4, frames: SIX_FRAMES, fps: 10, loop: false }),
   "defense.dodge": Object.freeze({ row: 5, frames: SIX_FRAMES, fps: 12, loop: false }),
-  "reaction.hit": Object.freeze({ row: 6, frames: SIX_FRAMES, fps: 10, loop: false }),
+  /* Вторая половина строки 6 — падение. Реакция на обычный удар использует
+   * только первые три позы и возвращается в стойку, не изображая смерть. */
+  "reaction.hit": Object.freeze({ row: 6, frames: Object.freeze([0, 1, 2, 1, 0]), fps: 10, loop: false }),
   defeated: Object.freeze({ row: 6, frames: Object.freeze([3, 4, 5]), fps: 8, loop: false }),
 });
 
@@ -84,6 +86,7 @@ const bodySpriteGrid = (
   handSocket,
   clips = SAFE_GENERATED_BODY_ROWS,
   weaponLayers = Object.freeze({}),
+  displayScale = 1,
 ) => Object.freeze({
   id,
   assetPath,
@@ -93,6 +96,8 @@ const bodySpriteGrid = (
   grid: OVERLAY_ATLAS,
   clips,
   weaponLayers,
+  displayScale,
+  baselineInset: 32 / OVERLAY_ATLAS.cellHeight,
   sockets: Object.freeze({
     "hand.primary": Object.freeze(handSocket),
     "hand.rear": Object.freeze(handSocket),
@@ -116,6 +121,7 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
     { x: 0.56, y: 0.48, rotation: 0 },
     ANIMATION_SPRITE_ROWS,
     RETIARIUS_WEAPON_LAYERS,
+    1.3,
   ),
   "murmillo-body-unarmed-v1": bodySpriteGrid(
     "murmillo-body-unarmed-v1",

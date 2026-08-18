@@ -51,6 +51,7 @@ assert.equal(BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].grid.columns, 6);
 assert.equal(BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].clips.attack.frames.length, 6, "Атака занимает всю строку из шести кадров");
 assert.equal(BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].clips.attack.row, 3, "Атака использует собственную строку атласа");
 assert.equal(BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].clips["idle.normal"].loop, true, "Стойка должна быть циклической анимацией");
+assert.deepEqual(BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].clips["reaction.hit"].frames, [0, 1, 2, 1, 0], "Реакция на удар не захватывает кадры падения");
 assert.equal(mobileFrame.components[1].animation, null, "Нестандартное оружие без листа не зависит от тела");
 const standardInput = createDefaultBattleInput();
 standardInput.fighters[1].fighterClass = "retiarius";
@@ -69,11 +70,18 @@ assert.equal(standardMobileFrame.components[1].attachment.mode, "frame-overlay",
 assert.equal(standardMobileFrame.components[0].animation.mirrored, false, "Левый боец смотрит в центр без отражения исходного листа");
 assert.equal(standardMobileFrame.components[2].animation.bodyGridId, "retiarius-body-overlay-v4", "Ретиарий получает отдельное тело без оружия");
 assert.equal(standardMobileFrame.components[3].skinId, "trident", "Ретиарий получает отдельный слой трезубца");
+assert.equal(standardMobileFrame.components[2].animation.assetHeight, 221, "Меньший исходник ретиария компенсируется масштабом отображения");
+assert.equal(standardMobileFrame.components[2].transform.x - standardMobileFrame.components[0].transform.x, 144, "Бойцы стоят достаточно близко для ближнего боя");
 assert.equal(standardMobileFrame.components[3].attachment.socket, "hand.rear", "Трезубец регистрируется по хвату задней руки");
 assert.equal(standardMobileFrame.components[1].animation.layerByFrame[0], "behind", "Тело мурмиллона рисуется над мечом");
 assert.equal(BODY_ANIMATION_GRIDS["retiarius-body-overlay-v4"].weaponLayers.attack[2], "front", "Глубина оружия может меняться в отдельном кадре");
 assert.equal(standardMobileFrame.components[2].animation.mirrored, true, "Правый боец зеркалит исходный правый лист");
-assert.equal(standardMobileFrame.components[0].transform.y, standardMobileFrame.arena.groundY, "Ноги спрайта стоят на линии земли");
+assert.equal(
+  standardMobileFrame.components[0].transform.y
+    - standardMobileFrame.components[0].animation.assetHeight * BODY_ANIMATION_GRIDS["murmillo-body-overlay-v3"].baselineInset,
+  standardMobileFrame.arena.groundY,
+  "Ноги спрайта стоят на линии земли",
+);
 assert.equal(standardMobileFrame.components[0].animation.assetHeight, 170, "Ассет помещается в безопасную область мобильной сцены");
 const actionMobileFrame = createVisualFrame(actionSnapshot, standardInput, undefined, {
   presentation: PRESENTATIONS.mobile,

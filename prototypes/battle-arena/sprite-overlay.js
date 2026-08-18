@@ -31,7 +31,7 @@ const CLIPS = Object.freeze({
   attack: Object.freeze({ row: 3, fps: 12 }),
   "defense.block": Object.freeze({ row: 4, fps: 10 }),
   "defense.dodge": Object.freeze({ row: 5, fps: 12 }),
-  "reaction.hit": Object.freeze({ row: 6, fps: 10 }),
+  "reaction.hit": Object.freeze({ row: 6, fps: 10, frames: Object.freeze([0, 1, 2, 1, 0]) }),
 });
 const LAYER_BY_BODY = Object.freeze({
   murmillo: Object.freeze({ default: Object.freeze(["behind", "behind", "behind", "behind", "behind", "behind"]) }),
@@ -90,7 +90,9 @@ const drawLayer = (image, frame, row) => {
 
 const renderPreview = (now) => {
   const clip = CLIPS[stateSelect.value];
-  const frame = Math.floor(currentElapsed(now) / 1000 * clip.fps) % 6;
+  const sequence = clip.frames || [0, 1, 2, 3, 4, 5];
+  const sequenceIndex = Math.floor(currentElapsed(now) / 1000 * clip.fps) % sequence.length;
+  const frame = sequence[sequenceIndex];
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "#050607";
@@ -122,7 +124,7 @@ const renderPreview = (now) => {
     drawWeapon();
   }
   context.restore();
-  frameLabel.value = `Строка ${clip.row} · кадр ${frame} / 5 · ${clip.fps} FPS`;
+  frameLabel.value = `Строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS`;
   frameLabel.textContent = frameLabel.value;
   requestAnimationFrame(renderPreview);
 };

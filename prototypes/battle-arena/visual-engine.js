@@ -66,7 +66,7 @@ const sheetMotion = (motion) => {
 
 /* Ассет выводится высотой 170 px из безопасного кадра 256×256. Два бойца
  * помещаются рядом в мобильной области и не обрезаются по краям. */
-const presentationConfig = () => ({ positions: [92, 268], groundY: 500, scale: 3.2, assetHeight: 170 });
+const presentationConfig = () => ({ positions: [108, 252], groundY: 500, scale: 3.2, assetHeight: 170 });
 
 /*
  * Чистый адаптер: вход — снимок симуляции, выход — визуальная сцена.
@@ -102,9 +102,11 @@ const createVisualFrame = (
     const sheetClip = bodyGrid.clips[bodyClip];
     const weaponClip = weaponSkin.spriteSheet?.clips?.[bodyClip] || null;
     const usesVectorWeapon = spriteAssets && Boolean(weaponSkin.vectorStyle);
+    const assetHeight = config.assetHeight * (bodyGrid.displayScale || 1);
+    const baselineOffset = spriteAssets ? assetHeight * (bodyGrid.baselineInset || 0) : 0;
     const base = {
       x: config.positions[side],
-      y: spriteAssets ? config.groundY : fighter.health <= 0 ? config.groundY - 9 : config.groundY - 38 * config.scale,
+      y: spriteAssets ? config.groundY + baselineOffset : fighter.health <= 0 ? config.groundY - 9 : config.groundY - 38 * config.scale,
       direction,
       scale: config.scale,
     };
@@ -118,7 +120,7 @@ const createVisualFrame = (
           clip: bodyClip, experimental: bodyGrid.experimental, weaponBakedIn: false,
           sheet: freeze({ columns: bodyGrid.grid.columns, rows: bodyGrid.grid.rows, ...sheetClip }),
           mirrored: (bodyGrid.facing || "right") !== desiredFacing,
-          assetHeight: config.assetHeight || null,
+          assetHeight: assetHeight || null,
         }),
         transform: freeze(base), motion: spriteAssets ? sheetMotion(motion) : componentMotion("fighter", motion, direction, config.scale),
       }),
@@ -139,10 +141,10 @@ const createVisualFrame = (
             frameOverlay: weaponSkin.spriteSheet.frameOverlay,
             layerByFrame: bodyGrid.weaponLayers?.[bodyClip] || null,
             mirrored: (weaponSkin.facing || "right") !== desiredFacing,
-            assetHeight: config.assetHeight || null,
+            assetHeight: assetHeight || null,
           })
           : usesVectorWeapon
-            ? freeze({ vectorFallback: weaponSkin.vectorStyle, assetHeight: config.assetHeight || null })
+            ? freeze({ vectorFallback: weaponSkin.vectorStyle, assetHeight: assetHeight || null })
             : null,
         transform: freeze(base),
         /* frameOverlay — буквальный трафарет над телом. Его движение уже

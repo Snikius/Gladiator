@@ -67,7 +67,7 @@
             <label><span>Состояние</span><select id="preview-state">
               <option value="idle.normal">Обычная стойка</option>
               <option value="idle.tired">Уставшая стойка</option>
-              <option value="idle.injured">Раненая стойка</option>
+              <option value="idle.injured" selected>Раненая стойка</option>
               <option value="attack">Атака</option>
               <option value="defense.block">Блок</option>
               <option value="defense.dodge">Уворот</option>
@@ -79,7 +79,7 @@
         </div>
         <div class="preview-stage-wrap">
           <canvas id="sprite-preview-canvas" width="288" height="288" aria-label="Предпросмотр наложения кадра"></canvas>
-          <output id="preview-frame-label">Строка 0 · кадр 0 / 5 · 6 FPS</output>
+          <output id="preview-frame-label">Строка 2 · кадр 0 · 5 FPS</output>
         </div>
       </section>
 
@@ -134,6 +134,6 @@
       </section>
     </main>
 
-    <script src="./sprite-overlay.js?v=5"></script>
+    <script src="./sprite-overlay.js?v=6"></script>
   </body>
 </html>
