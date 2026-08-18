@@ -4,10 +4,15 @@
 const {
   ARENA_TYPES,
   BattleEngine,
-  EQUIPMENT_TYPE_DEFINITIONS,
+  FIGHTER_CLASS_DEFINITIONS,
+  EQUIPMENT_QUALITIES,
+  WEAPON_SET_DEFINITIONS,
+  WEAPON_ITEMS,
+  ARMOR_ITEMS,
+  ALL_MODIFIER_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
-  TEMPORARY_PERK_DEFINITIONS,
+  BUFF_DEFINITIONS,
   createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
@@ -70,11 +75,25 @@ const formatNumber = (value, digits = 2) => Number(value).toLocaleString("ru-RU"
 const percent = (value) => `${formatNumber(value * 100, 2)}%`;
 
 const arenaName = (arenaId) => ARENA_TYPES.find((arena) => arena.id === arenaId)?.name || arenaId;
-const equipmentType = (typeId) => EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === typeId);
-const equipmentTypeName = (typeId) => equipmentType(typeId)?.name || typeId;
-const perkName = (perkId) => PERK_DEFINITIONS.find((perk) => perk.id === perkId)?.name || perkId;
+const fighterClass = (classId) => FIGHTER_CLASS_DEFINITIONS.find((item) => item.id === classId);
+const fighterClassName = (classId) => fighterClass(classId)?.name || classId;
+const perkName = (modifierId) => PERK_DEFINITIONS.find((perk) => perk.id === modifierId)?.name || modifierId;
+const modifierName = (modifierId) => ALL_MODIFIER_DEFINITIONS.find((item) => item.id === modifierId)?.name || modifierId;
+const qualityName = (qualityId) => EQUIPMENT_QUALITIES.find((item) => item.id === qualityId)?.name || qualityId;
+const equipmentGlyphs = {
+  shield: "▣", sica: "⌁", net: "#", helmet: "◉", spear: "↟",
+  sword: "†", armor: "▤", greaves: "∥", shoulder: "◒",
+};
+const equipmentGlyph = (name) => equipmentGlyphs[name] || "◆";
+const equipmentStatNames = {
+  weaponPower: "урон",
+  accuracy: "точность",
+  armor: "броня",
+  weight: "вес",
+  mobility: "подвижность",
+};
 const effectDefinitions = {
-  temporaryPerks: TEMPORARY_PERK_DEFINITIONS,
+  buffs: BUFF_DEFINITIONS,
   injuries: INJURY_DEFINITIONS,
 };
 const effectName = (type, effectId) =>
@@ -99,16 +118,62 @@ const appendEffectRow = (fighterIndex, type, selectedValue = "") => {
   list.append(row);
 };
 
+const equipmentItem = (itemId) => [...WEAPON_ITEMS, ...ARMOR_ITEMS].find((item) => item.id === itemId);
+
+const equipmentPreview = (item) => {
+  const stats = Object.entries(item.stats)
+    .map(([key, value]) => `${equipmentStatNames[key] || key}: ${value > 0 && key === "mobility" ? "+" : ""}${value}`)
+    .join(" · ");
+  const weaponSet = item.slot === "weapon"
+    ? WEAPON_SET_DEFINITIONS.find((candidate) => candidate.id === item.setId)
+    : null;
+  const technique = weaponSet ? `Приём: ${modifierName(weaponSet.techniqueId)}` : null;
+  const extraNames = item.additionalPerkIds.map(modifierName).join(", ");
+  const extras = [technique, extraNames ? `Доп.: ${extraNames}` : "без дополнительного эффекта"]
+    .filter(Boolean)
+    .join(" · ");
+  return `<span class="equipment-icon">${equipmentGlyph(item.icon)}</span>
+    <span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(qualityName(item.quality))} · ${escapeHtml(stats)}</small><em>${escapeHtml(extras)}</em></span>`;
+};
+
+const updateEquipmentPreview = (picker) => {
+  ["weapon", "armor"].forEach((slot) => {
+    const select = picker.querySelector(`[data-equipment-slot="${slot}"]`);
+    const item = equipmentItem(select.value);
+    const preview = picker.querySelector(`[data-equipment-preview="${slot}"]`);
+    preview.className = `equipment-preview quality-${item.quality}`;
+    preview.innerHTML = equipmentPreview(item);
+  });
+};
+
+const renderEquipmentPicker = (fighterIndex, classId, weaponId, armorId) => {
+  const picker = document.querySelector(`[data-equipment-picker="${fighterIndex}"]`);
+  const selectedClass = fighterClass(classId) || FIGHTER_CLASS_DEFINITIONS[0];
+  const weapons = WEAPON_ITEMS.filter((item) => item.classId === selectedClass.id);
+  const armors = ARMOR_ITEMS.filter((item) => item.classId === selectedClass.id);
+  const selectedWeapon = weapons.some((item) => item.id === weaponId) ? weaponId : weapons[0].id;
+  const selectedArmor = armors.some((item) => item.id === armorId) ? armorId : armors[0].id;
+  picker.innerHTML = `
+    <p class="sublegend">Класс и комплекты</p>
+    <div class="class-choice" role="group" aria-label="Класс гладиатора">
+      ${FIGHTER_CLASS_DEFINITIONS.map((item) => `<button type="button" data-class-choice="${item.id}" class="${item.id === selectedClass.id ? "selected" : ""}" title="${escapeHtml(item.description)}"><b>${equipmentGlyph(item.icon)}</b><span>${escapeHtml(item.name)}</span></button>`).join("")}
+    </div>
+    <input type="hidden" data-fighter-class value="${selectedClass.id}" />
+    <label class="equipment-select"><span>Оружейный комплект</span><select data-equipment-slot="weapon">
+      ${weapons.map((item) => `<option value="${item.id}" ${item.id === selectedWeapon ? "selected" : ""}>${escapeHtml(qualityName(item.quality))} · ${escapeHtml(item.name)}</option>`).join("")}
+    </select></label>
+    <div class="equipment-preview quality-${equipmentItem(selectedWeapon).quality}" data-equipment-preview="weapon"></div>
+    <label class="equipment-select"><span>Комплект доспехов</span><select data-equipment-slot="armor">
+      ${armors.map((item) => `<option value="${item.id}" ${item.id === selectedArmor ? "selected" : ""}>${escapeHtml(qualityName(item.quality))} · ${escapeHtml(item.name)}</option>`).join("")}
+    </select></label>
+    <div class="equipment-preview quality-${equipmentItem(selectedArmor).quality}" data-equipment-preview="armor"></div>`;
+  updateEquipmentPreview(picker);
+};
+
 const populateMenus = () => {
   elements.arenaType.innerHTML = ARENA_TYPES
     .map((arena) => `<option value="${arena.id}">${escapeHtml(arena.name)}</option>`)
     .join("");
-
-  document.querySelectorAll('[data-field="equipmentType"]').forEach((select) => {
-    select.innerHTML = EQUIPMENT_TYPE_DEFINITIONS.map((type) => (
-      `<option value="${type.id}">${escapeHtml(type.name)} · ${escapeHtml(type.weapon)}</option>`
-    )).join("");
-  });
 
   document.querySelectorAll("[data-perks]").forEach((container) => {
     const fighterIndex = Number(container.dataset.perks);
@@ -132,9 +197,9 @@ const populateMenus = () => {
             <strong>Временные эффекты</strong>
             <small>Действуют один бой · количество не ограничено</small>
           </div>
-          <button type="button" data-add-effect="temporaryPerks" data-fighter-index="${fighterIndex}">+ Добавить</button>
+          <button type="button" data-add-effect="buffs" data-fighter-index="${fighterIndex}">+ Добавить</button>
         </div>
-        <div class="dynamic-effect-list" data-effect-list="temporaryPerks" data-fighter-index="${fighterIndex}"></div>
+        <div class="dynamic-effect-list" data-effect-list="buffs" data-fighter-index="${fighterIndex}"></div>
       </section>
       <section class="effect-builder injury-builder">
         <div class="effect-builder-heading">
@@ -151,12 +216,6 @@ const populateMenus = () => {
 };
 
 const renderPerkSlotDescriptions = () => {
-  document.querySelectorAll('[data-field="equipmentType"]').forEach((select) => {
-    const definition = equipmentType(select.value);
-    select.closest("label").querySelector("[data-equipment-description]").textContent =
-      definition?.description || "Тип экипировки не выбран";
-  });
-
   document.querySelectorAll("[data-perk-slot]").forEach((select) => {
     const perk = PERK_DEFINITIONS.find((item) => item.id === select.value);
     select.closest(".perk-slot").querySelector("[data-perk-description]").textContent =
@@ -194,21 +253,23 @@ const setFormFromInput = (input) => {
     const fighter = input.fighters[index];
     const values = {
       name: fighter.name,
-      equipmentType: fighter.equipmentType,
       strength: fighter.base.strength,
       health: fighter.base.health,
       charisma: fighter.base.charisma,
-      weaponPower: fighter.equipment.weaponPower,
-      armor: fighter.equipment.armor,
-      weight: fighter.equipment.weight,
     };
     Object.entries(values).forEach(([field, value]) => {
       form.querySelector(`[data-field="${field}"]`).value = value;
     });
+    renderEquipmentPicker(
+      index,
+      fighter.fighterClass,
+      fighter.equipment.weaponSet.definitionId,
+      fighter.equipment.armorSet.definitionId,
+    );
     document.querySelectorAll(`[data-fighter-perk="${index}"]`).forEach((select, slot) => {
       select.value = fighter.perks[slot] || "";
     });
-    ["temporaryPerks", "injuries"].forEach((type) => {
+    ["buffs", "injuries"].forEach((type) => {
       const list = document.querySelector(`[data-effect-list="${type}"][data-fighter-index="${index}"]`);
       list.innerHTML = "";
       (fighter[type] || []).forEach((effectId) => appendEffectRow(index, type, effectId));
@@ -229,17 +290,16 @@ const readFighter = (index) => {
       charisma: Number(read("charisma")),
     },
     equipment: {
-      weaponPower: Number(read("weaponPower")),
-      armor: Number(read("armor")),
-      weight: Number(read("weight")),
+      weaponSet: { definitionId: form.querySelector('[data-equipment-slot="weapon"]').value },
+      armorSet: { definitionId: form.querySelector('[data-equipment-slot="armor"]').value },
     },
-    equipmentType: read("equipmentType"),
+    fighterClass: form.querySelector("[data-fighter-class]").value,
     perks: [...new Set(
       [...document.querySelectorAll(`[data-fighter-perk="${index}"]`)]
         .map((select) => select.value)
         .filter(Boolean),
     )],
-    temporaryPerks: [...document.querySelectorAll(`[data-fighter-effect="${index}"][data-effect-type="temporaryPerks"]`)]
+    buffs: [...document.querySelectorAll(`[data-fighter-effect="${index}"][data-effect-type="buffs"]`)]
       .map((select) => select.value)
       .filter(Boolean),
     injuries: [...document.querySelectorAll(`[data-fighter-effect="${index}"][data-effect-type="injuries"]`)]
@@ -301,9 +361,10 @@ const renderNumbers = (snapshot) => {
         ${meterRow("Инициатива", fighter.initiative, 150, "initiative")}
         ${meterRow("Усталость", fighter.fatigue, 150, "fatigue")}
         <p class="equipment-line">
-          ТИП ${escapeHtml(equipmentTypeName(fighter.equipmentType)).toUpperCase()} ·
+          КЛАСС ${escapeHtml(fighterClassName(fighter.fighterClass)).toUpperCase()} ·
           ХАРИЗМА ${base.charisma} · МНОЖИТЕЛЬ АРЕНЫ ${formatNumber(multiplier)} ·
-          ОРУЖИЕ +${fighter.weaponPower} · БРОНЯ ${fighter.armor} · ВЕС ${fighter.equipmentWeight}
+          ОРУЖИЕ +${fighter.weaponPower} · ТОЧНОСТЬ ${fighter.accuracy} · БРОНЯ ${fighter.armor} ·
+          ВЕС ${fighter.equipmentWeight} · ПОДВИЖНОСТЬ ${fighter.mobility}
         </p>
         <p class="perks-line">ПЕРКИ: ${escapeHtml(perks)}</p>
         <p class="trauma-line">ТРАВМЫ: ${escapeHtml(traumas)}</p>
@@ -504,15 +565,15 @@ const renderDomArena = (snapshot, input) => {
     health: fighter.base.health,
     maxHealth: fighter.base.health,
     fatigue: 0,
-    equipmentType: fighter.equipmentType,
+    fighterClass: fighter.fighterClass,
   }));
   elements.pixelArena.className = `pixel-arena ${snapshot?.arena?.type || input.arena.type}`;
 
   fighters.forEach((fighter, index) => {
     const sprite = elements.pixelArena.querySelector(`[data-dom-fighter="${index}"]`);
     sprite.classList.remove("attacking", "missing", "achilles-leap", "hit", "dodging", "blocking");
-    sprite.classList.remove("equipment-murmillo", "equipment-thraex", "equipment-retiarius");
-    sprite.classList.add(`equipment-${fighter.equipmentType || "murmillo"}`);
+    sprite.classList.remove("equipment-murmillo", "equipment-thraex", "equipment-retiarius", "equipment-secutor", "equipment-hoplomachus");
+    sprite.classList.add(`equipment-${fighter.fighterClass || "murmillo"}`);
     sprite.classList.toggle("active", snapshot?.lastAction?.actorId === fighter.id);
     sprite.classList.toggle("tired", fighter.fatigue >= 70 && fighter.health > 0);
     sprite.classList.toggle("defeated", fighter.health <= 0);
@@ -534,11 +595,11 @@ const renderDomArena = (snapshot, input) => {
     const effects = [
       ...(fighter.equipmentPerks?.length ? [{
         type: "equipment",
-        name: `Специализация: ${equipmentTypeName(fighter.equipmentType)}`,
+        name: fighter.equipmentPerks.map(modifierName).join(", "),
       }] : []),
-      ...(fighter.temporaryPerks || []).map((effectId) => ({
+      ...(fighter.buffs || []).map((effectId) => ({
         type: "temporary",
-        name: effectName("temporaryPerks", effectId),
+        name: effectName("buffs", effectId),
       })),
       ...(fighter.injuries || []).map((effectId) => ({
         type: "injury",
@@ -784,7 +845,7 @@ const renderStatistics = (result) => {
     ["damageReceived", "Урон получен"],
     ["traumasReceived", "Травмы"],
     ["fatigueGained", "Усталость +"],
-    ["perkActivations", "Перки"],
+    ["modifierActivations", "Модификаторы"],
     ["maxConsecutiveActions", "Серия"],
   ];
   elements.statisticsTable.innerHTML = `
@@ -807,7 +868,7 @@ const keyEventTypes = new Set([
   "battle.draw",
   "battle.finished",
   "effect.applied",
-  "perk.activated",
+  "modifier.activated",
 ]);
 
 const renderLog = () => {
@@ -825,7 +886,7 @@ const renderLog = () => {
   elements.battleLog.innerHTML = events.map((event) => {
     const classes = ["log-entry"];
     if (keyEventTypes.has(event.type)) classes.push("key-event");
-    if (event.type.startsWith("perk.")) classes.push("perk-event");
+    if (event.type.startsWith("modifier.")) classes.push("modifier-event");
     return `
       <details class="${classes.join(" ")}" data-sequence="${event.sequence}">
         <summary>
@@ -882,12 +943,16 @@ const resetResults = () => {
 
 const renderPreview = () => {
   const input = readInput();
+  const normalizedInput = new BattleEngine(input).input;
   const snapshot = {
     step: 0,
     label: "Предварительный просмотр",
     arena: input.arena,
     lastAction: null,
-    fighters: input.fighters.map((fighter, index) => ({
+    fighters: normalizedInput.fighters.map((fighter, index) => {
+      const weapon = equipmentItem(fighter.equipment.weaponSet.definitionId);
+      const armor = equipmentItem(fighter.equipment.armorSet.definitionId);
+      return ({
       id: fighter.id,
       name: fighter.name,
       health: fighter.base.health,
@@ -896,16 +961,23 @@ const renderPreview = () => {
       support: fighter.base.charisma * input.arena.supportMultipliers[index],
       initiative: 0,
       fatigue: 0,
-      weaponPower: fighter.equipment.weaponPower,
-      armor: fighter.equipment.armor,
-      equipmentWeight: fighter.equipment.weight,
-      equipmentType: fighter.equipmentType,
-      equipmentPerks: [],
+      weaponPower: weapon.stats.weaponPower,
+      accuracy: weapon.stats.accuracy,
+      armor: armor.stats.armor,
+      equipmentWeight: weapon.stats.weight + armor.stats.weight,
+      mobility: armor.stats.mobility,
+      fighterClass: fighter.fighterClass,
+      weaponSet: fighter.equipment.weaponSet,
+      armorSet: fighter.equipment.armorSet,
+      equipmentPerks: [
+        ...weapon.additionalPerkIds,
+        ...armor.additionalPerkIds,
+      ],
       perks: fighter.perks,
-      temporaryPerks: fighter.temporaryPerks,
+      buffs: fighter.buffs,
       injuries: fighter.injuries,
       traumas: [],
-    })),
+    }); }),
   };
   elements.arenaName.textContent = arenaName(input.arena.type);
   elements.arenaSeed.textContent = input.seed;
@@ -944,10 +1016,18 @@ renderPreview();
 
 elements.form.addEventListener("submit", startBattle);
 elements.form.addEventListener("input", () => {
+  document.querySelectorAll("[data-equipment-picker]").forEach(updateEquipmentPreview);
   renderPerkSlotDescriptions();
   if (!currentResult) renderPreview();
 });
 elements.form.addEventListener("click", (event) => {
+  const classButton = event.target.closest("[data-class-choice]");
+  if (classButton) {
+    const picker = classButton.closest("[data-equipment-picker]");
+    renderEquipmentPicker(Number(picker.dataset.equipmentPicker), classButton.dataset.classChoice);
+    if (!currentResult) renderPreview();
+    return;
+  }
   const addButton = event.target.closest("[data-add-effect]");
   if (addButton) {
     appendEffectRow(Number(addButton.dataset.fighterIndex), addButton.dataset.addEffect);

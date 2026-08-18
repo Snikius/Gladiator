@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=20" />
   </head>
   <body>
     <header class="topbar">
@@ -15,7 +15,7 @@
       </div>
       <div class="topbar-links">
         <a class="topbar-link" href="./reference.html">▦ Справочник</a>
-        <div class="build-badge">RULESET 0.5</div>
+        <div class="build-badge">RULESET 0.6</div>
       </div>
     </header>
 
@@ -66,21 +66,11 @@
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Маркус" />
               </label>
-              <label class="equipment-type-field">
-                <span>Тип экипировки</span>
-                <select data-field="equipmentType"></select>
-                <small data-equipment-description></small>
-              </label>
+              <div class="equipment-picker" data-equipment-picker="0"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="125" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="48" /></label>
-              </div>
-              <p class="sublegend">Экипировка</p>
-              <div class="form-grid stats-input-grid">
-                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="14" /></label>
-                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="12" /></label>
-                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="11" /></label>
               </div>
               <div class="perk-list" data-perks="0"></div>
             </fieldset>
@@ -91,21 +81,11 @@
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Тит" />
               </label>
-              <label class="equipment-type-field">
-                <span>Тип экипировки</span>
-                <select data-field="equipmentType"></select>
-                <small data-equipment-description></small>
-              </label>
+              <div class="equipment-picker" data-equipment-picker="1"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="112" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="68" /></label>
-              </div>
-              <p class="sublegend">Экипировка</p>
-              <div class="form-grid stats-input-grid">
-                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="11" /></label>
-                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="8" /></label>
-                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="7" /></label>
               </div>
               <div class="perk-list" data-perks="1"></div>
             </fieldset>
@@ -268,7 +248,8 @@
       </section>
     </main>
 
-    <script src="./battle-engine.js?v=18"></script>
-    <script src="./app.js?v=18"></script>
+    <script src="./reference-data.js?v=2"></script>
+    <script src="./battle-engine.js?v=20"></script>
+    <script src="./app.js?v=20"></script>
   </body>
 </html>

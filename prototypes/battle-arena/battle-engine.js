@@ -4,6 +4,21 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round = (value, digits = 2) => Number(value.toFixed(digits));
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const REFERENCE_DATA = globalThis.GladiatorReferenceData;
+
+if (!REFERENCE_DATA) {
+  throw new Error("Сначала подключите reference-data.js — он содержит каталог экипировки");
+}
+
+const {
+  classes: FIGHTER_CLASS_DEFINITIONS,
+  weapons: WEAPON_SET_DEFINITIONS,
+  armor: ARMOR_SET_DEFINITIONS,
+  perks: ALL_MODIFIER_DEFINITIONS,
+  qualities: EQUIPMENT_QUALITIES,
+  weaponItems: WEAPON_ITEMS,
+  armorItems: ARMOR_ITEMS,
+} = REFERENCE_DATA;
 
 const hashSeed = (seed) => {
   let hash = 2166136261;
@@ -37,9 +52,30 @@ const weightedPick = (items, random) => {
   return { ...items.at(-1), roll: round(roll, 6), totalWeight: round(total) };
 };
 
+const normalizeModifierRefs = (items, limit = Infinity) => items
+  .filter(Boolean)
+  .map((item) => (typeof item === "string" ? item : item.id))
+  .filter(Boolean)
+  .slice(0, limit);
+
+const normalizeEquipmentRef = (rawRef, catalog, fighterClass, slot) => {
+  const requestedId = typeof rawRef === "string" ? rawRef : rawRef?.definitionId;
+  const item = catalog.find((candidate) => (
+    candidate.id === requestedId && candidate.classId === fighterClass
+  )) || catalog.find((candidate) => candidate.classId === fighterClass && candidate.quality === "common");
+  if (!item) throw new Error(`Для класса ${fighterClass} отсутствует комплект ${slot}`);
+  return {
+    instanceId: rawRef?.instanceId || `${fighterClass}:${slot}:${item.id}`,
+    definitionId: item.id,
+    quality: item.quality,
+    statValues: clone(item.stats),
+    additionalPerkIds: [...item.additionalPerkIds],
+  };
+};
+
 const normalizeInput = (input) => ({
   schemaVersion: 1,
-  rulesetVersion: "prototype-0.5",
+  rulesetVersion: "prototype-0.6",
   seed: String(input.seed || "gladiator-prototype"),
   maxSteps: clamp(Number(input.maxSteps) || 80, 1, 500),
   arena: {
@@ -49,61 +85,34 @@ const normalizeInput = (input) => ({
       clamp(Number(input.arena?.supportMultipliers?.[1]) || 1, 0.1, 3),
     ],
   },
-  fighters: input.fighters.map((fighter, index) => ({
-    id: fighter.id || `fighter-${index + 1}`,
-    name: fighter.name || `Боец ${index + 1}`,
-    base: {
-      strength: clamp(Number(fighter.base?.strength) || 50, 1, 100),
-      health: clamp(Number(fighter.base?.health) || 100, 1, 300),
-      charisma: clamp(Number(fighter.base?.charisma) || 50, 1, 100),
-    },
-    equipment: {
-      weaponPower: clamp(Number(fighter.equipment?.weaponPower) || 0, 0, 50),
-      armor: clamp(Number(fighter.equipment?.armor) || 0, 0, 50),
-      weight: clamp(Number(fighter.equipment?.weight) || 0, 0, 50),
-    },
-    equipmentType: EQUIPMENT_TYPE_DEFINITIONS.some((type) => type.id === fighter.equipmentType)
-      ? fighter.equipmentType
-      : "murmillo",
-    perks: [...new Set((fighter.perks || []).filter(Boolean))].slice(0, 3),
-    temporaryPerks: (fighter.temporaryPerks || []).filter(Boolean),
-    injuries: (fighter.injuries || []).filter(Boolean),
-  })),
+  fighters: input.fighters.map((fighter, index) => {
+    const requestedClass = fighter.fighterClass || fighter.equipmentType;
+    const fighterClass = FIGHTER_CLASS_DEFINITIONS.some((item) => item.id === requestedClass)
+      ? requestedClass
+      : "murmillo";
+    return {
+      id: fighter.id || `fighter-${index + 1}`,
+      name: fighter.name || `Боец ${index + 1}`,
+      fighterClass,
+      base: {
+        strength: clamp(Number(fighter.base?.strength) || 50, 1, 100),
+        health: clamp(Number(fighter.base?.health) || 100, 1, 300),
+        charisma: clamp(Number(fighter.base?.charisma) || 50, 1, 100),
+      },
+      equipment: {
+        weaponSet: normalizeEquipmentRef(fighter.equipment?.weaponSet, WEAPON_ITEMS, fighterClass, "weapon"),
+        armorSet: normalizeEquipmentRef(fighter.equipment?.armorSet, ARMOR_ITEMS, fighterClass, "armor"),
+      },
+      perks: [...new Set(normalizeModifierRefs(fighter.perks, 3))],
+      buffs: normalizeModifierRefs(fighter.buffs || fighter.temporaryPerks || []),
+      injuries: normalizeModifierRefs(fighter.injuries || []),
+    };
+  }),
 });
 
 const ARENA_TYPES = [
   { id: "normal", name: "Обычная арена" },
   { id: "sand", name: "Песчаная арена" },
-];
-
-const EQUIPMENT_TYPE_DEFINITIONS = [
-  {
-    id: "murmillo",
-    name: "Мурмиллон",
-    weapon: "Гладиус и большой скутум",
-    beats: "thraex",
-    specializationPerk: "murmillo-specialization",
-    bonuses: { weaponPower: 2, armor: 8, weight: 6 },
-    description: "Тяжёлый стиль: +2 оружия, +8 брони, +6 веса; первый полученный удар блокируется. Силен против Фракийца.",
-  },
-  {
-    id: "thraex",
-    name: "Фракиец",
-    weapon: "Изогнутая сика и малая пармула",
-    beats: "retiarius",
-    specializationPerk: "thraex-specialization",
-    bonuses: { weaponPower: 5, armor: 3, weight: 2 },
-    description: "Подвижный стиль: +5 оружия, +3 брони, +2 веса; попадание ускоряет следующий выбор хода. Силен против Ретиария.",
-  },
-  {
-    id: "retiarius",
-    name: "Ретиарий",
-    weapon: "Сеть и трезубец",
-    beats: "murmillo",
-    specializationPerk: "retiarius-specialization",
-    bonuses: { weaponPower: 7, armor: -3, weight: -4 },
-    description: "Дальний стиль: +7 оружия, −3 брони, −4 веса; сеть один раз крадёт ход врага. Силен против Мурмиллона.",
-  },
 ];
 
 const PERK_DEFINITIONS = [
@@ -159,7 +168,7 @@ const PERK_DEFINITIONS = [
   },
 ];
 
-const TEMPORARY_PERK_DEFINITIONS = [
+const BUFF_DEFINITIONS = [
   {
     id: "bath-effect",
     name: "Эффект бани",
@@ -264,27 +273,18 @@ const applyInitializationModifiers = (data, api, modifiers, message) => {
   return { ...data, fighters };
 };
 
-const applyEquipmentSpecialization = (data, api, equipmentTypeId) => {
+const applyClassEquipment = (data, api, fighterClassId) => {
   const fighterIndex = data.fighters.findIndex((fighter) => fighter.id === api.ownerId);
-  const definition = EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === equipmentTypeId);
+  const definition = FIGHTER_CLASS_DEFINITIONS.find((item) => item.id === fighterClassId);
   if (fighterIndex < 0 || !definition) return data;
 
   const fighter = clone(data.fighters[fighterIndex]);
   const opponent = data.fighters.find((candidate) => candidate.id !== api.ownerId);
-  const hasMatchupAdvantage = opponent?.equipmentType === definition.beats;
-  fighter.equipment.weaponPower = clamp(
-    round(fighter.equipment.weaponPower + definition.bonuses.weaponPower), 0, 75,
-  );
-  fighter.equipment.armor = clamp(
-    round(fighter.equipment.armor + definition.bonuses.armor), 0, 75,
-  );
-  fighter.equipment.weight = clamp(
-    round(fighter.equipment.weight + definition.bonuses.weight), 0, 75,
-  );
-  fighter.equipmentPerks = [definition.specializationPerk];
+  const hasMatchupAdvantage = opponent?.fighterClass === definition.beats;
+  const hasMatchupDisadvantage = opponent?.fighterClass === definition.losesTo;
   fighter.matchup = {
-    opponentEquipmentType: opponent?.equipmentType || null,
-    advantage: hasMatchupAdvantage,
+    opponentClass: opponent?.fighterClass || null,
+    relation: hasMatchupAdvantage ? "advantage" : (hasMatchupDisadvantage ? "disadvantage" : "neutral"),
     strengthMultiplier: hasMatchupAdvantage ? 1.15 : 1,
     initiativeBonus: hasMatchupAdvantage ? 10 : 0,
   };
@@ -298,15 +298,15 @@ const applyEquipmentSpecialization = (data, api, equipmentTypeId) => {
   fighters[fighterIndex] = fighter;
   api.activate(
     hasMatchupAdvantage
-      ? `${definition.name}: преимущество экипировки даёт ×1.15 к силе и +10 инициативы`
-      : `${definition.name}: применены бонусы специализации экипировки`,
+      ? `${definition.name}: преимущество класса даёт ×1.15 к силе и +10 инициативы`
+      : `${definition.name}: классовый комплект подготовлен`,
   );
   return { ...data, fighters };
 };
 
-const EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS = {
-  "murmillo-specialization": {
-    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "murmillo"),
+const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
+  "weapon.murmillo-shield-advance": {
+    beforeInitialize: (data, api) => applyClassEquipment(data, api, "murmillo"),
     afterAction(data, api, runtime) {
       if (runtime.shieldWallUsed || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
       runtime.shieldWallUsed = true;
@@ -320,12 +320,12 @@ const EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS = {
       };
     },
   },
-  "thraex-specialization": {
-    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "thraex"),
+  "weapon.thraex-hooking-slash": {
+    beforeInitialize: (data, api) => applyClassEquipment(data, api, "thraex"),
     afterAction(data, api, runtime) {
       if (data.actorId !== api.ownerId || data.outcome !== "hit") return data;
       runtime.initiativeSurge = true;
-      api.emit("perk.state.changed", "Фракиец подготовил рывок инициативы", {
+      api.emit("modifier.runtime.changed", "Фракиец подготовил рывок инициативы", {
         initiativeSurge: true,
       });
       return data;
@@ -344,8 +344,8 @@ const EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS = {
       };
     },
   },
-  "retiarius-specialization": {
-    beforeInitialize: (data, api) => applyEquipmentSpecialization(data, api, "retiarius"),
+  "weapon.retiarius-net-cast": {
+    beforeInitialize: (data, api) => applyClassEquipment(data, api, "retiarius"),
     afterSelectActor(data, api, runtime) {
       if (runtime.netUsed || data.actorId === api.ownerId) return data;
       runtime.netUsed = true;
@@ -354,16 +354,151 @@ const EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS = {
         type: "fatigue",
         fighterId: data.actorId,
         value: 6,
-        reason: "equipment-perk:retiarius-net",
+        reason: "class-technique:retiarius-net",
       });
       return {
         ...data,
         originalActorId: data.actorId,
         actorId: api.ownerId,
-        reason: "equipment-perk:retiarius-net",
+        reason: "class-technique:retiarius-net",
       };
     },
   },
+  "weapon.secutor-relentless-pursuit": {
+    beforeInitialize: (data, api) => applyClassEquipment(data, api, "secutor"),
+    afterAction(data, api, runtime) {
+      if (data.actorId !== api.ownerId || !["miss", "dodge"].includes(data.outcome)) return data;
+      runtime.pursuit = true;
+      api.emit("modifier.runtime.changed", "Секутор продолжает преследование", { pursuit: true });
+      return data;
+    },
+    beforeSelectActor(data, api, runtime) {
+      if (!runtime.pursuit) return data;
+      runtime.pursuit = false;
+      api.activate("Неотступное преследование усилило инициативу");
+      return { ...data, candidates: data.candidates.map((candidate) => (
+        candidate.fighterId === api.ownerId ? { ...candidate, weight: round(candidate.weight * 1.4) } : candidate
+      )) };
+    },
+  },
+  "weapon.hoplomachus-spear-distance": {
+    beforeInitialize: (data, api) => applyClassEquipment(data, api, "hoplomachus"),
+    beforeAction(data, api, runtime) {
+      if (runtime.used || data.actorId !== api.ownerId) return data;
+      runtime.used = true;
+      api.activate("Дистанция копья усилила первый удар");
+      return { ...data, strengthMultiplier: 1.25, classTechnique: "spear-distance" };
+    },
+  },
+};
+
+const EQUIPMENT_MODIFIER_IMPLEMENTATIONS = {
+  "weapon.honed-edge": {
+    afterAction(data, api, runtime) {
+      if (runtime.used || data.actorId !== api.ownerId || data.outcome !== "hit") return data;
+      runtime.used = true;
+      api.activate("Отточенная кромка добавила 5 урона к первому попаданию");
+      return { ...data, damage: data.damage + 5 };
+    },
+  },
+  "weapon.blood-seeker": {
+    beforeAction(data, api) {
+      if (data.actorId !== api.ownerId) return data;
+      const target = api.state.fighters.find((fighter) => fighter.id === data.targetId);
+      if (!target || target.health >= target.maxHealth) return data;
+      api.activate("Ищущий кровь усилил удар по раненому противнику");
+      return { ...data, strengthMultiplier: (data.strengthMultiplier || 1) * 1.1 };
+    },
+  },
+  "weapon.counterweight": {
+    beforeApplyEffects(data, api) {
+      const changed = data.effects.some((effect) => effect.type === "fatigue" && effect.fighterId === api.ownerId && effect.reason === "action");
+      if (!changed) return data;
+      api.activate("Противовес уменьшил усталость от атаки");
+      return { ...data, effects: data.effects.map((effect) => (
+        effect.type === "fatigue" && effect.fighterId === api.ownerId && effect.reason === "action"
+          ? { ...effect, value: round(effect.value * 0.8) }
+          : effect
+      )) };
+    },
+  },
+  "weapon.guard-breaker": {
+    afterAction(data, api) {
+      if (data.actorId !== api.ownerId || data.outcome !== "block") return data;
+      api.activate("Разрушитель защиты утомил заблокировавшего врага");
+      api.enqueue({ type: "fatigue", fighterId: data.targetId, value: 4, reason: "equipment:guard-breaker" });
+      return data;
+    },
+  },
+  "weapon.quick-recovery": {
+    afterAction(data, api) {
+      if (data.actorId !== api.ownerId || data.outcome !== "miss") return data;
+      api.activate("Быстрое возвращение снизило цену промаха");
+      api.enqueue({ type: "fatigue", fighterId: api.ownerId, value: -2, reason: "equipment:quick-recovery" });
+      return data;
+    },
+  },
+  "weapon.deceptive-feint": {
+    beforeAction(data, api) {
+      if (data.actorId !== api.ownerId || api.random() >= 0.15) return data;
+      api.activate("Обманный финт не позволяет заблокировать атаку");
+      return { ...data, unblockable: true };
+    },
+  },
+  "armor.reinforced-lining": {
+    afterAction(data, api, runtime) {
+      if (runtime.used || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      runtime.used = true;
+      api.activate("Усиленная подкладка поглотила часть первого удара");
+      return { ...data, damage: Math.max(1, data.damage - 6) };
+    },
+  },
+  "armor.balanced-straps": {
+    beforeApplyEffects(data, api) {
+      if (data.action?.outcome !== "block" || data.action.targetId !== api.ownerId) return data;
+      api.activate("Удобные ремни уменьшили усталость от блока");
+      return { ...data, effects: data.effects.map((effect) => (
+        effect.type === "fatigue" && effect.fighterId === api.ownerId
+          ? { ...effect, value: round(effect.value * 0.7) }
+          : effect
+      )) };
+    },
+  },
+  "armor.closed-visor": {
+    afterAction(data, api) {
+      if (data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      api.activate("Закрытое забрало снизило вероятность травмы");
+      return { ...data, traumaChance: round(data.traumaChance * 0.7, 4) };
+    },
+  },
+  "armor.flexible-joints": {
+    afterRecalculateInitiative(data, api) {
+      if (data.fighterId !== api.ownerId) return data;
+      api.activate("Подвижные сочленения добавили 4 инициативы");
+      return { ...data, initiative: data.initiative + 4 };
+    },
+  },
+  "armor.layered-padding": {
+    afterAction(data, api) {
+      if (data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      api.activate("Многослойная стёжка уменьшила урон");
+      return { ...data, damage: Math.max(1, data.damage - 3) };
+    },
+  },
+  "armor.last-plate": {
+    beforeApplyEffects(data, api, runtime) {
+      if (runtime.used) return data;
+      const owner = api.state.fighters.find((fighter) => fighter.id === api.ownerId);
+      const healthEffect = data.effects.find((effect) => effect.type === "health" && effect.fighterId === api.ownerId);
+      if (!owner || !healthEffect || owner.health + healthEffect.value > 0) return data;
+      runtime.used = true;
+      api.activate("Последняя пластина оставила бойцу 1 здоровье");
+      return { ...data, effects: data.effects.map((effect) => (
+        effect === healthEffect ? { ...effect, value: 1 - owner.health } : effect
+      )) };
+    },
+  },
+  "armor.sand-seals": {},
 };
 
 const PERK_IMPLEMENTATIONS = {
@@ -404,7 +539,7 @@ const PERK_IMPLEMENTATIONS = {
         ...data,
         originalActorId: data.actorId,
         actorId: api.ownerId,
-        reason: "perk:turn-interceptor",
+        reason: "modifier:turn-interceptor",
       };
     },
   },
@@ -438,7 +573,7 @@ const PERK_IMPLEMENTATIONS = {
       if (!earnedTurn) return data;
       runtime.guaranteedNextTurn = true;
       runtime.trigger = data.outcome;
-      api.emit("perk.state.changed", "Умелый воин подготовил гарантированный ход", {
+      api.emit("modifier.runtime.changed", "Умелый воин подготовил гарантированный ход", {
         guaranteedNextTurn: true,
         trigger: data.outcome,
       });
@@ -454,7 +589,7 @@ const PERK_IMPLEMENTATIONS = {
         ...data,
         originalActorId: data.actorId,
         actorId: api.ownerId,
-        reason: "perk:skilled-warrior",
+        reason: "modifier:skilled-warrior",
       };
     },
   },
@@ -464,8 +599,8 @@ const PERK_IMPLEMENTATIONS = {
         && ["dodge", "block"].includes(data.outcome);
       if (!successfulDefense) return data;
       api.activate("Эффектная защита впечатлила публику");
-      api.enqueue({ type: "support", fighterId: api.ownerId, value: 5, reason: "perk:show-off" });
-      api.enqueue({ type: "fatigue", fighterId: api.ownerId, value: 2, reason: "perk:show-off" });
+      api.enqueue({ type: "support", fighterId: api.ownerId, value: 5, reason: "modifier:show-off" });
+      api.enqueue({ type: "fatigue", fighterId: api.ownerId, value: 2, reason: "modifier:show-off" });
       return data;
     },
   },
@@ -473,7 +608,7 @@ const PERK_IMPLEMENTATIONS = {
     afterAction(data, api) {
       if (data.actorId !== api.ownerId || data.outcome !== "miss") return data;
       api.activate("Публика поддержала красивый, но неудачный замах");
-      api.enqueue({ type: "support", fighterId: api.ownerId, value: 4, reason: "perk:lovable-loser" });
+      api.enqueue({ type: "support", fighterId: api.ownerId, value: 4, reason: "modifier:lovable-loser" });
       return data;
     },
   },
@@ -499,7 +634,7 @@ const PERK_IMPLEMENTATIONS = {
   },
 };
 
-const TEMPORARY_PERK_IMPLEMENTATIONS = {
+const BUFF_IMPLEMENTATIONS = {
   "bath-effect": {
     beforeInitialize: (data, api) => applyInitializationModifiers(
       data, api, { strength: 4, health: 8, charisma: 4 },
@@ -587,7 +722,7 @@ const createStats = () => ({
   damageReceived: 0,
   traumasReceived: 0,
   fatigueGained: 0,
-  perkActivations: 0,
+  modifierActivations: 0,
   maxConsecutiveActions: 0,
 });
 
@@ -603,24 +738,74 @@ const createDefaultBattleInput = () => ({
       id: "fighter-1",
       name: "Маркус",
       base: { strength: 62, health: 125, charisma: 48 },
-      equipment: { weaponPower: 14, armor: 12, weight: 11 },
-      equipmentType: "murmillo",
+      fighterClass: "murmillo",
+      equipment: {
+        weaponSet: { definitionId: "murmillo-arms.good" },
+        armorSet: { definitionId: "murmillo-armor.good" },
+      },
       perks: ["cornered-beast"],
-      temporaryPerks: [],
+      buffs: [],
       injuries: [],
     },
     {
       id: "fighter-2",
       name: "Тит",
       base: { strength: 54, health: 112, charisma: 68 },
-      equipment: { weaponPower: 11, armor: 8, weight: 7 },
-      equipmentType: "thraex",
+      fighterClass: "thraex",
+      equipment: {
+        weaponSet: { definitionId: "thraex-arms.good" },
+        armorSet: { definitionId: "thraex-armor.good" },
+      },
       perks: ["strong-bones"],
-      temporaryPerks: [],
+      buffs: [],
       injuries: [],
     },
   ],
 });
+
+class BattleModifierManager {
+  constructor(engine, instances) {
+    this.engine = engine;
+    this.instances = instances;
+  }
+
+  run(method, initialData) {
+    let data = clone(initialData);
+    for (const modifier of this.instances) {
+      const hook = modifier.implementation[method];
+      if (typeof hook !== "function") continue;
+      const before = clone(data);
+      const runtimeBefore = clone(modifier.runtime);
+      const api = this.engine.createModifierApi(modifier);
+      const returned = hook(clone(data), api, modifier.runtime);
+      data = returned === undefined ? data : clone(returned);
+      this.engine.emit("modifier.hook", `${modifier.id}.${method}`, {
+        modifierId: modifier.id,
+        kind: modifier.kind,
+        instanceId: modifier.instanceId,
+        ownerId: modifier.ownerId,
+        sourceId: modifier.sourceId,
+        before,
+        after: data,
+        runtimeBefore,
+        runtimeAfter: clone(modifier.runtime),
+      });
+    }
+    return data;
+  }
+
+  snapshot() {
+    return this.instances.map((modifier) => ({
+      id: modifier.id,
+      instanceId: modifier.instanceId,
+      kind: modifier.kind,
+      ownerId: modifier.ownerId,
+      sourceId: modifier.sourceId,
+      priority: modifier.priority,
+      runtime: clone(modifier.runtime),
+    }));
+  }
+}
 
 class BattleEngine {
   constructor(rawInput) {
@@ -636,40 +821,46 @@ class BattleEngine {
     this.lastAction = null;
     this.lastActorId = null;
     this.consecutiveActions = 0;
-    this.extensions = this.createExtensions();
+    this.modifierManager = new BattleModifierManager(this, this.createModifiers());
     this.state = null;
   }
 
-  createExtensions() {
-    const extensions = [];
+  createModifiers() {
+    const modifiers = [];
     this.input.fighters.forEach((fighter) => {
-      const addExtensions = (ids, implementations, extensionType, priority) => {
-        ids.forEach((extensionId, index) => {
-          const implementation = implementations[extensionId];
+      const addModifiers = (ids, implementations, kind, priority, sourceId = null) => {
+        ids.forEach((modifierId, index) => {
+          const implementation = implementations[modifierId];
           if (!implementation) return;
-          extensions.push({
-            id: extensionId,
-            instanceId: `${extensionType}:${fighter.id}:${index}:${extensionId}`,
-            extensionType,
+          modifiers.push({
+            id: modifierId,
+            instanceId: `${kind}:${fighter.id}:${index}:${modifierId}`,
+            kind,
             ownerId: fighter.id,
+            sourceId,
             priority,
             implementation,
             runtime: { activations: 0, used: false },
           });
         });
       };
-      const equipmentType = EQUIPMENT_TYPE_DEFINITIONS.find((type) => type.id === fighter.equipmentType);
-      addExtensions(
-        equipmentType ? [equipmentType.specializationPerk] : [],
-        EQUIPMENT_SPECIALIZATION_IMPLEMENTATIONS,
-        "equipment-perk",
+      const weaponItem = WEAPON_ITEMS.find((item) => item.id === fighter.equipment.weaponSet.definitionId);
+      const armorItem = ARMOR_ITEMS.find((item) => item.id === fighter.equipment.armorSet.definitionId);
+      const weaponSet = WEAPON_SET_DEFINITIONS.find((item) => item.id === weaponItem?.setId);
+      addModifiers(
+        weaponSet ? [weaponSet.techniqueId] : [],
+        CLASS_TECHNIQUE_IMPLEMENTATIONS,
+        "class-technique",
         40,
+        weaponItem?.id,
       );
-      addExtensions(fighter.temporaryPerks, TEMPORARY_PERK_IMPLEMENTATIONS, "temporary-perk", 50);
-      addExtensions(fighter.injuries, INJURY_IMPLEMENTATIONS, "injury", 60);
-      addExtensions(fighter.perks, PERK_IMPLEMENTATIONS, "perk", 100);
+      addModifiers(weaponItem?.additionalPerkIds || [], EQUIPMENT_MODIFIER_IMPLEMENTATIONS, "equipment", 45, weaponItem?.id);
+      addModifiers(armorItem?.additionalPerkIds || [], EQUIPMENT_MODIFIER_IMPLEMENTATIONS, "equipment", 45, armorItem?.id);
+      addModifiers(fighter.buffs, BUFF_IMPLEMENTATIONS, "buff", 50);
+      addModifiers(fighter.injuries, INJURY_IMPLEMENTATIONS, "injury", 60);
+      addModifiers(fighter.perks, PERK_IMPLEMENTATIONS, "perk", 100);
     });
-    return extensions.sort((left, right) =>
+    return modifiers.sort((left, right) =>
       left.priority - right.priority
         || left.id.localeCompare(right.id)
         || left.instanceId.localeCompare(right.instanceId),
@@ -688,6 +879,9 @@ class BattleEngine {
 
   initialize() {
     const fighters = this.input.fighters.map((fighter, index) => {
+      const weaponItem = WEAPON_ITEMS.find((item) => item.id === fighter.equipment.weaponSet.definitionId);
+      const armorItem = ARMOR_ITEMS.find((item) => item.id === fighter.equipment.armorSet.definitionId);
+      const weaponSet = WEAPON_SET_DEFINITIONS.find((item) => item.id === weaponItem.setId);
       const support = clamp(
         fighter.base.charisma * this.input.arena.supportMultipliers[index],
         0,
@@ -696,10 +890,22 @@ class BattleEngine {
       return {
         id: fighter.id,
         name: fighter.name,
+        fighterClass: fighter.fighterClass,
         base: clone(fighter.base),
-        equipment: clone(fighter.equipment),
-        equipmentType: fighter.equipmentType,
-        equipmentPerks: [],
+        equipment: {
+          weaponSet: clone(fighter.equipment.weaponSet),
+          armorSet: clone(fighter.equipment.armorSet),
+          weaponPower: weaponItem.stats.weaponPower,
+          accuracy: weaponItem.stats.accuracy,
+          armor: armorItem.stats.armor,
+          weight: weaponItem.stats.weight + armorItem.stats.weight,
+          mobility: armorItem.stats.mobility,
+        },
+        equipmentPerks: [
+          weaponSet.techniqueId,
+          ...weaponItem.additionalPerkIds,
+          ...armorItem.additionalPerkIds,
+        ],
         matchup: null,
         initiativeEquipmentBonus: 0,
         maxHealth: fighter.base.health,
@@ -710,7 +916,7 @@ class BattleEngine {
         fatigue: 0,
         traumas: [],
         perks: [...fighter.perks],
-        temporaryPerks: [...fighter.temporaryPerks],
+        buffs: [...fighter.buffs],
         injuries: [...fighter.injuries],
         stats: createStats(),
       };
@@ -734,9 +940,9 @@ class BattleEngine {
     );
     this.state.fighters = initialized.fighters;
     this.state.arena = initialized.arena;
-    this.extensions.forEach((extension) => {
-      if (extension.runtime.activations > 0) {
-        this.getFighter(extension.ownerId).stats.perkActivations += extension.runtime.activations;
+    this.modifierManager.instances.forEach((modifier) => {
+      if (modifier.runtime.activations > 0) {
+        this.getFighter(modifier.ownerId).stats.modifierActivations += modifier.runtime.activations;
       }
     });
 
@@ -894,9 +1100,13 @@ class BattleEngine {
       };
     }
 
-    const missWeight = 9 + actor.fatigue * 0.32;
-    const dodgeWeight = clamp(9 + target.initiative * 0.1 - target.fatigue * 0.08, 4, 32);
-    const blockWeight = clamp(10 + target.equipment.armor * 0.85 - target.fatigue * 0.09, 4, 34);
+    const missWeight = Math.max(2, 9 + actor.fatigue * 0.32 - actor.equipment.accuracy * 0.8);
+    const dodgeWeight = data.undodgeable ? 0 : clamp(
+      9 + target.initiative * 0.1 - target.fatigue * 0.08 + target.equipment.mobility,
+      4,
+      32,
+    );
+    const blockWeight = data.unblockable ? 0 : clamp(10 + target.equipment.armor * 0.85 - target.fatigue * 0.09, 4, 34);
     const hitWeight = 52 + actor.strength * 0.18;
     const weights = [
       { outcome: "miss", weight: missWeight },
@@ -1052,7 +1262,7 @@ class BattleEngine {
             initiative: round(Math.max(
               1,
               15 + data.support * 0.55 + data.strength * 0.25 - data.fatigue * 0.45
-                - legPenalty + (fighter.initiativeEquipmentBonus || 0),
+                - legPenalty + fighter.equipment.mobility + (fighter.initiativeEquipmentBonus || 0),
             )),
           };
         },
@@ -1081,56 +1291,36 @@ class BattleEngine {
   }
 
   runHooks(method, initialData) {
-    let data = clone(initialData);
-    for (const extension of this.extensions) {
-      const hook = extension.implementation[method];
-      if (typeof hook !== "function") continue;
-      const before = clone(data);
-      const runtimeBefore = clone(extension.runtime);
-      const api = this.createPerkApi(extension);
-      const returned = hook(clone(data), api, extension.runtime);
-      data = returned === undefined ? data : clone(returned);
-      this.emit("perk.hook", `${extension.id}.${method}`, {
-        perkId: extension.id,
-        extensionType: extension.extensionType,
-        instanceId: extension.instanceId,
-        ownerId: extension.ownerId,
-        before,
-        after: data,
-        runtimeBefore,
-        runtimeAfter: clone(extension.runtime),
-      });
-    }
-    return data;
+    return this.modifierManager.run(method, initialData);
   }
 
-  createPerkApi(extension) {
+  createModifierApi(modifier) {
     return {
-      ownerId: extension.ownerId,
-      extensionType: extension.extensionType,
-      instanceId: extension.instanceId,
+      ownerId: modifier.ownerId,
+      kind: modifier.kind,
+      instanceId: modifier.instanceId,
       state: clone(this.state),
       random: () => this.random(),
       canActivate: () => true,
       enqueue: (effect) => this.state.pendingEffects.push(clone(effect)),
       emit: (type, message, data = {}) => this.emit(type, message, {
-        perkId: extension.id,
-        extensionType: extension.extensionType,
-        instanceId: extension.instanceId,
-        ownerId: extension.ownerId,
+        modifierId: modifier.id,
+        kind: modifier.kind,
+        instanceId: modifier.instanceId,
+        ownerId: modifier.ownerId,
         ...data,
       }),
       activate: (message) => {
-        extension.runtime.activations += 1;
+        modifier.runtime.activations += 1;
         if (this.currentPhase !== "initialize") {
-          this.getFighter(extension.ownerId).stats.perkActivations += 1;
+          this.getFighter(modifier.ownerId).stats.modifierActivations += 1;
         }
-        this.emit("perk.activated", message, {
-          perkId: extension.id,
-          extensionType: extension.extensionType,
-          instanceId: extension.instanceId,
-          ownerId: extension.ownerId,
-          activation: extension.runtime.activations,
+        this.emit("modifier.activated", message, {
+          modifierId: modifier.id,
+          kind: modifier.kind,
+          instanceId: modifier.instanceId,
+          ownerId: modifier.ownerId,
+          activation: modifier.runtime.activations,
         });
       },
     };
@@ -1271,7 +1461,7 @@ class BattleEngine {
         ...this.fighterNumbers(fighter),
         name: fighter.name,
         perks: [...fighter.perks],
-        temporaryPerks: [...fighter.temporaryPerks],
+        buffs: [...fighter.buffs],
         injuries: [...fighter.injuries],
         traumas: clone(fighter.traumas),
       })),
@@ -1296,14 +1486,7 @@ class BattleEngine {
         lastActorId: this.lastActorId,
         consecutiveActions: this.consecutiveActions,
       },
-      extensions: this.extensions.map((extension) => ({
-        id: extension.id,
-        instanceId: extension.instanceId,
-        extensionType: extension.extensionType,
-        ownerId: extension.ownerId,
-        priority: extension.priority,
-        runtime: clone(extension.runtime),
-      })),
+      modifiers: this.modifierManager.snapshot(),
     };
   }
 
@@ -1315,7 +1498,7 @@ class BattleEngine {
       phase: this.currentPhase,
       type,
       message,
-      ...(data.extensionType ? { extensionType: data.extensionType } : {}),
+      ...(data.kind ? { kind: data.kind } : {}),
       ...(data.instanceId ? { instanceId: data.instanceId } : {}),
       data: clone(data),
       state: this.captureSystemState(),
@@ -1332,9 +1515,13 @@ class BattleEngine {
       initiative: round(fighter.initiative),
       fatigue: round(fighter.fatigue),
       weaponPower: round(fighter.equipment.weaponPower),
+      accuracy: round(fighter.equipment.accuracy),
       armor: round(fighter.equipment.armor),
       equipmentWeight: round(fighter.equipment.weight),
-      equipmentType: fighter.equipmentType,
+      mobility: round(fighter.equipment.mobility),
+      fighterClass: fighter.fighterClass,
+      weaponSet: clone(fighter.equipment.weaponSet),
+      armorSet: clone(fighter.equipment.armorSet),
       equipmentPerks: clone(fighter.equipmentPerks || []),
       matchup: clone(fighter.matchup),
     };
@@ -1375,7 +1562,7 @@ const createBattleLogExport = (result, exportedAt = new Date().toISOString()) =>
   format: "gladiator.battle-log",
   formatVersion: 1,
   exportedAt,
-  prototype: "battle-arena-0.5",
+  prototype: "battle-arena-0.6",
   replay: {
     mode: "state-after-event",
     eventCount: result.events.length,
@@ -1389,10 +1576,17 @@ const createBattleLogExport = (result, exportedAt = new Date().toISOString()) =>
 globalThis.GladiatorBattle = {
   ARENA_TYPES,
   BattleEngine,
-  EQUIPMENT_TYPE_DEFINITIONS,
+  BattleModifierManager,
+  FIGHTER_CLASS_DEFINITIONS,
+  EQUIPMENT_QUALITIES,
+  WEAPON_SET_DEFINITIONS,
+  ARMOR_SET_DEFINITIONS,
+  WEAPON_ITEMS,
+  ARMOR_ITEMS,
+  ALL_MODIFIER_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
-  TEMPORARY_PERK_DEFINITIONS,
+  BUFF_DEFINITIONS,
   createBattleLogExport,
   createDefaultBattleInput,
 };

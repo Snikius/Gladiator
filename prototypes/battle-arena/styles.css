@@ -291,6 +291,128 @@ input[type="range"] {
   text-transform: none;
 }
 
+.equipment-picker {
+  margin: 10px 0 14px;
+  padding: 10px;
+  background: #1b1410;
+  border: 1px solid var(--line);
+}
+
+.equipment-picker .sublegend {
+  margin-top: 0;
+}
+
+.class-choice {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.class-choice button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 48px;
+  padding: 5px 2px;
+  color: var(--muted);
+  background: #281e18;
+  border: 1px solid #4c392c;
+  cursor: pointer;
+}
+
+.class-choice button:hover,
+.class-choice button.selected {
+  color: var(--sand-light);
+  background: #3b2a1f;
+  border-color: var(--bronze);
+  box-shadow: inset 0 -3px #a66a32;
+}
+
+.class-choice b {
+  color: #e2bb70;
+  font: 20px/1 monospace;
+}
+
+.class-choice span {
+  overflow: hidden;
+  max-width: 100%;
+  margin-top: 4px;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.equipment-select {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.equipment-select > span {
+  color: var(--sand-light);
+  font-size: 8px;
+}
+
+.equipment-select select {
+  min-width: 0;
+  font-size: 9px;
+}
+
+.equipment-preview {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 5px;
+  padding: 8px;
+  background: #251b15;
+  border: 1px solid #584330;
+  border-left: 4px solid #82745f;
+}
+
+.equipment-preview.quality-good { border-left-color: #78a57b; }
+.equipment-preview.quality-rare { border-left-color: #5f8fd4; }
+.equipment-preview.quality-named { border-left-color: #bb6fd0; }
+
+.equipment-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #f0ce79;
+  background: #120d0a;
+  border: 1px solid #6b4b2d;
+  font: 24px/1 monospace;
+}
+
+.equipment-preview strong,
+.equipment-preview small,
+.equipment-preview em {
+  display: block;
+}
+
+.equipment-preview strong {
+  color: var(--text);
+  font-size: 9px;
+}
+
+.equipment-preview small,
+.equipment-preview em {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 7px;
+  font-style: normal;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.equipment-preview em {
+  color: #c89c5d;
+}
+
 .perk-slot {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
@@ -1181,6 +1303,40 @@ a.button {
   top: -210%; right: -24%; width: 27%; height: 520%;
   background: #e4d6a6;
   clip-path: polygon(0 42%, 55% 42%, 55% 0, 72% 0, 72% 37%, 84% 37%, 84% 5%, 100% 5%, 100% 95%, 84% 95%, 84% 63%, 72% 63%, 72% 100%, 55% 100%, 55% 58%, 0 58%);
+}
+
+.dom-fighter.equipment-secutor .fighter-shield {
+  top: 25%; left: -23%; width: 50%; height: 50%; border-radius: 8% 25% 25% 8%;
+}
+
+.dom-fighter.equipment-secutor .fighter-helmet {
+  height: 17%;
+  border-radius: 45% 45% 18% 18%;
+  box-shadow: inset -7px 0 #704327;
+}
+
+.dom-fighter.equipment-secutor .fighter-plume { display: none; }
+
+.dom-fighter.equipment-secutor .fighter-weapon {
+  width: 98%; height: 6%; background: #e4d6a6; box-shadow: 0 4px 0 #704327;
+}
+
+.dom-fighter.equipment-hoplomachus .fighter-shield {
+  top: 32%; left: -14%; width: 38%; height: 38%; border-radius: 50%;
+}
+
+.dom-fighter.equipment-hoplomachus .fighter-weapon {
+  top: 27%; width: 190%; height: 4%; background: #704327; box-shadow: 0 3px #3e241b;
+}
+
+.dom-fighter.equipment-hoplomachus .fighter-weapon::after {
+  top: -180%; right: -17%; width: 22%; height: 430%;
+  background: #e4d6a6;
+  clip-path: polygon(0 42%, 65% 42%, 65% 8%, 100% 50%, 65% 92%, 65% 58%, 0 58%);
+}
+
+.dom-fighter.equipment-hoplomachus .fighter-leg {
+  box-shadow: 0 6px 0 #a66a2b, 0 12px 0 #d1a95c, 0 18px 0 #704327;
 }
 
 .dom-fighter.active::before {
@@ -2100,7 +2256,7 @@ th {
   color: var(--text);
 }
 
-.log-entry.perk-event summary {
+.log-entry.modifier-event summary {
   color: var(--success);
 }
 
