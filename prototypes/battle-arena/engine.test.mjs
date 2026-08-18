@@ -1,54 +1,57 @@
 import assert from "node:assert/strict";
+import "./reference-data.js";
 import "./battle-engine.js";
 
 const {
   ARENA_TYPES,
   BattleEngine,
-  EQUIPMENT_TYPE_DEFINITIONS,
+  BattleModifierManager,
+  FIGHTER_CLASS_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
-  TEMPORARY_PERK_DEFINITIONS,
+  BUFF_DEFINITIONS,
   createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
 
 assert.deepEqual(ARENA_TYPES.map((arena) => arena.id), ["normal", "sand"]);
 assert.deepEqual(
-  EQUIPMENT_TYPE_DEFINITIONS.map((type) => [type.id, type.beats]),
-  [["murmillo", "thraex"], ["thraex", "retiarius"], ["retiarius", "murmillo"]],
-  "Типы экипировки должны образовывать замкнутый цикл преимуществ",
+  FIGHTER_CLASS_DEFINITIONS.map((type) => [type.id, type.beats]),
+  [["murmillo", "thraex"], ["thraex", "hoplomachus"], ["retiarius", "murmillo"], ["secutor", "retiarius"], ["hoplomachus", "secutor"]],
+  "Пять классов должны образовывать замкнутый цикл преимуществ",
 );
 assert.equal(PERK_DEFINITIONS.length, 10, "В прототипе должно быть десять постоянных перков");
-assert.equal(TEMPORARY_PERK_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
+assert.equal(BUFF_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
 assert.equal(INJURY_DEFINITIONS.length, 5, "Нужно пять стартовых травм");
+assert.equal(typeof BattleModifierManager, "function", "BattleModifierManager должен быть публичной частью прототипа");
 
 const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
 const defaultMurmillo = first.snapshots[0].fighters[0];
-assert.equal(defaultMurmillo.equipmentType, "murmillo");
+assert.equal(defaultMurmillo.fighterClass, "murmillo");
 assert.deepEqual(
   {
     weaponPower: defaultMurmillo.weaponPower,
     armor: defaultMurmillo.armor,
     weight: defaultMurmillo.equipmentWeight,
   },
-  { weaponPower: 16, armor: 20, weight: 17 },
-  "Специализация Мурмиллона должна изменить боевую копию экипировки",
+  { weaponPower: 15, armor: 16, weight: 24 },
+  "Движок должен разрешить выбранные оружие и доспехи",
 );
-assert.equal(defaultMurmillo.matchup.advantage, true, "Мурмиллон должен иметь преимущество против Фракийца");
+assert.equal(defaultMurmillo.matchup.relation, "advantage", "Мурмиллон должен иметь преимущество против Фракийца");
 assert.equal(defaultMurmillo.matchup.strengthMultiplier, 1.15);
 assert.equal(defaultMurmillo.matchup.initiativeBonus, 10);
 assert.ok(
-  first.events.some((event) => event.type === "perk.activated"
-    && event.data.perkId === "murmillo-specialization"
-    && event.data.extensionType === "equipment-perk"),
-  "Тип экипировки должен создавать отдельный перк специализации",
+  first.events.some((event) => event.type === "modifier.activated"
+    && event.data.modifierId === "weapon.murmillo-shield-advance"
+    && event.data.kind === "class-technique"),
+  "Оружейный комплект должен создавать классовый приём",
 );
 assert.ok(
-  first.events.some((event) => event.type === "perk.activated"
-    && event.data.perkId === "murmillo-specialization"
+  first.events.some((event) => event.type === "modifier.activated"
+    && event.data.modifierId === "weapon.murmillo-shield-advance"
     && event.message.includes("Стена скутума")),
   "Мурмиллон должен один раз превратить попадание в блок",
 );
@@ -57,24 +60,63 @@ const equipmentMechanicsInput = createDefaultBattleInput();
 equipmentMechanicsInput.seed = "equipment-mechanics";
 equipmentMechanicsInput.maxSteps = 80;
 equipmentMechanicsInput.fighters[0].base.health = 300;
-equipmentMechanicsInput.fighters[0].equipmentType = "thraex";
+equipmentMechanicsInput.fighters[0].fighterClass = "thraex";
+equipmentMechanicsInput.fighters[0].equipment = {
+  weaponSet: { definitionId: "thraex-arms.good" },
+  armorSet: { definitionId: "thraex-armor.good" },
+};
 equipmentMechanicsInput.fighters[0].perks = [];
 equipmentMechanicsInput.fighters[1].base.health = 300;
-equipmentMechanicsInput.fighters[1].equipmentType = "retiarius";
+equipmentMechanicsInput.fighters[1].fighterClass = "retiarius";
+equipmentMechanicsInput.fighters[1].equipment = {
+  weaponSet: { definitionId: "retiarius-arms.good" },
+  armorSet: { definitionId: "retiarius-armor.good" },
+};
 equipmentMechanicsInput.fighters[1].perks = [];
 const equipmentMechanics = new BattleEngine(equipmentMechanicsInput).simulate();
 assert.ok(
-  equipmentMechanics.events.some((event) => event.type === "perk.activated"
-    && event.data.perkId === "thraex-specialization"
+  equipmentMechanics.events.some((event) => event.type === "modifier.activated"
+    && event.data.modifierId === "weapon.thraex-hooking-slash"
     && event.message.includes("вес инициативы")),
   "Фракиец должен расходовать рывок инициативы после попадания",
 );
 assert.ok(
-  equipmentMechanics.events.some((event) => event.type === "perk.activated"
-    && event.data.perkId === "retiarius-specialization"
+  equipmentMechanics.events.some((event) => event.type === "modifier.activated"
+    && event.data.modifierId === "weapon.retiarius-net-cast"
     && event.message.includes("ход противника перехвачен")),
   "Ретиарий должен один раз перехватить ход сетью",
 );
+
+const namedEquipmentInput = createDefaultBattleInput();
+namedEquipmentInput.fighters[0].equipment = {
+  weaponSet: { definitionId: "murmillo-arms.named" },
+  armorSet: { definitionId: "murmillo-armor.named" },
+};
+const namedEquipment = new BattleEngine(namedEquipmentInput).simulate();
+assert.deepEqual(
+  namedEquipment.input.fighters[0].equipment.weaponSet.additionalPerkIds,
+  ["weapon.guard-breaker", "weapon.quick-recovery"],
+  "Именное оружие должно передавать два дополнительных модификатора",
+);
+assert.ok(
+  namedEquipment.events[0].state.modifiers.some((modifier) => modifier.kind === "equipment"),
+  "Эффекты редких предметов должны создаваться как BattleModifier kind=equipment",
+);
+
+for (const fighterClass of ["secutor", "hoplomachus"]) {
+  const classInput = createDefaultBattleInput();
+  classInput.fighters[0].fighterClass = fighterClass;
+  classInput.fighters[0].equipment = {
+    weaponSet: { definitionId: `${fighterClass}-arms.good` },
+    armorSet: { definitionId: `${fighterClass}-armor.good` },
+  };
+  const classResult = new BattleEngine(classInput).simulate();
+  assert.equal(classResult.snapshots[0].fighters[0].fighterClass, fighterClass);
+  assert.ok(
+    classResult.events.some((event) => event.type === "modifier.activated" && event.data.kind === "class-technique"),
+    `${fighterClass}: классовый приём должен исполняться как BattleModifier`,
+  );
+}
 assert.ok(first.steps > 0, "Бой должен содержать хотя бы один шаг");
 assert.ok(first.events.some((event) => event.type === "phase.start"), "В логе должны быть начала фаз");
 assert.ok(first.events.some((event) => event.type === "phase.finish"), "В логе должны быть результаты фаз");
@@ -88,8 +130,8 @@ assert.ok(
   "Состояние события должно соответствовать его шагу и фазе",
 );
 assert.ok(
-  first.events.every((event) => Array.isArray(event.state.extensions)),
-  "Состояние события должно включать runtime всех расширений",
+  first.events.every((event) => Array.isArray(event.state.modifiers)),
+  "Состояние события должно включать runtime всех модификаторов арены",
 );
 assert.equal(first.events.at(-1).state.status, "finished", "Последнее событие должно содержать финальное состояние");
 assert.notEqual(
@@ -111,8 +153,6 @@ drawInput.maxSteps = 1;
 drawInput.fighters.forEach((fighter) => {
   fighter.base.health = 300;
   fighter.base.strength = 1;
-  fighter.equipment.weaponPower = 0;
-  fighter.equipment.armor = 50;
 });
 const draw = new BattleEngine(drawInput).simulate();
 
@@ -121,14 +161,14 @@ assert.ok(draw.fighters.every((fighter) => fighter.battleOutcome === "draw"));
 
 const strongBonesResult = first.fighters.find((fighter) => fighter.id === "fighter-2");
 assert.ok(strongBonesResult, "В результате должен присутствовать второй боец");
-assert.ok(first.statistics["fighter-2"].perkActivations > 0, "Перк должен пройти через hook интерфейс");
+assert.ok(first.statistics["fighter-2"].modifierActivations > 0, "Перк должен пройти через hook интерфейс");
 
 const interceptorInput = createDefaultBattleInput();
 interceptorInput.fighters[0].perks = ["turn-interceptor"];
 interceptorInput.fighters[1].perks = [];
 const intercepted = new BattleEngine(interceptorInput).simulate();
 const interceptionEvent = intercepted.events.find(
-  (event) => event.type === "perk.activated" && event.data.perkId === "turn-interceptor",
+  (event) => event.type === "modifier.activated" && event.data.modifierId === "turn-interceptor",
 );
 assert.ok(interceptionEvent, "Перк должен перехватить результат afterSelectActor");
 
@@ -143,12 +183,12 @@ skilledInput.fighters[0].perks = ["skilled-warrior"];
 skilledInput.fighters[1].perks = [];
 const skilledResult = new BattleEngine(skilledInput).simulate();
 const armedEvent = skilledResult.events.find(
-  (event) => event.type === "perk.hook"
+  (event) => event.type === "modifier.hook"
     && event.message === "skilled-warrior.afterAction"
     && event.data.runtimeAfter?.guaranteedNextTurn === true,
 );
 const guaranteedTurnEvent = skilledResult.events.find(
-  (event) => event.type === "perk.hook"
+  (event) => event.type === "modifier.hook"
     && event.message === "skilled-warrior.afterSelectActor"
     && event.data.runtimeBefore?.guaranteedNextTurn === true,
 );
@@ -197,13 +237,13 @@ const slotted = new BattleEngine(slotsInput).simulate();
 assert.equal(slotted.input.fighters[0].perks.length, 3, "Движок должен принимать не более трёх перков");
 assert.ok(
   slotted.events.some(
-    (event) => event.type === "perk.activated" && event.data.perkId === "light-footed",
+    (event) => event.type === "modifier.activated" && event.data.modifierId === "light-footed",
   ),
   "Лёгкая поступь должна модифицировать усталость через beforeApplyEffects",
 );
 
 const temporaryInput = createDefaultBattleInput();
-temporaryInput.fighters[0].temporaryPerks = ["bath-effect", "wine", "bath-effect"];
+temporaryInput.fighters[0].buffs = ["bath-effect", "wine", "bath-effect"];
 temporaryInput.fighters[0].injuries = ["leg-damage", "arm-damage", "head-damage"];
 const temporaryResult = new BattleEngine(temporaryInput).simulate();
 const initialFighter = temporaryResult.snapshots[0].fighters[0];
@@ -212,7 +252,7 @@ assert.equal(initialFighter.strength, 63.15, "Травма руки должна
 assert.equal(initialFighter.support, 52, "Харизма и травма головы должны менять поддержку");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");
 assert.equal(initialFighter.traumas.length, 2, "Рука и нога должны стать стартовыми травмами");
-assert.equal(initialFighter.temporaryPerks.length, 3, "Повторяющиеся временные эффекты разрешены");
+assert.equal(initialFighter.buffs.length, 3, "Повторяющиеся временные эффекты разрешены");
 const temporaryFighterResult = temporaryResult.fighters.find((fighter) => fighter.id === "fighter-1");
 assert.equal(temporaryFighterResult.startingInjuries.length, 3, "Входные травмы сохраняются отдельно");
 assert.ok(
@@ -224,14 +264,14 @@ assert.ok(
   "Стартовые травмы не должны считаться новыми",
 );
 assert.ok(
-  temporaryResult.statistics["fighter-1"].perkActivations >= 6,
+  temporaryResult.statistics["fighter-1"].modifierActivations >= 6,
   "Статистика должна учитывать стартовые расширения",
 );
 assert.ok(
   temporaryResult.events.some(
-    (event) => event.type === "perk.activated"
-      && event.extensionType === "injury"
-      && event.data.extensionType === "injury",
+    (event) => event.type === "modifier.activated"
+      && event.kind === "injury"
+      && event.data.kind === "injury",
   ),
   "Стартовые травмы должны проходить через общий hook-конвейер",
 );

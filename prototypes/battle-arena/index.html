@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=20" />
+    <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
+         этим же путям, а preload исключает пустой первый кадр. -->
+    <link rel="preload" as="image" href="./assets/murmillo-body-overlay-grid-v3.png" />
+    <link rel="preload" as="image" href="./assets/retiarius-body-overlay-grid-v4.png" />
+    <link rel="preload" as="image" href="./assets/gladius-overlay-grid-v3.png" />
+    <link rel="preload" as="image" href="./assets/trident-overlay-grid-v4.png" />
   </head>
   <body>
     <header class="topbar">
@@ -15,7 +21,8 @@
       </div>
       <div class="topbar-links">
         <a class="topbar-link" href="./reference.html">▦ Справочник</a>
-        <div class="build-badge">RULESET 0.5</div>
+        <a class="topbar-link" href="./sprite-overlay.html">⊞ Наложение</a>
+        <div class="build-badge">RULESET 0.6</div>
       </div>
     </header>
 
@@ -66,21 +73,11 @@
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Маркус" />
               </label>
-              <label class="equipment-type-field">
-                <span>Тип экипировки</span>
-                <select data-field="equipmentType"></select>
-                <small data-equipment-description></small>
-              </label>
+              <div class="equipment-picker" data-equipment-picker="0"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="125" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="48" /></label>
-              </div>
-              <p class="sublegend">Экипировка</p>
-              <div class="form-grid stats-input-grid">
-                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="14" /></label>
-                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="12" /></label>
-                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="11" /></label>
               </div>
               <div class="perk-list" data-perks="0"></div>
             </fieldset>
@@ -91,21 +88,11 @@
                 <span>Имя</span>
                 <input data-field="name" type="text" value="Тит" />
               </label>
-              <label class="equipment-type-field">
-                <span>Тип экипировки</span>
-                <select data-field="equipmentType"></select>
-                <small data-equipment-description></small>
-              </label>
+              <div class="equipment-picker" data-equipment-picker="1"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="112" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="68" /></label>
-              </div>
-              <p class="sublegend">Экипировка</p>
-              <div class="form-grid stats-input-grid">
-                <label><span>Оружие</span><input data-field="weaponPower" type="number" min="0" max="50" value="11" /></label>
-                <label><span>Броня</span><input data-field="armor" type="number" min="0" max="50" value="8" /></label>
-                <label><span>Вес</span><input data-field="weight" type="number" min="0" max="50" value="7" /></label>
               </div>
               <div class="perk-list" data-perks="1"></div>
             </fieldset>
@@ -118,85 +105,14 @@
         </form>
       </aside>
 
-      <section class="debug-workspace">
-        <section class="arena-panel panel">
-          <div class="arena-meta">
+      <section class="battle-workspace">
+        <section class="arena-panel panel" aria-labelledby="replay-controls-title">
+          <div class="section-heading horizontal-heading replay-heading">
+            <span>01</span>
             <div>
-              <span class="meta-label">АРЕНА</span>
-              <strong id="arena-name">Песчаная арена</strong>
+              <h2 id="replay-controls-title">Управление реплеем</h2>
+            <p>Один снимок одновременно проигрывается на спрайтовой и PixiJS-сценах; диагностика — в блоках ниже.</p>
             </div>
-            <div>
-              <span class="meta-label">SEED</span>
-              <strong id="arena-seed">arena-001</strong>
-            </div>
-            <div>
-              <span class="meta-label">ШАГ</span>
-              <strong id="arena-step">0 / 80</strong>
-            </div>
-          </div>
-
-          <div class="canvas-frame">
-            <canvas id="arena-canvas" width="320" height="180" aria-label="Пиксельная боевая арена"></canvas>
-            <div id="pixel-arena" class="pixel-arena normal" aria-hidden="true">
-              <div class="pixel-sky"></div>
-              <div class="pixel-stands">
-                <i class="banner banner-left"></i>
-                <i class="banner banner-right"></i>
-                <div class="crowd-pixels"></div>
-              </div>
-              <div class="pixel-wall">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-              </div>
-              <div class="pixel-ground"></div>
-              <div class="pixel-health pixel-health-one">
-                <i></i><span>МАРКУС</span>
-                <dl class="arena-fighter-stats" data-arena-stats="0"></dl>
-                <div class="arena-active-effects" data-arena-effects="0"></div>
-              </div>
-              <div class="pixel-health pixel-health-two">
-                <i></i><span>ТИТ</span>
-                <dl class="arena-fighter-stats" data-arena-stats="1"></dl>
-                <div class="arena-active-effects" data-arena-effects="1"></div>
-              </div>
-              <div class="dom-fighter dom-fighter-one" data-dom-fighter="0">
-                <i class="fighter-shadow"></i>
-                <i class="fighter-cape"></i>
-                <i class="fighter-head"></i>
-                <i class="fighter-helmet"></i>
-                <i class="fighter-plume"></i>
-                <i class="fighter-body"></i>
-                <i class="fighter-armor"></i>
-                <i class="fighter-arm"></i>
-                <i class="fighter-leg leg-left"></i>
-                <i class="fighter-leg leg-right"></i>
-                <i class="fighter-shield"></i>
-                <i class="fighter-weapon"></i>
-                <i class="fighter-weapon-guard"></i>
-              </div>
-              <div class="dom-fighter dom-fighter-two" data-dom-fighter="1">
-                <i class="fighter-shadow"></i>
-                <i class="fighter-cape"></i>
-                <i class="fighter-head"></i>
-                <i class="fighter-helmet"></i>
-                <i class="fighter-plume"></i>
-                <i class="fighter-body"></i>
-                <i class="fighter-armor"></i>
-                <i class="fighter-arm"></i>
-                <i class="fighter-leg leg-left"></i>
-                <i class="fighter-leg leg-right"></i>
-                <i class="fighter-shield"></i>
-                <i class="fighter-weapon"></i>
-                <i class="fighter-weapon-guard"></i>
-              </div>
-              <div class="pixel-impact" aria-hidden="true">
-                <i></i><i></i><i></i><i></i><i></i><i></i>
-              </div>
-              <div id="arena-event" class="arena-event idle">
-                <strong>ОЖИДАНИЕ БОЯ</strong>
-                <span>Настройте бойцов и запустите симуляцию</span>
-              </div>
-            </div>
-            <div class="canvas-noise"></div>
           </div>
 
           <div id="battle-callout" class="battle-callout idle">
@@ -212,13 +128,38 @@
           </div>
         </section>
 
-        <section class="numbers-panel panel" hidden aria-hidden="true">
+        <section class="mobile-preview-panel panel" aria-labelledby="mobile-preview-title">
+          <div class="mobile-preview-heading">
+            <div>
+              <p class="eyebrow">SPRITE · FRAME LAB</p>
+              <h2 id="mobile-preview-title">Спрайтовая анимация</h2>
+              <p>Мурмиллон и ретиарий: тело без оружия + отдельный прозрачный слой гладиуса или трезубца.</p>
+            </div>
+            <div class="view-mode-switch" role="group" aria-label="Режим отображения">
+              <button type="button" data-renderer-mode="lines">Линии</button>
+              <button type="button" data-renderer-mode="assets" class="selected">Спрайты</button>
+            </div>
+          </div>
+          <div class="mobile-device">
+            <div class="mobile-device-speaker"></div>
+            <canvas id="mobile-arena-canvas" width="360" height="560" aria-label="Покадровая боевая сцена"></canvas>
+          </div>
+          <p class="pixi-preview-note">Каждый слой — одинаковая сетка 6×7. Оружие накладывается на одноимённый кадр тела без сдвига; противник зеркалит оба слоя вместе.</p>
+        </section>
+
+        <section class="numbers-panel panel">
           <div class="section-heading horizontal-heading">
             <span>02</span>
             <div>
               <h2>Динамические показатели</h2>
-              <p>Точные числа выбранного шага.</p>
+              <p>Точные числа и контекст выбранного шага.</p>
             </div>
+          </div>
+          <div id="snapshot-details" class="snapshot-details">
+            <div><span>АРЕНА</span><strong id="arena-name">Песчаная арена</strong></div>
+            <div><span>SEED</span><strong id="arena-seed">arena-001</strong></div>
+            <div><span>ШАГ</span><strong id="arena-step">0 / 80</strong></div>
+            <div><span>ДЕЙСТВИЕ</span><strong>Ожидание симуляции</strong></div>
           </div>
           <div id="fighter-numbers" class="fighter-numbers"></div>
         </section>
@@ -268,7 +209,10 @@
       </section>
     </main>
 
-    <script src="./battle-engine.js?v=18"></script>
-    <script src="./app.js?v=18"></script>
+    <script src="./reference-data.js?v=2"></script>
+    <script src="./battle-engine.js?v=20"></script>
+    <script src="./sprite-library.js?v=4"></script>
+    <script src="./visual-engine.js?v=3"></script>
+    <script src="./app.js?v=34"></script>
   </body>
 </html>
