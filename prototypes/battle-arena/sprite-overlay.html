@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — проверка единого спрайта</title>
-    <link rel="stylesheet" href="./sprite-overlay.css?v=4" />
-    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v8.png" />
+    <link rel="stylesheet" href="./sprite-overlay.css?v=7" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v9.png" />
+    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v5.png" />
+    <link rel="preload" as="image" href="./assets/unified-retiarius-character-reference-v1.png" />
   </head>
   <body>
     <header class="topbar">
@@ -24,14 +26,14 @@
       <section class="intro panel">
         <div>
           <p class="eyebrow">ПРОВЕРКА МАТРИЦЫ · БЕЗ БОЯ</p>
-          <h2>Боец и меч в одном спрайте</h2>
-          <p>Единый лист имеет 1536×2560 px: 6 колонок × 10 строк, кадр 256×256 px. Тело и гладиус уже запечены вместе. На время разработки этот мечник назначается всем пяти классам.</p>
+          <h2>Матрицы мечника и ретиария</h2>
+          <p>Оба листа имеют логическую ячейку бойца 256×256 px. Ретиарий хранится в физической ячейке 384×384: дополнительные прозрачные поля принадлежат оружию и не уменьшают тело. Трезубец и сеть запечены вместе; соперник использует зеркальную копию.</p>
         </div>
         <dl class="contract">
           <div><dt>НАПРАВЛЕНИЕ</dt><dd>вправо</dd></div>
           <div><dt>ОППОНЕНТ</dt><dd>зеркалится рендером</dd></div>
-          <div><dt>КАДР</dt><dd>256 × 256 px</dd></div>
-          <div><dt>КЛАССЫ</dt><dd>один временный лист</dd></div>
+          <div><dt>ЛОГИЧЕСКИЙ КАДР</dt><dd>256 × 256 px</dd></div>
+          <div><dt>РЕТИАРИЙ</dt><dd>буферный лист V5</dd></div>
         </dl>
       </section>
 
@@ -39,7 +41,7 @@
         <div class="preview-copy">
           <p class="eyebrow">ПОКАДРОВАЯ ПРОВЕРКА</p>
           <h2 id="preview-title">Отдельный кадр анимации</h2>
-          <p>Выбор класса оставлен для проверки интерфейса, но визуально все варианты используют один и тот же спрайт мечника. Состояния автоматически переключаются каждые четыре секунды.</p>
+          <p>Ретиарий использует собственную полную матрицу с трезубцем и сетью. Остальные классы временно используют лист мечника. Состояния автоматически переключаются каждые четыре секунды.</p>
           <div class="preview-controls">
             <label><span>Персонаж</span><select id="preview-body">
               <option value="murmillo">Мурмиллон</option>
@@ -54,6 +56,7 @@
               <option value="idle.injured" selected>Раненая стойка</option>
               <option value="greeting">Приветствие</option>
               <option value="attack">Атака</option>
+              <option value="special">Особый приём</option>
               <option value="defense.block">Блок</option>
               <option value="defense.dodge">Уворот</option>
               <option value="reaction.hit">Попадание</option>
@@ -68,23 +71,50 @@
           </div>
         </div>
         <div class="preview-stage-wrap">
-          <canvas id="sprite-preview-canvas" width="288" height="288" aria-label="Предпросмотр единого кадра"></canvas>
+          <canvas id="sprite-preview-canvas" width="384" height="384" aria-label="Предпросмотр единого кадра"></canvas>
           <output id="preview-frame-label">Строка 2 · кадр 0 · 5 FPS</output>
         </div>
       </section>
 
-      <section class="atlas-pair single-atlas" aria-label="Матрица единого спрайта">
+      <section class="retiarius-reference panel" aria-labelledby="retiarius-reference-title">
+        <div>
+          <p class="eyebrow">RETIARIUS · CANONICAL REFERENCE</p>
+          <h2 id="retiarius-reference-title">Базовый образ ретиария</h2>
+          <p>Этот образ фиксирует направление вправо, пропорции, экипировку, прямой трезубец с тремя зубцами и собранную сеть. Он служит единственным референсом для генерации всех одиннадцати строк.</p>
+          <p class="reference-status">Статус: референс зафиксирован · буферная матрица V5 собрана и подключена</p>
+        </div>
+        <figure>
+          <img src="./assets/unified-retiarius-character-reference-v1.png" alt="Базовый образ ретиария с трезубцем и сетью" />
+        </figure>
+      </section>
+
+      <section class="atlas-pair" aria-label="Матрицы единых спрайтов">
         <article class="atlas-card panel">
           <header>
-            <p class="eyebrow">UNIFIED SWORDSMAN · V8</p>
+            <p class="eyebrow">UNIFIED SWORDSMAN · V9</p>
             <h2>Временный мечник для всех классов</h2>
-            <p>Десять анимаций сгенерированы отдельными строками и затем проверены и собраны в точную сетку. Последние две строки — приветствие перед боем и победа с поднятым мечом.</p>
+            <p>Одиннадцать анимаций сгенерированы отдельными строками и затем проверены и собраны в точную сетку. Строка 10 — особый силовой удар с коротким прыжком.</p>
           </header>
           <div class="atlas-layout">
             <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
-            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li></ol>
+            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li></ol>
             <figure class="overlay-atlas" aria-label="Матрица единого спрайта мечника">
-              <img class="body-layer" src="./assets/unified-swordsman-grid-v8.png" alt="Матрица мечника с оружием" />
+              <img class="body-layer" src="./assets/unified-swordsman-grid-v9.png" alt="Матрица мечника с оружием" />
+              <span class="grid-overlay" aria-hidden="true"></span>
+            </figure>
+          </div>
+        </article>
+        <article class="atlas-card panel">
+          <header>
+            <p class="eyebrow">UNIFIED RETIARIUS · V5</p>
+            <h2>Ретиарий с трезубцем и сетью</h2>
+            <p>Все одиннадцать строк выровнены по корню ног и плотному контуру тела. Строка 10 показывает классовый бросок сети; физическая ячейка 384×384 сохраняет буфер экипировки.</p>
+          </header>
+          <div class="atlas-layout">
+            <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
+            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li></ol>
+            <figure class="overlay-atlas" aria-label="Матрица единого спрайта ретиария">
+              <img class="body-layer" src="./assets/unified-retiarius-grid-v5.png" alt="Буферная матрица ретиария с трезубцем и сетью" />
               <span class="grid-overlay" aria-hidden="true"></span>
             </figure>
           </div>
@@ -103,12 +133,13 @@
           <div><b>6</b><span>Попадание / падение</span></div>
           <div><b>7</b><span>Движение вперёд; назад — обратный порядок кадров</span></div>
           <div><b>8</b><span>Приветствие перед стартовым сближением</span></div>
-          <div><b>9</b><span>Победа · меч поднимается вверх, финальная поза удерживается</span></div>
+          <div><b>9</b><span>Победа · циклический салют поднятым оружием</span></div>
+          <div><b>10</b><span>Особый приём · мечник: силовой прыжок; ретиарий: бросок сети</span></div>
         </div>
-        <p class="warning">Если тело или меч выходят за границы ячейки, исправлять нужно исходный единый лист или его нарезку, а не логику боя.</p>
+        <p class="warning">Масштаб определяется по плотному телу. Длинное оружие может занимать прозрачный буфер физической ячейки и не должно уменьшать бойца.</p>
       </section>
     </main>
 
-    <script src="./sprite-overlay.js?v=18"></script>
+    <script src="./sprite-overlay.js?v=23"></script>
   </body>
 </html>

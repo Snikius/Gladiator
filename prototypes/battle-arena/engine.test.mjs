@@ -11,6 +11,7 @@ const {
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
+  calculateTraumaChance,
   createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
@@ -33,6 +34,14 @@ assert.deepEqual(first, second, "Одинаковый seed должен дава
 assert.equal(COMBAT_RULES.critical.chance, 0.03, "Базовый шанс критического удара равен 3%");
 assert.equal(COMBAT_RULES.critical.damageMultiplier, 2, "Критический удар удваивает урон");
 assert.deepEqual(
+  COMBAT_RULES.trauma,
+  { baseChance: 0.12, damageRatioMultiplier: 0.9, maxChance: 0.45, armChance: 0.5 },
+  "Вероятности боевой травмы вынесены в правила",
+);
+assert.equal(calculateTraumaChance(0, 100), 0.12, "Успешное попадание имеет базовые 12% травмы");
+assert.equal(calculateTraumaChance(20, 100), 0.3, "Сила попадания значительно повышает шанс травмы");
+assert.equal(calculateTraumaChance(100, 100), 0.45, "Шанс травмы ограничен сверху 45%");
+assert.deepEqual(
   [COMBAT_RULES.strikePower.minMultiplier, COMBAT_RULES.strikePower.maxMultiplier],
   [0.85, 1.15],
   "Случайная сила попадания ограничена диапазоном 85–115%",
@@ -54,6 +63,27 @@ assert.ok(
     && typeof event.data.strikePowerRoll === "number"
     && typeof event.data.criticalRoll === "number"),
   "Точные броски силы и крита сохраняются в техническом журнале",
+);
+
+const traumaInput = createDefaultBattleInput();
+traumaInput.fighters.forEach((fighter) => { fighter.perks = []; });
+const traumaResult = new BattleEngine(traumaInput).simulate();
+const traumaSnapshot = traumaResult.snapshots.find((snapshot) => (
+  snapshot.fighters.some((fighter) => fighter.traumas.some((trauma) => trauma.source === "battle"))
+));
+assert.ok(traumaSnapshot, "Повышенная вероятность должна давать наблюдаемую боевую травму в детерминированном бою");
+const traumatizedFighter = traumaSnapshot.fighters.find((fighter) => (
+  fighter.traumas.some((trauma) => trauma.source === "battle")
+));
+const newTrauma = traumatizedFighter.traumas.find((trauma) => trauma.source === "battle");
+assert.equal(newTrauma.type, "arm", "Контрольный seed детерминированно выбирает травму руки");
+assert.equal(traumaSnapshot.lastAction.targetId, traumatizedFighter.id, "Травма появляется у цели текущего попадания");
+const fighterBeforeTrauma = traumaResult.snapshots[traumaSnapshot.index - 1].fighters.find(
+  (fighter) => fighter.id === traumatizedFighter.id,
+);
+assert.ok(
+  traumatizedFighter.strength < fighterBeforeTrauma.strength,
+  "Дебафф травмы руки применяется до фиксации того же снимка",
 );
 
 const forcedCritical = BattleEngine.prototype.finalizeActionDamage.call(
@@ -141,6 +171,19 @@ assert.ok(
     && event.message.includes("ход противника перехвачен")),
   "Ретиарий должен один раз перехватить ход сетью",
 );
+assert.ok(
+  equipmentMechanics.snapshots.some((snapshot) => (
+    snapshot.lastAction?.classTechnique === "weapon.retiarius-net-cast"
+  )),
+  "Перехват сетью должен сохраняться в действии для визуального реплея",
+);
+assert.ok(
+  equipmentMechanics.snapshots.some((snapshot) => (
+    snapshot.lastAction?.actorId === "fighter-1"
+      && snapshot.lastAction.classTechnique === "weapon.thraex-hooking-slash"
+  )),
+  "Рывок Фракийца должен помечать следующий удар для специальной анимации",
+);
 
 const namedEquipmentInput = createDefaultBattleInput();
 namedEquipmentInput.fighters[0].equipment = {
@@ -160,6 +203,14 @@ assert.ok(
 
 for (const fighterClass of ["secutor", "hoplomachus"]) {
   const classInput = createDefaultBattleInput();
+  if (fighterClass === "secutor") {
+    classInput.seed = "secutor-special-0";
+    classInput.maxSteps = 100;
+    classInput.fighters.forEach((fighter) => {
+      fighter.base.health = 300;
+      fighter.perks = [];
+    });
+  }
   classInput.fighters[0].fighterClass = fighterClass;
   classInput.fighters[0].equipment = {
     weaponSet: { definitionId: `${fighterClass}-arms.good` },
@@ -171,6 +222,23 @@ for (const fighterClass of ["secutor", "hoplomachus"]) {
     classResult.events.some((event) => event.type === "modifier.activated" && event.data.kind === "class-technique"),
     `${fighterClass}: классовый приём должен исполняться как BattleModifier`,
   );
+  if (fighterClass === "hoplomachus") {
+    assert.ok(
+      classResult.snapshots.some((snapshot) => (
+        snapshot.lastAction?.classTechnique === "weapon.hoplomachus-spear-distance"
+      )),
+      "Усиленный удар Гопломаха должен быть отмечен как классовый приём",
+    );
+  }
+  if (fighterClass === "secutor") {
+    assert.ok(
+      classResult.snapshots.some((snapshot) => (
+        snapshot.lastAction?.actorId === "fighter-1"
+          && snapshot.lastAction.classTechnique === "weapon.secutor-relentless-pursuit"
+      )),
+      "Преследование Секутора должно помечать следующую атаку как классовый приём",
+    );
+  }
 }
 assert.ok(first.steps > 0, "Бой должен содержать хотя бы один шаг");
 assert.ok(first.events.some((event) => event.type === "phase.start"), "В логе должны быть начала фаз");

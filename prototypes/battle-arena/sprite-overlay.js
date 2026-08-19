@@ -10,7 +10,10 @@ const autoCycle = document.querySelector("#preview-auto-cycle");
 const playButton = document.querySelector("#preview-play");
 const frameLabel = document.querySelector("#preview-frame-label");
 
-const ASSET_PATH = "./assets/unified-swordsman-grid-v8.png";
+const ASSET_PATHS = Object.freeze({
+  swordsman: Object.freeze({ path: "./assets/unified-swordsman-grid-v9.png", cellWidth: 384, cellHeight: 384 }),
+  retiarius: Object.freeze({ path: "./assets/unified-retiarius-grid-v5.png", cellWidth: 384, cellHeight: 384 }),
+});
 const CLIPS = Object.freeze({
   "idle.normal": Object.freeze({ row: 0, fps: 6 }),
   "idle.tired": Object.freeze({ row: 1, fps: 5 }),
@@ -23,9 +26,10 @@ const CLIPS = Object.freeze({
   advance: Object.freeze({ row: 7, fps: 7 }),
   retreat: Object.freeze({ row: 7, fps: 7, frames: Object.freeze([5, 4, 3, 2, 1, 0]) }),
   greeting: Object.freeze({ row: 8, fps: 4, loop: false }),
-  victory: Object.freeze({ row: 9, fps: 7, loop: false }),
+  victory: Object.freeze({ row: 9, fps: 7, loop: true }),
+  special: Object.freeze({ row: 10, fps: 10, loop: false }),
 });
-let image = null;
+const images = new Map();
 let playing = true;
 let startedAt = performance.now();
 let pausedAt = 0;
@@ -47,34 +51,42 @@ const scheduleStateCycle = () => {
   }, 4000);
 };
 
-const getImage = () => {
-  if (!image) {
-    image = new Image();
-    image.src = ASSET_PATH;
+const getImage = (assetPath) => {
+  if (!images.has(assetPath)) {
+    const image = new Image();
+    image.src = assetPath;
+    images.set(assetPath, image);
   }
-  return image;
+  return images.get(assetPath);
 };
 
 const currentElapsed = (now) => playing ? now - startedAt : pausedAt;
 
-const drawLayer = (image, frame, row) => {
+const drawLayer = (image, asset, frame, row) => {
   if (!image.complete || !image.naturalWidth) return;
   const sourceWidth = image.naturalWidth / 6;
-  const sourceHeight = image.naturalHeight / 10;
+  const sourceHeight = image.naturalHeight / 11;
   context.drawImage(
     image,
     frame * sourceWidth,
     row * sourceHeight,
     sourceWidth,
     sourceHeight,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
+    (canvas.width - asset.cellWidth) / 2,
+    canvas.height - asset.cellHeight,
+    asset.cellWidth,
+    asset.cellHeight,
   );
 };
 
+const syncCharacterControls = () => {
+  resetAnimationClock();
+  scheduleStateCycle();
+};
+
 const renderPreview = (now) => {
+  const retiarius = bodySelect.value === "retiarius";
+  const asset = retiarius ? ASSET_PATHS.retiarius : ASSET_PATHS.swordsman;
   const clip = CLIPS[stateSelect.value];
   const sequence = clip.frames || [0, 1, 2, 3, 4, 5];
   const elapsedFrame = Math.floor(currentElapsed(now) / 1000 * clip.fps);
@@ -91,16 +103,17 @@ const renderPreview = (now) => {
     context.translate(canvas.width, 0);
     context.scale(-1, 1);
   }
-  drawLayer(getImage(), frame, clip.row);
+  drawLayer(getImage(asset.path), asset, frame, clip.row);
   context.restore();
-  frameLabel.value = `Строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS`;
+  frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS`;
   frameLabel.textContent = frameLabel.value;
   requestAnimationFrame(renderPreview);
 };
 
-[bodySelect, stateSelect, mirrored].forEach((control) => {
+[stateSelect, mirrored].forEach((control) => {
   control.addEventListener("change", resetAnimationClock);
 });
+bodySelect.addEventListener("change", syncCharacterControls);
 stateSelect.addEventListener("change", scheduleStateCycle);
 autoCycle.addEventListener("change", scheduleStateCycle);
 playButton.addEventListener("click", () => {
@@ -114,6 +127,6 @@ playButton.addEventListener("click", () => {
   playButton.setAttribute("aria-pressed", String(playing));
 });
 
-scheduleStateCycle();
+syncCharacterControls();
 requestAnimationFrame(renderPreview);
 })();

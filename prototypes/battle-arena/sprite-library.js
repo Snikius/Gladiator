@@ -19,7 +19,7 @@ const CORE_VISUAL_STATES = Object.freeze({
   "defense.dodge": Object.freeze({ kind: "one-shot", description: "Уход или backstep." }),
   "reaction.hit": Object.freeze({ kind: "one-shot", description: "Реакция на попадание." }),
   defeated: Object.freeze({ kind: "terminal", description: "Падение и лежачая поза." }),
-  victory: Object.freeze({ kind: "terminal", description: "Победитель поднимает меч и удерживает финальную позу." }),
+  victory: Object.freeze({ kind: "terminal", description: "Победитель циклически повторяет победный салют." }),
   special: Object.freeze({ kind: "one-shot", description: "Классовый или перковый приём." }),
 });
 
@@ -41,16 +41,35 @@ const UNIFIED_ANIMATION_SPRITE_ROWS = Object.freeze({
   advance: Object.freeze({ row: 7, frames: SIX_FRAMES, fps: 7, loop: true, durationMs: 900 }),
   retreat: Object.freeze({ row: 7, frames: Object.freeze([5, 4, 3, 2, 1, 0]), fps: 7, loop: true, durationMs: 900 }),
   greeting: Object.freeze({ row: 8, frames: SIX_FRAMES, fps: 4, loop: false, durationMs: 1400 }),
-  victory: Object.freeze({ row: 9, frames: SIX_FRAMES, fps: 7, loop: false, durationMs: 860 }),
+  victory: Object.freeze({ row: 9, frames: SIX_FRAMES, fps: 7, loop: true, durationMs: 860 }),
+  special: Object.freeze({ row: 10, frames: SIX_FRAMES, fps: 10, loop: false, durationMs: 680 }),
 });
 
 /*
- * Временный контракт unified v8: тело и меч запечены в один лист 6×10,
- * 1536×2560 px. Кадр всегда 256×256 px; все классы используют этот лист,
- * а боец справа получает то же изображение зеркально.
+ * Контракт unified: тело и экипировка запечены в лист 6×11. Логическая
+ * ячейка бойца всегда 256×256, но физическая ячейка может иметь прозрачный
+ * буфер для длинного оружия; боец справа зеркалит исходник.
  */
-const UNIFIED_ATLAS = Object.freeze({ columns: 6, rows: 10, cellWidth: 256, cellHeight: 256 });
-const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v8";
+const UNIFIED_ATLAS = Object.freeze({
+  columns: 6,
+  rows: 11,
+  cellWidth: 384,
+  cellHeight: 384,
+  logicalWidth: 256,
+  logicalHeight: 256,
+  equipmentBuffer: Object.freeze({ top: 128, right: 64, bottom: 0, left: 64 }),
+});
+const RETIARIUS_ATLAS = Object.freeze({
+  columns: 6,
+  rows: 11,
+  cellWidth: 384,
+  cellHeight: 384,
+  logicalWidth: 256,
+  logicalHeight: 256,
+  equipmentBuffer: Object.freeze({ top: 128, right: 64, bottom: 0, left: 64 }),
+});
+const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v9";
+const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v5";
 
 const ARENA_BACKGROUNDS = Object.freeze({
   normal: Object.freeze({
@@ -58,19 +77,32 @@ const ARENA_BACKGROUNDS = Object.freeze({
     assetPath: "./assets/arena-normal-background-v1.png",
     fallbackColor: "#050607",
     groundY: 500,
+    ambientLights: Object.freeze([
+      Object.freeze({ x: 109, y: 283, scale: 1, phase: 0.08 }),
+      Object.freeze({ x: 250, y: 283, scale: 1, phase: 0.61 }),
+    ]),
   }),
   sand: Object.freeze({
     id: "sand",
-    assetPath: "./assets/arena-sand-background-v1.png",
-    fallbackColor: "#171008",
-    groundY: 500,
+    assetPath: "./assets/arena-sand-background-v2.png",
+    fallbackColor: "#100c08",
+    groundY: 465,
+    ambientLights: Object.freeze([
+      Object.freeze({ x: 18, y: 196, scale: 0.55, phase: 0.04 }),
+      Object.freeze({ x: 70, y: 197, scale: 0.58, phase: 0.36 }),
+      Object.freeze({ x: 123, y: 195, scale: 0.62, phase: 0.71 }),
+      Object.freeze({ x: 177, y: 196, scale: 0.65, phase: 0.17 }),
+      Object.freeze({ x: 231, y: 195, scale: 0.62, phase: 0.52 }),
+      Object.freeze({ x: 284, y: 197, scale: 0.58, phase: 0.83 }),
+      Object.freeze({ x: 338, y: 196, scale: 0.55, phase: 0.27 }),
+    ]),
   }),
 });
 
 const BODY_ANIMATION_GRIDS = Object.freeze({
   [UNIFIED_SWORDSMAN_GRID_ID]: Object.freeze({
     id: UNIFIED_SWORDSMAN_GRID_ID,
-    assetPath: "./assets/unified-swordsman-grid-v8.png",
+    assetPath: "./assets/unified-swordsman-grid-v9.png",
     facing: "right",
     renderable: true,
     experimental: true,
@@ -79,10 +111,29 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
     weaponLayers: Object.freeze({}),
     displayScale: 1,
     weaponBakedIn: true,
-    baselineInset: 16 / UNIFIED_ATLAS.cellHeight,
+    bakedWeaponSkinId: "sword",
+    baselineInset: 8 / UNIFIED_ATLAS.logicalHeight,
     sockets: Object.freeze({
       "hand.primary": Object.freeze({ x: 0.56, y: 0.48, rotation: 0 }),
       "hand.rear": Object.freeze({ x: 0.56, y: 0.48, rotation: 0 }),
+    }),
+  }),
+  [UNIFIED_RETIARIUS_GRID_ID]: Object.freeze({
+    id: UNIFIED_RETIARIUS_GRID_ID,
+    assetPath: "./assets/unified-retiarius-grid-v5.png",
+    facing: "right",
+    renderable: true,
+    experimental: true,
+    grid: RETIARIUS_ATLAS,
+    clips: UNIFIED_ANIMATION_SPRITE_ROWS,
+    weaponLayers: Object.freeze({}),
+    displayScale: 1,
+    weaponBakedIn: true,
+    bakedWeaponSkinId: "trident",
+    baselineInset: 8 / RETIARIUS_ATLAS.logicalHeight,
+    sockets: Object.freeze({
+      "hand.primary": Object.freeze({ x: 0.56, y: 0.48, rotation: 0 }),
+      "hand.rear": Object.freeze({ x: 0.38, y: 0.52, rotation: 0 }),
     }),
   }),
 });
@@ -90,7 +141,7 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
 const EQUIPMENT_ANIMATION_PROFILES = Object.freeze({
   "murmillo-armor": Object.freeze({ id: "murmillo-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
   "thraex-armor": Object.freeze({ id: "thraex-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
-  "retiarius-armor": Object.freeze({ id: "retiarius-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
+  "retiarius-armor": Object.freeze({ id: "retiarius-armor", bodyGridId: UNIFIED_RETIARIUS_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
   "secutor-armor": Object.freeze({ id: "secutor-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
   "hoplomachus-armor": Object.freeze({ id: "hoplomachus-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
 });
@@ -210,7 +261,9 @@ globalThis.GladiatorSpriteLibrary = {
   ANIMATION_SPRITE_ROWS,
   UNIFIED_ANIMATION_SPRITE_ROWS,
   UNIFIED_ATLAS,
+  RETIARIUS_ATLAS,
   UNIFIED_SWORDSMAN_GRID_ID,
+  UNIFIED_RETIARIUS_GRID_ID,
   ARENA_BACKGROUNDS,
   BODY_ANIMATION_GRIDS,
   EQUIPMENT_ANIMATION_PROFILES,

@@ -9,17 +9,21 @@ const { BattleEngine, createDefaultBattleInput } = globalThis.GladiatorBattle;
 const {
   ARENA_BACKGROUNDS,
   BODY_ANIMATION_GRIDS,
+  RETIARIUS_ATLAS,
   SpriteLibrary,
   UNIFIED_ATLAS,
+  UNIFIED_RETIARIUS_GRID_ID,
   UNIFIED_SWORDSMAN_GRID_ID,
 } = globalThis.GladiatorSpriteLibrary;
 const {
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
+  PRESSURE_STEP_DISTANCE,
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
   createVisualFrame,
+  resolveTerritoryOffset,
 } = globalThis.GladiatorVisualEngine;
 const { createSkeletalFrame } = globalThis.GladiatorPixiSkeletal;
 
@@ -53,14 +57,16 @@ const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
 });
 assert.equal(mobileFrame.presentation, "mobile", "Мобильная сцена должна иметь отдельную презентацию");
 assert.equal(mobileFrame.rendererMode, "assets", "Режим ассетов переключается только в визуальном слое");
-assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v8.png");
+assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v9.png");
 assert.equal(mobileFrame.components[0].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID);
 assert.equal(mobileFrame.components[0].animation.equipmentProfileId, "murmillo-armor", "Профиль поз берётся из комплекта брони");
 assert.equal(mobileFrame.components[0].animation.state, "idle.normal");
 assert.equal(mobileFrame.components[0].animation.weaponBakedIn, true, "Меч является частью единого листа бойца");
-assert.equal(UNIFIED_ATLAS.cellWidth, 256, "Единый лист использует ширину кадра 256 px");
-assert.equal(UNIFIED_ATLAS.cellHeight, 256, "Единый лист использует высоту кадра 256 px");
-assert.equal(UNIFIED_ATLAS.rows, 10, "Единый лист содержит движение, приветствие и победу");
+assert.equal(UNIFIED_ATLAS.cellWidth, 384, "Единый лист использует физическую ширину кадра 384 px");
+assert.equal(UNIFIED_ATLAS.cellHeight, 384, "Единый лист использует физическую высоту кадра 384 px");
+assert.equal(UNIFIED_ATLAS.logicalWidth, 256, "Масштаб тела считается по логической ширине 256 px");
+assert.equal(UNIFIED_ATLAS.logicalHeight, 256, "Масштаб тела считается по логической высоте 256 px");
+assert.equal(UNIFIED_ATLAS.rows, 11, "Единый лист содержит отдельную строку особого приёма");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].grid.columns, 6);
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.frames.length, 6, "Атака занимает всю строку из шести кадров");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.row, 3, "Атака использует собственную строку атласа");
@@ -72,7 +78,9 @@ assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.retreat.f
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.greeting.row, 8, "Приветствие занимает отдельную девятую строку");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.greeting.loop, false, "Приветствие проигрывается один раз");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.row, 9, "Победа занимает отдельную десятую строку");
-assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.loop, false, "Победа удерживает последний кадр, а не зацикливается");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.loop, true, "Победный салют циклически повторяется в итоговом состоянии");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.row, 10, "Особый приём занимает отдельную одиннадцатую строку");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.frames.length, 6, "Особый приём использует все шесть кадров строки");
 const standardInput = createDefaultBattleInput();
 standardInput.fighters[1].fighterClass = "retiarius";
 standardInput.fighters[1].equipment = {
@@ -85,11 +93,29 @@ const standardMobileFrame = createVisualFrame(standardResult.snapshots[0], stand
   rendererMode: RENDERER_MODES.assets,
 });
 assert.equal(standardMobileFrame.components[0].animation.mirrored, false, "Левый боец смотрит в центр без отражения исходного листа");
-assert.equal(standardMobileFrame.components[1].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID, "Ретиарий временно использует тот же лист мечника");
-assert.equal(standardMobileFrame.components[1].assetPath, standardMobileFrame.components[0].assetPath, "Все классы используют один ассет");
-assert.equal(standardMobileFrame.components[1].animation.weaponSkinId, "sword", "Ретиарий временно отображается мечником");
+assert.equal(standardMobileFrame.components[1].animation.bodyGridId, UNIFIED_RETIARIUS_GRID_ID, "Ретиарий использует собственный единый лист");
+assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v5.png", "Игра использует атлас ретиария с отдельным броском сети");
+assert.notEqual(standardMobileFrame.components[1].assetPath, standardMobileFrame.components[0].assetPath, "Ретиарий не подменяется ассетом мечника");
+assert.equal(standardMobileFrame.components[1].animation.weaponSkinId, "trident", "Трезубец запечён в кадры ретиария");
 assert.equal(standardMobileFrame.components[1].animation.assetHeight, 150, "Оба бойца имеют одинаковый визуальный масштаб");
-assert.equal(standardMobileFrame.components[1].transform.x - standardMobileFrame.components[0].transform.x, 128, "Бойцы стоят ближе для ближнего боя");
+assert.equal(RETIARIUS_ATLAS.cellHeight, 384, "Физическая ячейка ретиария содержит буфер для длинного оружия");
+assert.equal(RETIARIUS_ATLAS.logicalHeight, 256, "Логический размер тела не включает оружейный буфер");
+assert.equal(standardMobileFrame.components[1].animation.sheet.logicalHeight, 256, "Рендерер масштабирует ретиария по логическому телу");
+let bufferedDrawArgs = null;
+const bufferedContext = {
+  set filter(value) {},
+  scale() {},
+  drawImage(...args) { bufferedDrawArgs = args; },
+};
+BattleVisualEngine.prototype.drawAsset.call({
+  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
+  animationFrameIndex: () => 0,
+}, bufferedContext, standardMobileFrame.components[1], 0, 0);
+assert.equal(bufferedDrawArgs[3], 384, "Рендерер вырезает полную физическую ширину буферного кадра");
+assert.equal(bufferedDrawArgs[4], 384, "Рендерер вырезает полную физическую высоту буферного кадра");
+assert.equal(bufferedDrawArgs[7], 225, "Буфер расширяет рисунок, не меняя логическую высоту тела 150 px");
+assert.equal(bufferedDrawArgs[8], 225, "Оружейный буфер выводится целиком поверх сцены");
+assert.equal(standardMobileFrame.components[1].transform.x - standardMobileFrame.components[0].transform.x, 120, "Бойцы стоят ближе для ближнего боя");
 assert.equal(standardMobileFrame.components[1].animation.mirrored, true, "Правый боец зеркалит единый исходный лист");
 assert.equal(
   standardMobileFrame.components[0].transform.y
@@ -99,6 +125,7 @@ assert.equal(
 );
 assert.equal(standardMobileFrame.components[0].animation.assetHeight, 150, "Ассет помещается в компактную игровую сцену");
 assert.equal(standardMobileFrame.arena.assetPath, ARENA_BACKGROUNDS.normal.assetPath, "Обычная арена получает каменный фон из библиотеки визуала");
+assert.equal(standardMobileFrame.arena.ambientLights.length, 2, "Каменная арена передаёт два независимых факела");
 assert.equal(standardMobileFrame.arena.groundY, 280, "Линия ног помещается в компактный Canvas высотой 300 px");
 assert.equal(standardMobileFrame.arena.sourceGroundY, 500, "Фон обрезается с сохранением исходной линии земли");
 assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог раненой стойки зафиксирован на 45% здоровья");
@@ -146,10 +173,10 @@ const dominantPressureFrame = createVisualFrame(dominantPressureSnapshot, standa
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
 });
-assert.equal(dominantPressureFrame.arena.territoryOffset, 32, "Преимущество первого бойца сильнее сдвигает бой к правому краю");
+assert.equal(dominantPressureFrame.arena.territoryOffset, 40, "Преимущество первого бойца сильнее сдвигает бой к правому краю");
 assert.equal(
   dominantPressureFrame.components[0].transform.x - neutralPressureFrame.components[0].transform.x,
-  32,
+  40,
   "Напирающий боец визуально продвигается вперёд",
 );
 const healthPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
@@ -161,7 +188,36 @@ const healthPressureFrame = createVisualFrame(healthPressureSnapshot, standardIn
 });
 assert.equal(healthPressureFrame.arena.initiativePressure, 0, "Равная инициатива не создаёт собственное давление");
 assert.equal(healthPressureFrame.arena.healthPressure, 0.25, "Половина запаса здоровья даёт четверть визуального давления");
-assert.equal(healthPressureFrame.arena.territoryOffset, 8, "Преимущество по здоровью умеренно сдвигает сцену");
+assert.equal(healthPressureFrame.arena.territoryOffset, 10, "Преимущество по здоровью умеренно сдвигает сцену");
+assert.equal(PRESSURE_STEP_DISTANCE, 6, "Теснение требует накопить заметный шаг в шесть пикселей");
+const minorPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
+minorPressureSnapshot.fighters[0].initiative = 59;
+const minorPressureFrame = createVisualFrame(minorPressureSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(minorPressureFrame.arena.territoryOffset, 5, "Небольшое преимущество создаёт только желаемый сдвиг");
+assert.equal(resolveTerritoryOffset(0, minorPressureFrame.arena.territoryOffset), 0, "Неполный шаг остаётся накопленным без движения");
+const accumulatedPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
+accumulatedPressureSnapshot.fighters[0].initiative = 68;
+const accumulatedPressureFrame = createVisualFrame(accumulatedPressureSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(accumulatedPressureFrame.arena.territoryOffset, 10, "Рост преимущества накапливает расстояние для полноценного шага");
+assert.equal(resolveTerritoryOffset(0, accumulatedPressureFrame.arena.territoryOffset), 10, "Полный шаг фиксирует новую территорию");
+const heldMinorPressureFrame = createVisualFrame(minorPressureSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+  territoryOffsetOverride: 0,
+});
+const skippedPressureMovement = BattleVisualEngine.prototype.createPressureMovementFrame.call({
+  frame: neutralPressureFrame,
+  spriteLibrary: new SpriteLibrary(),
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+}, minorPressureSnapshot, standardInput, heldMinorPressureFrame);
+assert.equal(skippedPressureMovement, null, "Неполный накопленный шаг не запускает анимацию ходьбы");
 const pressureMovementFrame = BattleVisualEngine.prototype.createPressureMovementFrame.call({
   frame: neutralPressureFrame,
   spriteLibrary: new SpriteLibrary(),
@@ -182,7 +238,7 @@ const approachStartGap = initialApproach.startFrame.components[1].transform.x
 const approachEndGap = initialApproach.movementFrame.components[1].transform.x
   - initialApproach.movementFrame.components[0].transform.x;
 assert.equal(approachStartGap, 204, "Сближение начинается с дальней позиции");
-assert.equal(approachEndGap, 128, "Сближение заканчивается на дистанции удара");
+assert.equal(approachEndGap, 120, "Сближение заканчивается на дистанции удара");
 assert.deepEqual(
   initialApproach.greetingFrame.components.map((component) => component.animation.clip),
   ["greeting", "greeting"],
@@ -205,6 +261,7 @@ if (finalSnapshot.outcome?.type === "victory") {
   });
   const winner = finalFrame.components.find((component) => component.fighterId === finalSnapshot.outcome.winnerId);
   assert.equal(winner.animation.clip, "victory", "Победитель поднимает меч только в итоговом снимке");
+  assert.equal(winner.animation.sheet.loop, true, "Победный салют остаётся циклическим в итоговом кадре");
   assert.equal(winner.motion.duration, 860, "Победная строка проигрывается полностью");
   assert.equal(
     BattleVisualEngine.prototype.createRecoveryFrame.call({
@@ -224,6 +281,28 @@ const sandFrame = createVisualFrame(null, sandInput, undefined, {
   rendererMode: RENDERER_MODES.assets,
 });
 assert.equal(sandFrame.arena.assetPath, ARENA_BACKGROUNDS.sand.assetPath, "Песчаная арена получает самостоятельный фон");
+assert.equal(sandFrame.arena.ambientLights.length, 7, "Песчаная арена передаёт ряд небольших источников света");
+const loadedBackground = { complete: true, naturalWidth: 360, naturalHeight: 560 };
+const lightRenderer = { loadAsset: () => loadedBackground };
+const normalLights = BattleVisualEngine.prototype.arenaLightSprites.call(
+  lightRenderer,
+  360,
+  300,
+  standardMobileFrame,
+  0,
+);
+assert.equal(normalLights.length, 2, "Оба видимых факела каменной арены получают пиксельные спрайты");
+assert.deepEqual(normalLights.map((light) => light.y), [63, 63], "Координаты огня проходят тот же вертикальный crop, что и фон");
+assert.notEqual(normalLights[0].pulse, normalLights[1].pulse, "Разные фазы не дают факелам мерцать синхронно");
+const sandLights = BattleVisualEngine.prototype.arenaLightSprites.call(
+  lightRenderer,
+  360,
+  300,
+  sandFrame,
+  500,
+);
+assert.equal(sandLights.length, 7, "Все огни песчаной арены остаются внутри видимого фрагмента");
+assert.ok(sandLights.every((light) => light.y >= 9 && light.y <= 12), "Малые огни располагаются вдоль верхней стены сцены");
 
 const blockSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 blockSnapshot.fighters[1].fatigue = 75;
@@ -286,6 +365,39 @@ const actionMobileFrame = createVisualFrame(actionSnapshot, standardInput, undef
 const actionActor = actionMobileFrame.components.find((component) => component.id === `${actionSnapshot.lastAction.actorId}:fighter`);
 assert.equal(Math.abs(actionActor.motion.x), 12, "Во время удара атакующий сближается с целью на 12 px");
 assert.equal(actionActor.motion.returnToOrigin, true, "После выпада атакующий плавно возвращается к боевой позиции");
+const swordsmanSpecialSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
+swordsmanSpecialSnapshot.lastAction = {
+  actorId: swordsmanSpecialSnapshot.fighters[0].id,
+  targetId: swordsmanSpecialSnapshot.fighters[1].id,
+  attackType: "achilles-leap",
+  outcome: "hit",
+};
+const swordsmanSpecialFrame = createVisualFrame(swordsmanSpecialSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const swordsmanSpecialActor = swordsmanSpecialFrame.components.find(
+  (component) => component.fighterId === swordsmanSpecialSnapshot.lastAction.actorId,
+);
+assert.equal(swordsmanSpecialActor.animation.clip, "special", "Прыжок Ахилла использует отдельную строку особого удара");
+assert.equal(Math.abs(swordsmanSpecialActor.motion.x), 14, "Силовой особый удар получает отдельный короткий выпад");
+const retiariusSpecialSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
+retiariusSpecialSnapshot.lastAction = {
+  actorId: retiariusSpecialSnapshot.fighters[1].id,
+  targetId: retiariusSpecialSnapshot.fighters[0].id,
+  classTechnique: "weapon.retiarius-net-cast",
+  outcome: "hit",
+};
+const retiariusSpecialFrame = createVisualFrame(retiariusSpecialSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const retiariusSpecialActor = retiariusSpecialFrame.components.find(
+  (component) => component.fighterId === retiariusSpecialSnapshot.lastAction.actorId,
+);
+assert.equal(retiariusSpecialActor.animation.clip, "special", "Перехват сетью использует отдельную строку ретиария");
+assert.equal(Math.abs(retiariusSpecialActor.motion.x), 0, "Бросок сети не сдвигает ретиария дополнительным выпадом");
+assert.equal(retiariusSpecialFrame.action.classTechnique, "weapon.retiarius-net-cast", "Визуальный кадр сохраняет доменный id классового приёма");
 const criticalSnapshot = JSON.parse(JSON.stringify(actionSnapshot));
 criticalSnapshot.lastAction = {
   ...criticalSnapshot.lastAction,
@@ -326,4 +438,4 @@ assert.equal(skeletalFrame.rigs.length, 2, "Pixi-предпросмотр пол
 assert.equal(skeletalFrame.rigs[0].weaponSkinId, "spear", "Скелетный риг получает скин оружия отдельно от тела");
 assert.equal(skeletalFrame.rigs[0].state, "idle.normal", "Скелетный адаптер выводит состояние из снимка боя");
 
-console.log("OK: visual frame uses one baked swordsman sprite per fighter");
+console.log("OK: visual frame resolves baked swordsman and retiarius sprites");

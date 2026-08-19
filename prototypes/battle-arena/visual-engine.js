@@ -15,6 +15,7 @@ const PRESENTATIONS = Object.freeze({ mobile: "mobile" });
 const RENDERER_MODES = Object.freeze({ lines: "lines", assets: "assets" });
 const POSITION_STAGES = Object.freeze({ entrance: "entrance", combat: "combat" });
 const INJURED_HEALTH_RATIO = 0.45;
+const PRESSURE_STEP_DISTANCE = 6;
 const CRITICAL_BLOOD_PATTERN = Object.freeze([
   Object.freeze({ distance: 32, lift: 18, gravity: 10, size: 3, delay: 0, color: "#a91414" }),
   Object.freeze({ distance: 25, lift: 27, gravity: 13, size: 2, delay: 0.04, color: "#731010" }),
@@ -36,9 +37,22 @@ const fighterFromInput = (fighter) => ({
   visual: fighter.visual,
 });
 
+const isSpecialAction = (action) => Boolean(
+  action?.attackType === "achilles-leap"
+  || action?.classTechnique
+  || action?.specialAttack,
+);
+
+const isRangedSpecialAction = (action) => (
+  action?.classTechnique === "weapon.retiarius-net-cast"
+);
+
 const actionMotion = (fighter, action) => {
   if (!action) return "idle";
-  if (action.actorId === fighter.id) return action.attackType === "achilles-leap" ? "leap" : "attack";
+  if (action.actorId === fighter.id) {
+    if (isSpecialAction(action)) return isRangedSpecialAction(action) ? "special-ranged" : "special";
+    return "attack";
+  }
   if (action.targetId === fighter.id) return action.outcome;
   return "idle";
 };
@@ -46,7 +60,7 @@ const actionMotion = (fighter, action) => {
 const visualStateForFighter = (fighter, action, outcome, showOutcome) => {
   if (fighter.health <= 0) return "defeated";
   if (showOutcome && outcome?.type === "victory" && outcome.winnerId === fighter.id) return "victory";
-  if (action?.actorId === fighter.id) return "attack";
+  if (action?.actorId === fighter.id) return isSpecialAction(action) ? "special" : "attack";
   if (action?.targetId === fighter.id) {
     return ({ hit: "reaction.hit", dodge: "defense.dodge", block: "defense.block" }[action.outcome] || "idle.normal");
   }
@@ -71,11 +85,12 @@ const visualPressure = (fighters) => {
 const componentMotion = (kind, motion, direction, scale) => {
   const idle = freeze({ duration: 0, x: 0, y: 0, rotation: 0 });
   if (motion === "idle") return idle;
-  if (motion === "attack" || motion === "leap") {
+  if (motion === "attack" || motion === "leap" || motion === "special" || motion === "special-ranged") {
+    const rangedSpecial = motion === "special-ranged";
     return freeze({
-      duration: motion === "leap" ? 760 : 560,
-      x: direction * (motion === "leap" ? 28 : 18) * scale,
-      y: (motion === "leap" ? -22 : -4) * scale,
+      duration: motion === "leap" ? 760 : motion.startsWith("special") ? 680 : 560,
+      x: direction * (rangedSpecial ? 0 : motion === "leap" ? 28 : motion === "special" ? 22 : 18) * scale,
+      y: (motion === "leap" || motion === "special" ? -12 : -4) * scale,
       rotation: kind === "weapon" ? direction * (motion === "leap" ? 1.15 : 0.55) : 0,
     });
   }
@@ -88,8 +103,8 @@ const componentMotion = (kind, motion, direction, scale) => {
 
 const sheetMotion = (motion, sheetClip, direction) => {
   const duration = sheetClip?.durationMs
-    ?? ({ attack: 560, leap: 760, dodge: 430, block: 300, hit: 390 }[motion] || 0);
-  const lunge = motion === "leap" ? 18 : motion === "attack" ? 12 : 0;
+    ?? ({ attack: 560, leap: 760, special: 680, "special-ranged": 680, dodge: 430, block: 300, hit: 390 }[motion] || 0);
+  const lunge = motion === "leap" ? 18 : motion === "special" ? 14 : motion === "attack" ? 12 : 0;
   return freeze({
     duration,
     x: direction * lunge,
@@ -99,16 +114,22 @@ const sheetMotion = (motion, sheetClip, direction) => {
   });
 };
 
-/* Ассет выводится высотой 150 px из безопасного кадра 256×256. Два бойца
- * помещаются рядом в мобильной области и не обрезаются по краям. */
+/* Логическое тело выводится высотой 150 px. Физический кадр может быть больше
+ * 256×256 за счёт прозрачного буфера оружия; он не меняет масштаб тела. */
 const presentationConfig = () => ({
-  combatPositions: [116, 244],
+  combatPositions: [120, 240],
   entrancePositions: [78, 282],
   groundY: 280,
   scale: 3.2,
   assetHeight: 150,
-  pressureDistance: 32,
+  pressureDistance: 40,
 });
+
+const resolveTerritoryOffset = (displayedOffset, desiredOffset) => (
+  Math.abs(desiredOffset - displayedOffset) >= PRESSURE_STEP_DISTANCE
+    ? desiredOffset
+    : displayedOffset
+);
 
 /*
  * Чистый адаптер: вход — снимок симуляции, выход — визуальная сцена.
@@ -123,6 +144,7 @@ const createVisualFrame = (
     presentation = PRESENTATIONS.mobile,
     rendererMode = RENDERER_MODES.lines,
     positionStage = POSITION_STAGES.combat,
+    territoryOffsetOverride = null,
   } = {},
 ) => {
   const config = presentationConfig(presentation);
@@ -135,7 +157,12 @@ const createVisualFrame = (
   }));
   const pressure = visualPressure(fighters);
   const isEntrance = positionStage === POSITION_STAGES.entrance;
-  const territoryOffset = isEntrance ? 0 : Math.round(pressure.total * config.pressureDistance);
+  const desiredTerritoryOffset = isEntrance ? 0 : Math.round(pressure.total * config.pressureDistance);
+  const territoryOffset = isEntrance
+    ? 0
+    : Number.isFinite(territoryOffsetOverride)
+      ? clamp(Math.round(territoryOffsetOverride), -config.pressureDistance, config.pressureDistance)
+      : desiredTerritoryOffset;
   const anchorPositions = isEntrance ? config.entrancePositions : config.combatPositions;
   const positions = anchorPositions.map((position) => position + territoryOffset);
   const showOutcome = snapshot?.label === "Итог боя";
@@ -153,7 +180,7 @@ const createVisualFrame = (
     const desiredFacing = side === 0 ? "right" : "left";
     const bodyClip = bodyGrid.clips[visualState]
       ? visualState
-      : motion === "leap" ? animationRig.attackClip : "idle.normal";
+      : motion === "leap" || motion.startsWith("special") ? animationRig.attackClip : "idle.normal";
     const sheetClip = bodyGrid.clips[bodyClip];
     const weaponClip = weaponSkin.spriteSheet?.clips?.[bodyClip] || null;
     const usesVectorWeapon = spriteAssets && Boolean(weaponSkin.vectorStyle);
@@ -172,8 +199,15 @@ const createVisualFrame = (
         animation: freeze({
           equipmentProfileId: animationRig.id, bodyGridId: bodyGrid.id, state: visualState,
           clip: bodyClip, experimental: bodyGrid.experimental, weaponBakedIn: bodyGrid.weaponBakedIn,
-          weaponSkinId: bodyGrid.weaponBakedIn ? "sword" : weaponSkin.id,
-          sheet: freeze({ columns: bodyGrid.grid.columns, rows: bodyGrid.grid.rows, ...sheetClip }),
+          weaponSkinId: bodyGrid.weaponBakedIn ? bodyGrid.bakedWeaponSkinId : weaponSkin.id,
+          sheet: freeze({
+            columns: bodyGrid.grid.columns,
+            rows: bodyGrid.grid.rows,
+            logicalWidth: bodyGrid.grid.logicalWidth || bodyGrid.grid.cellWidth,
+            logicalHeight: bodyGrid.grid.logicalHeight || bodyGrid.grid.cellHeight,
+            equipmentBuffer: bodyGrid.grid.equipmentBuffer || null,
+            ...sheetClip,
+          }),
           mirrored: (bodyGrid.facing || "right") !== desiredFacing,
           assetHeight: assetHeight || null,
         }),
@@ -215,7 +249,7 @@ const createVisualFrame = (
     ];
   });
   return freeze({
-    version: 9,
+    version: 11,
     presentation,
     rendererMode,
     arena: freeze({
@@ -223,11 +257,13 @@ const createVisualFrame = (
       background: arenaBackground.fallbackColor,
       assetPath: arenaBackground.assetPath,
       sourceGroundY: arenaBackground.groundY,
+      ambientLights: freeze((arenaBackground.ambientLights || []).map((light) => freeze({ ...light }))),
       groundY: config.groundY,
       initiativePressure: pressure.initiative,
       healthPressure: pressure.health,
       pressure: pressure.total,
       territoryOffset,
+      desiredTerritoryOffset,
       positionStage,
     }),
     fighters: freeze(fighters.map((fighter) => freeze({
@@ -239,6 +275,9 @@ const createVisualFrame = (
       outcome: action.outcome,
       critical: Boolean(action.critical),
       impact: action.impact || null,
+      attackType: action.attackType || null,
+      classTechnique: action.classTechnique || null,
+      specialAttack: action.specialAttack || null,
     }) : null,
     components: freeze(components),
   });
@@ -262,6 +301,7 @@ class BattleVisualEngine {
     this.transitionFrom = new Map();
     this.playbackToken = 0;
     this.approachPending = true;
+    this.territoryOffset = 0;
   }
 
   setRendererMode(rendererMode) {
@@ -272,19 +312,31 @@ class BattleVisualEngine {
   }
 
   present(snapshot, input) {
-    const actionFrame = createVisualFrame(snapshot, input, this.spriteLibrary, {
+    const desiredActionFrame = createVisualFrame(snapshot, input, this.spriteLibrary, {
       presentation: this.presentation,
       rendererMode: this.rendererMode,
     });
     const initialApproach = this.approachPending
       ? this.createInitialApproach(snapshot, input)
       : null;
+    const desiredOffset = desiredActionFrame.arena.territoryOffset;
+    const territoryOffset = initialApproach
+      ? desiredOffset
+      : resolveTerritoryOffset(this.territoryOffset, desiredOffset);
+    const actionFrame = territoryOffset === desiredOffset
+      ? desiredActionFrame
+      : createVisualFrame(snapshot, input, this.spriteLibrary, {
+        presentation: this.presentation,
+        rendererMode: this.rendererMode,
+        territoryOffsetOverride: territoryOffset,
+      });
     const movementFrame = initialApproach?.movementFrame
       || this.createPressureMovementFrame(snapshot, input, actionFrame);
-    const recoveryFrame = this.createRecoveryFrame(snapshot, input);
+    const recoveryFrame = this.createRecoveryFrame(snapshot, input, territoryOffset);
     this.stop();
     const token = this.playbackToken;
     this.approachPending = false;
+    this.territoryOffset = territoryOffset;
     if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       this.setFrame(recoveryFrame || actionFrame);
       this.draw(1, 0);
@@ -314,6 +366,7 @@ class BattleVisualEngine {
     this.frame = null;
     this.transitionFrom = new Map();
     this.approachPending = true;
+    this.territoryOffset = 0;
   }
 
   createInitialApproach(snapshot, input) {
@@ -359,20 +412,24 @@ class BattleVisualEngine {
     return freeze({ startFrame, greetingFrame, movementFrame });
   }
 
-  createRecoveryFrame(snapshot, input) {
+  createRecoveryFrame(snapshot, input, territoryOffsetOverride = null) {
     if (!snapshot?.lastAction || snapshot.label === "Итог боя") return null;
     return createVisualFrame(
       { ...snapshot, lastAction: null, visualMovement: undefined },
       input,
       this.spriteLibrary,
-      { presentation: this.presentation, rendererMode: this.rendererMode },
+      {
+        presentation: this.presentation,
+        rendererMode: this.rendererMode,
+        territoryOffsetOverride,
+      },
     );
   }
 
   createPressureMovementFrame(snapshot, input, actionFrame) {
     if (!this.frame || !snapshot?.fighters?.length || snapshot.fighters.some((fighter) => fighter.health <= 0)) return null;
     const shift = actionFrame.arena.territoryOffset - (this.frame.arena?.territoryOffset || 0);
-    if (Math.abs(shift) < 2) return null;
+    if (Math.abs(shift) < PRESSURE_STEP_DISTANCE) return null;
     const [left, right] = snapshot.fighters;
     const visualMovement = shift > 0
       ? { [left.id]: "advance", [right.id]: "retreat" }
@@ -397,6 +454,9 @@ class BattleVisualEngine {
     this.setFrame(frame);
     const duration = Math.max(...frame.components.map((component) => component.motion.duration), 0);
     const hasLoop = frame.components.some((component) => component.animation?.sheet?.loop);
+    const hasTerminalLoop = frame.components.some((component) => (
+      component.animation?.state === "victory" && component.animation?.sheet?.loop
+    ));
     if (!duration && hasLoop) {
       const startedAt = performance.now();
       const animateLoop = (now) => {
@@ -418,6 +478,10 @@ class BattleVisualEngine {
       const progress = clamp((now - startedAt) / duration, 0, 1);
       this.draw(progress, now - startedAt);
       if (progress < 1) {
+        this.animationFrame = requestAnimationFrame(animate);
+      } else if (hasTerminalLoop) {
+        /* Итоговый салют остаётся живым до следующего setFrame/stop. Обычные
+         * циклы движения завершаются по duration и продолжают цепочку боя. */
         this.animationFrame = requestAnimationFrame(animate);
       } else {
         this.animationFrame = null;
@@ -444,6 +508,7 @@ class BattleVisualEngine {
     context.fillStyle = frame.arena.background;
     context.fillRect(0, 0, canvas.width, canvas.height);
     const backgroundDrawn = this.drawArenaBackground(context, canvas.width, canvas.height, frame);
+    this.drawArenaLights(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
     this.drawArenaGuides(context, canvas.width, canvas.height, frame, backgroundDrawn);
     const fighters = frame.components.filter((component) => component.kind === "fighter");
     const weapons = frame.components.filter((component) => component.kind === "weapon");
@@ -537,6 +602,64 @@ class BattleVisualEngine {
     return true;
   }
 
+  arenaLightSprites(width, height, frame, animationClock = 0) {
+    if (frame.rendererMode !== RENDERER_MODES.assets || !frame.arena.ambientLights?.length) return [];
+    const image = this.loadAsset(frame.arena.assetPath);
+    if (!image?.complete || !image.naturalWidth) return [];
+    const sourceHeight = Math.min(image.naturalHeight, height);
+    const sourceY = Math.min(
+      image.naturalHeight - sourceHeight,
+      Math.max(0, (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY),
+    );
+    const scaleX = width / image.naturalWidth;
+    const scaleY = height / sourceHeight;
+    const seconds = animationClock / 1000;
+    return frame.arena.ambientLights.flatMap((light) => {
+      const x = light.x * scaleX;
+      const y = (light.y - sourceY) * scaleY;
+      if (x < -16 || x > width + 16 || y < -16 || y > height + 16) return [];
+      const phase = (light.phase || 0) * Math.PI * 2;
+      const wave = Math.sin(seconds * 7.1 + phase) * 0.62
+        + Math.sin(seconds * 11.7 + phase * 1.7) * 0.38;
+      const drift = Math.round(Math.sin(seconds * 5.3 + phase) * Math.max(1, light.scale || 1));
+      const pulse = 0.82 + wave * 0.12;
+      return [freeze({
+        x: Math.round(x) + drift,
+        y: Math.round(y),
+        scale: (light.scale || 1) * scaleY,
+        pulse,
+      })];
+    });
+  }
+
+  drawArenaLights(context, width, height, frame, animationClock, backgroundDrawn = false) {
+    if (!backgroundDrawn) return;
+    const lights = this.arenaLightSprites(width, height, frame, animationClock);
+    if (!lights.length) return;
+    context.save();
+    context.globalCompositeOperation = "screen";
+    lights.forEach((light) => {
+      const unit = Math.max(1, Math.round(light.scale * 2));
+      const radius = Math.max(7, Math.round(13 * light.scale * light.pulse));
+      if (typeof context.createRadialGradient === "function") {
+        const glow = context.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
+        glow.addColorStop(0, `rgba(255, 178, 61, ${0.2 * light.pulse})`);
+        glow.addColorStop(0.45, `rgba(219, 83, 20, ${0.11 * light.pulse})`);
+        glow.addColorStop(1, "rgba(76, 18, 4, 0)");
+        context.fillStyle = glow;
+        context.fillRect(light.x - radius, light.y - radius, radius * 2, radius * 2);
+      }
+      context.globalAlpha = clamp(0.68 + light.pulse * 0.22, 0, 1);
+      context.fillStyle = "#9b2d0f";
+      context.fillRect(light.x - unit, light.y - unit * 3, unit * 2, unit * 4);
+      context.fillStyle = "#e66a1b";
+      context.fillRect(light.x, light.y - unit * 4, unit, unit * 3);
+      context.fillStyle = "#ffd56a";
+      context.fillRect(light.x - unit, light.y - unit * 2, unit, unit * 2);
+    });
+    context.restore();
+  }
+
   drawArenaGuides(context, width, height, frame, backgroundDrawn = false) {
     const color = frame.arena.type === "sand" ? "#3d2a12" : "#10232d";
     const groundY = frame.arena.groundY;
@@ -619,8 +742,11 @@ class BattleVisualEngine {
       const frame = sheet.frames[frameIndex];
       const sourceWidth = image.naturalWidth / sheet.columns;
       const sourceHeight = image.naturalHeight / sheet.rows;
-      const assetHeight = component.animation?.assetHeight || 255;
-      const assetWidth = assetHeight * (sourceWidth / sourceHeight);
+      const logicalHeight = sheet.logicalHeight || sourceHeight;
+      const logicalAssetHeight = component.animation?.assetHeight || 255;
+      const logicalScale = logicalAssetHeight / logicalHeight;
+      const assetHeight = sourceHeight * logicalScale;
+      const assetWidth = sourceWidth * logicalScale;
       context.drawImage(
         image,
         frame * sourceWidth,
@@ -692,9 +818,11 @@ class BattleVisualEngine {
 globalThis.GladiatorVisualEngine = {
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
+  PRESSURE_STEP_DISTANCE,
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
   createVisualFrame,
+  resolveTerritoryOffset,
 };
 })();

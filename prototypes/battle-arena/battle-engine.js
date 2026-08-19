@@ -18,7 +18,22 @@ const COMBAT_RULES = Object.freeze({
     chance: 0.03,
     damageMultiplier: 2,
   }),
+  trauma: Object.freeze({
+    baseChance: 0.12,
+    damageRatioMultiplier: 0.9,
+    maxChance: 0.45,
+    armChance: 0.5,
+  }),
 });
+
+const calculateTraumaChance = (damage, maxHealth) => {
+  const rules = COMBAT_RULES.trauma;
+  return round(clamp(
+    rules.baseChance + (damage / Math.max(1, maxHealth)) * rules.damageRatioMultiplier,
+    rules.baseChance,
+    rules.maxChance,
+  ), 4);
+};
 
 if (!REFERENCE_DATA) {
   throw new Error("Сначала подключите reference-data.js — он содержит каталог экипировки");
@@ -352,7 +367,12 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
         ...data,
         candidates: data.candidates.map((candidate) => (
           candidate.fighterId === api.ownerId
-            ? { ...candidate, weight: round(candidate.weight * 1.5), reason: "thraex-initiative-surge" }
+            ? {
+              ...candidate,
+              weight: round(candidate.weight * 1.5),
+              reason: "thraex-initiative-surge",
+              classTechnique: "weapon.thraex-hooking-slash",
+            }
             : candidate
         )),
       };
@@ -375,6 +395,7 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
         originalActorId: data.actorId,
         actorId: api.ownerId,
         reason: "class-technique:retiarius-net",
+        classTechnique: "weapon.retiarius-net-cast",
       };
     },
   },
@@ -391,7 +412,13 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
       runtime.pursuit = false;
       api.activate("Неотступное преследование усилило инициативу");
       return { ...data, candidates: data.candidates.map((candidate) => (
-        candidate.fighterId === api.ownerId ? { ...candidate, weight: round(candidate.weight * 1.4) } : candidate
+        candidate.fighterId === api.ownerId
+          ? {
+            ...candidate,
+            weight: round(candidate.weight * 1.4),
+            classTechnique: "weapon.secutor-relentless-pursuit",
+          }
+          : candidate
       )) };
     },
   },
@@ -401,7 +428,7 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
       if (runtime.used || data.actorId !== api.ownerId) return data;
       runtime.used = true;
       api.activate("Дистанция копья усилила первый удар");
-      return { ...data, strengthMultiplier: 1.25, classTechnique: "spear-distance" };
+      return { ...data, strengthMultiplier: 1.25, classTechnique: "weapon.hoplomachus-spear-distance" };
     },
   },
 };
@@ -412,7 +439,7 @@ const EQUIPMENT_MODIFIER_IMPLEMENTATIONS = {
       if (runtime.used || data.actorId !== api.ownerId || data.outcome !== "hit") return data;
       runtime.used = true;
       api.activate("Отточенная кромка добавила 5 урона к первому попаданию");
-      return { ...data, damage: data.damage + 5 };
+      return { ...data, damage: data.damage + 5, specialAttack: "weapon.honed-edge" };
     },
   },
   "weapon.blood-seeker": {
@@ -421,7 +448,11 @@ const EQUIPMENT_MODIFIER_IMPLEMENTATIONS = {
       const target = api.state.fighters.find((fighter) => fighter.id === data.targetId);
       if (!target || target.health >= target.maxHealth) return data;
       api.activate("Ищущий кровь усилил удар по раненому противнику");
-      return { ...data, strengthMultiplier: (data.strengthMultiplier || 1) * 1.1 };
+      return {
+        ...data,
+        strengthMultiplier: (data.strengthMultiplier || 1) * 1.1,
+        specialAttack: "weapon.blood-seeker",
+      };
     },
   },
   "weapon.counterweight": {
@@ -441,7 +472,7 @@ const EQUIPMENT_MODIFIER_IMPLEMENTATIONS = {
       if (data.actorId !== api.ownerId || data.outcome !== "block") return data;
       api.activate("Разрушитель защиты утомил заблокировавшего врага");
       api.enqueue({ type: "fatigue", fighterId: data.targetId, value: 4, reason: "equipment:guard-breaker" });
-      return data;
+      return { ...data, specialAttack: "weapon.guard-breaker" };
     },
   },
   "weapon.quick-recovery": {
@@ -456,7 +487,7 @@ const EQUIPMENT_MODIFIER_IMPLEMENTATIONS = {
     beforeAction(data, api) {
       if (data.actorId !== api.ownerId || api.random() >= 0.15) return data;
       api.activate("Обманный финт не позволяет заблокировать атаку");
-      return { ...data, unblockable: true };
+      return { ...data, unblockable: true, specialAttack: "weapon.deceptive-feint" };
     },
   },
   "armor.reinforced-lining": {
@@ -995,7 +1026,8 @@ class BattleEngine {
           actorId: selected.fighterId,
           roll: selected.roll,
           totalWeight: selected.totalWeight,
-          reason: "initiative-weighted-random",
+          reason: selected.reason || "initiative-weighted-random",
+          classTechnique: selected.classTechnique || null,
         };
       },
     );
@@ -1008,7 +1040,12 @@ class BattleEngine {
       "select-action",
       "beforeSelectAction",
       "afterSelectAction",
-      { actorId: actor.id, targetId: target.id, availableActions: ["attack"] },
+      {
+        actorId: actor.id,
+        targetId: target.id,
+        availableActions: ["attack"],
+        classTechnique: selection.classTechnique || null,
+      },
       (data) => ({ ...data, action: "attack" }),
     );
 
@@ -1109,7 +1146,7 @@ class BattleEngine {
     if (data.attackType === "achilles-leap") {
       const strike = this.rollStrikeDamage(actor, target, effectiveStrength);
       const damage = strike.damage;
-      const traumaChance = clamp(0.03 + (damage / target.maxHealth) * 0.42, 0.03, 0.45);
+      const traumaChance = calculateTraumaChance(damage, target.maxHealth);
       return {
         ...data,
         outcome: "hit",
@@ -1147,7 +1184,7 @@ class BattleEngine {
       : { strikePowerRoll: null, strikePowerMultiplier: null, damage: 0 };
     const damage = strike.damage;
     const traumaChance = outcome === "hit"
-      ? clamp(0.03 + (damage / target.maxHealth) * 0.42, 0.03, 0.45)
+      ? calculateTraumaChance(damage, target.maxHealth)
       : 0;
 
     return {
@@ -1255,7 +1292,7 @@ class BattleEngine {
         effects.push({
           type: "trauma",
           fighterId: target.id,
-          value: this.random() < 0.5 ? "arm" : "leg",
+          value: this.random() < COMBAT_RULES.trauma.armChance ? "arm" : "leg",
           reason: "heavy-hit",
         });
       }
@@ -1669,6 +1706,7 @@ globalThis.GladiatorBattle = {
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
+  calculateTraumaChance,
   createBattleLogExport,
   createDefaultBattleInput,
 };

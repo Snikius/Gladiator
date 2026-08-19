@@ -70,7 +70,7 @@ const randomPlaybackDelay = () => Math.round(PLAYBACK_STEP_MS * (
   PLAYBACK_PAUSE_MIN_MULTIPLIER
   + Math.random() * (PLAYBACK_PAUSE_MAX_MULTIPLIER - PLAYBACK_PAUSE_MIN_MULTIPLIER)
 ));
-const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1.3;
+const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1.4;
 const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
@@ -134,19 +134,26 @@ const effectDefinitions = {
 const effectName = (type, effectId) =>
   effectDefinitions[type].find((effect) => effect.id === effectId)?.name || effectId;
 
-const playerHitText = (snapshot) => {
+const playerActionText = (snapshot) => {
   const action = snapshot.lastAction;
-  if (!action || action.outcome !== "hit") return null;
+  if (!action) return null;
   const actor = snapshot.fighters.find((fighter) => fighter.id === action.actorId)?.name || action.actorId;
   const target = snapshot.fighters.find((fighter) => fighter.id === action.targetId)?.name || action.targetId;
-  const labels = {
+  if (action.outcome === "miss") return `${actor} промахивается — ${target} удерживает позицию`;
+  if (action.outcome === "dodge") return `${target} уклоняется от атаки ${actor}`;
+  if (action.outcome === "block") return `${target} блокирует удар ${actor}`;
+  const hitLabels = {
     light: `${actor} слегка ранит ${target}`,
     normal: `${actor} ранит ${target}`,
     strong: `${actor} наносит ${target} сильный удар`,
     critical: `${actor} наносит ${target} критический удар`,
   };
-  return labels[action.impact] || labels.normal;
+  return hitLabels[action.impact] || `${actor} атакует ${target}`;
 };
+
+const playerActionClass = (action) => action.outcome === "hit"
+  ? `impact-${action.impact || "normal"}`
+  : `outcome-${action.outcome || "action"}`;
 
 /* Боевые тесты сохраняют нейтральный дефолт движка. В интерфейсе сразу
  * показываем пару, для которой уже есть полные независимые sprite-слои. */
@@ -396,6 +403,43 @@ const statusLabel = (fighter) => {
   return "СВЕЖ И СОБРАН";
 };
 
+const conditionGlyph = (conditionId) => {
+  if (conditionId.includes("leg")) return "⌁";
+  if (conditionId.includes("arm")) return "†";
+  if (conditionId.includes("head")) return "◉";
+  if (conditionId.includes("ribs")) return "≋";
+  if (conditionId.includes("exhaust")) return "⌛";
+  if (conditionId.includes("post-battle")) return "☠";
+  return "✦";
+};
+
+const mobileConditions = (fighter) => {
+  const injuries = fighter.injuries || [];
+  const startingTraumaTypes = new Set(injuries.flatMap((injuryId) => (
+    injuryId === "leg-damage" ? ["leg"] : injuryId === "arm-damage" ? ["arm"] : []
+  )));
+  return [
+    ...injuries.map((injuryId) => ({
+      id: injuryId,
+      label: modifierName(injuryId),
+      source: "injury",
+    })),
+    ...(fighter.traumas || [])
+      .filter((trauma) => trauma.source !== "starting-injury" || !startingTraumaTypes.has(trauma.type))
+      .map((trauma) => ({
+        id: trauma.type || "trauma",
+        label: trauma.type === "arm"
+          ? "Травма руки"
+          : trauma.type === "leg"
+            ? "Травма ноги"
+            : trauma.type === "post-battle"
+              ? "Итоговая травма"
+              : "Боевая травма",
+        source: "trauma",
+      })),
+  ];
+};
+
 const meterRow = (label, value, max, className, displayValue = null) => {
   const width = Math.max(0, Math.min(100, (value / max) * 100));
   return `
@@ -413,15 +457,33 @@ const renderMobileBattleUi = (snapshot, input) => {
   const fighters = snapshot.fighters.map((fighter, index) => {
     const health = Math.max(0, fighter.health);
     const healthRatio = Math.max(0, Math.min(1, health / fighter.maxHealth));
+    const fatigueRatio = Math.max(0, Math.min(1, fighter.fatigue / 150));
+    const conditions = mobileConditions(fighter);
+    const visibleConditions = conditions.slice(0, 3);
+    const conditionLabel = conditions.length
+      ? conditions.map((condition) => condition.label).join(", ")
+      : "Травм нет";
     return `
       <article class="mobile-fighter-card side-${index + 1}">
-        <span class="mobile-fighter-avatar" aria-hidden="true"></span>
+        <span class="mobile-fighter-avatar" data-fighter-class="${escapeHtml(fighter.fighterClass)}" aria-hidden="true"></span>
         <div class="mobile-fighter-copy">
           <strong>${escapeHtml(fighter.name)}</strong>
           <small>${escapeHtml(fighterClassName(fighter.fighterClass))}</small>
           <div class="mobile-health-track" aria-label="Здоровье ${escapeHtml(fighter.name)}">
             <i style="width:${healthRatio * 100}%"></i>
             <span>${formatNumber(health)} / ${formatNumber(fighter.maxHealth)}</span>
+          </div>
+          <div class="mobile-condition-strip">
+            <div class="mobile-fatigue" aria-label="Усталость ${escapeHtml(fighter.name)}: ${formatNumber(fighter.fatigue)} из 150">
+              <span>УСТ</span>
+              <div class="mobile-fatigue-track"><i style="width:${fatigueRatio * 100}%"></i></div>
+            </div>
+            <div class="mobile-condition-icons" aria-label="${escapeHtml(conditionLabel)}">
+              ${visibleConditions.length
+                ? visibleConditions.map((condition) => `<i class="condition-${condition.source}" title="${escapeHtml(condition.label)}">${conditionGlyph(condition.id)}</i>`).join("")
+                : "<i class=\"condition-clear\" title=\"Травм нет\">◇</i>"}
+              ${conditions.length > visibleConditions.length ? `<b>+${conditions.length - visibleConditions.length}</b>` : ""}
+            </div>
           </div>
         </div>
       </article>
@@ -444,14 +506,14 @@ const renderMobileBattleUi = (snapshot, input) => {
       .filter((candidate) => (
         candidate.step <= snapshot.step
           && candidate.label !== "Итог боя"
-          && candidate.lastAction?.outcome === "hit"
+          && candidate.lastAction?.actorId
       ))
       .slice(-3)
     : [];
   elements.mobileBattleFeed.innerHTML = recentActions.length
     ? recentActions.map((actionSnapshot) => `
-        <li class="impact-${escapeHtml(actionSnapshot.lastAction.impact || "normal")}">
-          <span>${escapeHtml(playerHitText(actionSnapshot))}</span>
+        <li class="${escapeHtml(playerActionClass(actionSnapshot.lastAction))}">
+          <span>${escapeHtml(playerActionText(actionSnapshot))}</span>
         </li>
       `).join("")
     : "<li class=\"empty\">Бой ещё не начался.</li>";

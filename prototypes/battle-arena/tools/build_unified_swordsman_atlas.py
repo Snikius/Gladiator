@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build and validate the exact 6x10 runtime atlas from ten generated rows."""
+"""Build and validate the exact 6x11 runtime atlas from generated rows."""
 
 from pathlib import Path
 from statistics import median
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,19 +20,21 @@ ROW_SOURCES = [
     ("movement", ASSETS / "unified-swordsman-row-7-movement-source-v6.png"),
     ("greeting", ASSETS / "unified-swordsman-row-8-greeting-source-v1.png"),
     ("victory", ASSETS / "unified-swordsman-row-9-victory-source-v1.png"),
+    ("special", ASSETS / "unified-swordsman-row-10-special-source-v1.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v8.png"
+TARGET = ASSETS / "unified-swordsman-grid-v9.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
-CELL = 256
-SAFE_FRAME = 240
+CELL = 384
+SAFE_FRAME = 368
 PADDING = (CELL - SAFE_FRAME) // 2
 ALPHA_THRESHOLD = 64
 SIGNIFICANT_COMPONENT_PIXELS = 80
 DETACHED_COMPONENT_PIXELS = 600
 TARGET_BODY_HEIGHT = 196
 CHECKER_DIFFERENCE_THRESHOLD = 20
+ENCLOSED_BACKGROUND_PIXELS = 150
 
 
 Component = tuple[int, tuple[int, int, int, int], list[tuple[int, int]]]
@@ -97,6 +99,52 @@ def grounded_root_x(frame: Image.Image, bounds: tuple[int, int, int, int]) -> in
     return round((min(xs) + max(xs)) / 2) if xs else round((bounds[0] + bounds[2]) / 2)
 
 
+def dense_body_height(frame: Image.Image) -> int:
+    """Measure the body without counting thin weapons as character height."""
+    alpha = frame.getchannel("A")
+    minimum_run = max(12, round(frame.width * 0.06))
+    dense_rows = []
+    for y in range(frame.height):
+        longest_run = current_run = 0
+        for x in range(frame.width):
+            if alpha.getpixel((x, y)) >= ALPHA_THRESHOLD:
+                current_run += 1
+                longest_run = max(longest_run, current_run)
+            else:
+                current_run = 0
+        if longest_run >= minimum_run:
+            dense_rows.append(y)
+    if not dense_rows:
+        bounds = alpha.getbbox()
+        if bounds is None:
+            raise ValueError("Cannot measure an empty sprite frame")
+        return bounds[3] - bounds[1]
+    return max(dense_rows) - min(dense_rows) + 1
+
+
+def solid_body_height(frame: Image.Image) -> int:
+    """Measure a body while excluding a raised sword or other thin equipment."""
+    alpha = frame.getchannel("A")
+    bounds = alpha.getbbox()
+    if bounds is None:
+        raise ValueError("Cannot measure an empty sprite frame")
+    minimum_run = max(12, round((bounds[2] - bounds[0]) * 0.15))
+    solid_rows = []
+    for y in range(frame.height):
+        longest_run = current_run = 0
+        for x in range(frame.width):
+            if alpha.getpixel((x, y)) >= ALPHA_THRESHOLD:
+                current_run += 1
+                longest_run = max(longest_run, current_run)
+            else:
+                current_run = 0
+        if longest_run >= minimum_run:
+            solid_rows.append(y)
+    if not solid_rows:
+        return dense_body_height(frame)
+    return max(solid_rows) - min(solid_rows) + 1
+
+
 def checkerboard_profile(image: Image.Image) -> tuple[int, tuple[int, int, int], tuple[int, int, int]]:
     """Detect ImageGen's checker size and both neutral colors from an empty top band."""
     sample_y = min(8, image.height - 1)
@@ -142,10 +190,34 @@ def remove_generated_background(image: Image.Image) -> Image.Image:
     if alpha.getextrema()[0] < 255:
         return image
 
+    border = (
+        [image.getpixel((x, 0))[:3] for x in range(image.width)]
+        + [image.getpixel((x, image.height - 1))[:3] for x in range(image.width)]
+        + [image.getpixel((0, y))[:3] for y in range(image.height)]
+        + [image.getpixel((image.width - 1, y))[:3] for y in range(image.height)]
+    )
+    if median(max(pixel) for pixel in border) <= 12:
+        # Some generated rows return a nearly black matte instead of actual
+        # alpha. Remove only dark pixels connected to the outer canvas: black
+        # hair, folds and weapon details enclosed by the silhouette survive.
+        background_candidates = Image.new("L", image.size)
+        candidate_pixels = background_candidates.load()
+        pixels = image.load()
+        for y in range(image.height):
+            for x in range(image.width):
+                candidate_pixels[x, y] = 255 if max(pixels[x, y][:3]) <= 15 else 0
+        ImageDraw.floodfill(background_candidates, (0, 0), 128, thresh=0)
+        mask = background_candidates.point(lambda value: 0 if value == 128 else 255)
+        interior = mask.filter(ImageFilter.MinFilter(3))
+        boundary = ImageChops.subtract(mask, interior)
+        image.paste((24, 20, 24, 255), mask=boundary)
+        image.putalpha(mask)
+        return image
+
     checker_size, first_color, second_color = checkerboard_profile(image)
     pixels = image.load()
-    mask = Image.new("L", image.size)
-    mask_pixels = mask.load()
+    background_candidates = Image.new("L", image.size)
+    candidate_pixels = background_candidates.load()
     for y in range(image.height):
         for x in range(image.width):
             red, green, blue, _ = pixels[x, y]
@@ -159,7 +231,19 @@ def remove_generated_background(image: Image.Image) -> Image.Image:
                 abs(green - checker[1]),
                 abs(blue - checker[2]),
             )
-            mask_pixels[x, y] = 255 if difference >= CHECKER_DIFFERENCE_THRESHOLD else 0
+            candidate_pixels[x, y] = 255 if difference < CHECKER_DIFFERENCE_THRESHOLD else 0
+
+    # Remove only checker-colored pixels connected to the outer background.
+    # Bright metal highlights inside the silhouette can match a checker color,
+    # but they are enclosed by foreground and therefore must remain opaque.
+    ImageDraw.floodfill(background_candidates, (0, 0), 128, thresh=0)
+    enclosed_candidates = background_candidates.point(lambda value: 255 if value == 255 else 0)
+    for size, _, points in connected_components(enclosed_candidates):
+        if size < ENCLOSED_BACKGROUND_PIXELS:
+            continue
+        for x, y in points:
+            candidate_pixels[x, y] = 128
+    mask = background_candidates.point(lambda value: 0 if value == 128 else 255)
 
     # A generated white matte is always on the outside of the silhouette.
     # Replace exactly that outer pixel ring with the dark pixel-art contour.
@@ -219,65 +303,113 @@ def extract_primary_frames(source: Image.Image, name: str) -> list[Image.Image]:
     return frames
 
 
-def validate_atlas(atlas: Image.Image) -> None:
-    expected_size = (COLUMNS * CELL, ROWS * CELL)
+def validate_atlas(
+    atlas: Image.Image,
+    row_sources: list[tuple[str, Path]] = ROW_SOURCES,
+    cell: int = CELL,
+    safe_frame: int = SAFE_FRAME,
+) -> None:
+    padding = (cell - safe_frame) // 2
+    expected_size = (COLUMNS * cell, ROWS * cell)
     if atlas.size != expected_size:
         raise ValueError(f"Atlas size {atlas.size} does not match {expected_size}")
 
-    for row, (name, _) in enumerate(ROW_SOURCES):
+    for row, (name, _) in enumerate(row_sources):
+        grounded_roots = []
         for column in range(COLUMNS):
             frame = atlas.crop(
-                (column * CELL, row * CELL, (column + 1) * CELL, (row + 1) * CELL)
+                (column * cell, row * cell, (column + 1) * cell, (row + 1) * cell)
             )
             bounds = frame.getchannel("A").getbbox()
             if bounds is None:
                 raise ValueError(f"Empty runtime cell: {name} frame {column}")
             if (
-                bounds[0] < PADDING
-                or bounds[1] < PADDING
-                or bounds[2] > CELL - PADDING
-                or bounds[3] > CELL - PADDING
+                bounds[0] < padding
+                or bounds[1] < padding
+                or bounds[2] > cell - padding
+                or bounds[3] > cell - padding
             ):
                 raise ValueError(f"Unsafe bounds in {name} frame {column}: {bounds}")
             validate_runtime_frame(frame, row, column, name)
+            if row in (0, 7) or (row == 6 and column < 3):
+                grounded_roots.append(grounded_root_x(frame, bounds))
+        if grounded_roots and max(grounded_roots) - min(grounded_roots) > 1:
+            raise ValueError(f"Unstable grounded root in {name}: {grounded_roots}")
 
 
-def main() -> None:
+def build_atlas(
+    row_sources: list[tuple[str, Path]],
+    target: Path,
+    *,
+    cell: int = CELL,
+    safe_frame: int = SAFE_FRAME,
+    target_body_height: int = TARGET_BODY_HEIGHT,
+    buffered_equipment: bool = False,
+) -> None:
+    if len(row_sources) != ROWS:
+        raise ValueError(f"Expected {ROWS} animation rows, got {len(row_sources)}")
     prepared_rows: list[tuple[str, list[Image.Image]]] = []
-    for row, (name, source_path) in enumerate(ROW_SOURCES):
+    for row, (name, source_path) in enumerate(row_sources):
         source = remove_generated_background(Image.open(source_path))
         prepared_rows.append((name, extract_primary_frames(source, name)))
 
-    atlas = Image.new("RGBA", (COLUMNS * CELL, ROWS * CELL))
+    padding = (cell - safe_frame) // 2
+    atlas = Image.new("RGBA", (COLUMNS * cell, ROWS * cell))
     for row, (name, frames) in enumerate(prepared_rows):
         heights = [frame.height for frame in frames]
         widths = [frame.width for frame in frames]
-        base_scale = min(
-            TARGET_BODY_HEIGHT / median(heights),
-            SAFE_FRAME / max(heights),
-            SAFE_FRAME / max(widths),
-        )
+        if buffered_equipment:
+            body_heights = [dense_body_height(frame) for frame in frames]
+            base_scale = min(
+                target_body_height / median(body_heights),
+                safe_frame / max(heights),
+                safe_frame / max(widths),
+            )
+        else:
+            base_scale = min(
+                target_body_height / median(heights),
+                safe_frame / max(heights),
+                safe_frame / max(widths),
+            )
         if row == 6:
             # Falling poses are naturally short and must not influence the scale
             # of the standing hit reaction. Use one scale for the entire row so
             # the fighter does not grow at impact or shrink during the fall.
+            standing_heights = body_heights[:3] if buffered_equipment else heights[:3]
             base_scale = min(
-                TARGET_BODY_HEIGHT / max(heights[:3]),
-                SAFE_FRAME / max(heights),
-                SAFE_FRAME / max(widths),
+                target_body_height / median(standing_heights),
+                safe_frame / max(heights),
+                safe_frame / max(widths),
             )
-        if row == 9:
+        if row == 9 and not buffered_equipment:
             # The raised sword makes the final victory poses much taller than
             # the fighter. Keep one scale across the whole row and constrain it
             # by the tallest pose so the blade remains inside its 256px cell.
             base_scale = min(
-                TARGET_BODY_HEIGHT / median(heights[:2]),
-                SAFE_FRAME / max(heights),
-                SAFE_FRAME / max(widths),
+                target_body_height / median(heights[:2]),
+                safe_frame / max(heights),
+                safe_frame / max(widths),
             )
-        if row in (0, 7):
+        if row == 6 and buffered_equipment:
+            # Only the first three frames are standing hit reactions. Normalize
+            # them independently so a wider recoil pose cannot make the body
+            # visibly grow; falling frames keep the shared standing scale.
             frame_scales = [
-                min(TARGET_BODY_HEIGHT / height, SAFE_FRAME / width)
+                min(target_body_height / height, safe_frame / frame.height, safe_frame / frame.width)
+                for frame, height in zip(frames[:3], body_heights[:3])
+            ] + [base_scale] * 3
+        elif row == 9 and buffered_equipment:
+            # A raised sword is deliberately taller than the fighter and must
+            # not reduce body scale. Use a stricter solid-width measurement and
+            # normalize every victory pose independently.
+            victory_body_heights = [solid_body_height(frame) for frame in frames]
+            frame_scales = [
+                min(target_body_height / height, safe_frame / frame.height, safe_frame / frame.width)
+                for frame, height in zip(frames, victory_body_heights)
+            ]
+        elif row in (0, 7) and not buffered_equipment:
+            frame_scales = [
+                min(target_body_height / height, safe_frame / width)
                 for height, width in zip(heights, widths)
             ]
         else:
@@ -294,37 +426,57 @@ def main() -> None:
                 bounds = scaled.getchannel("A").getbbox()
                 if bounds is None:
                     raise ValueError(f"Empty source frame: {name} frame {column}")
+                grounded_pose = row in (0, 7) or (row == 6 and column < 3)
                 center_pose = row == 3 or (row == 6 and column >= 3)
                 anchor_x = (
                     grounded_root_x(scaled, bounds)
-                    if row in (0, 7)
+                    if grounded_pose
                     else root_x(scaled, bounds, falling=center_pose)
                 )
                 scaled_frames.append((scaled, bounds, anchor_x))
             max_left = max(anchor_x - bounds[0] for _, bounds, anchor_x in scaled_frames)
             max_right = max(bounds[2] - anchor_x for _, bounds, anchor_x in scaled_frames)
-            if max_left + max_right <= SAFE_FRAME:
+            if max_left + max_right <= safe_frame:
                 break
-            shrink = SAFE_FRAME / (max_left + max_right) * 0.98
+            shrink = safe_frame / (max_left + max_right) * 0.98
             frame_scales = [frame_scale * shrink for frame_scale in frame_scales]
 
-        anchor_min = PADDING + max_left
-        anchor_max = CELL - PADDING - max_right
+        anchor_min = padding + max_left
+        anchor_max = cell - padding - max_right
         if anchor_min > anchor_max:
             raise ValueError(f"{name}: frames cannot share one horizontal anchor")
-        shared_anchor_x = round(max(anchor_min, min(CELL // 2, anchor_max)))
+        shared_anchor_x = round(max(anchor_min, min(cell // 2, anchor_max)))
 
         for column, (frame, bounds, anchor_x) in enumerate(scaled_frames):
-            target_x = column * CELL + shared_anchor_x - anchor_x
-            target_y = row * CELL + CELL - PADDING - bounds[3]
+            target_x = column * cell + shared_anchor_x - anchor_x
+            target_y = row * cell + cell - padding - bounds[3]
             atlas.alpha_composite(frame, (target_x, target_y))
 
-    validate_atlas(atlas)
-    atlas.save(TARGET)
+    validate_atlas(atlas, row_sources, cell, safe_frame)
+    atlas.save(target)
     print(
-        f"Built and validated {TARGET.name}: {atlas.width}x{atlas.height}, "
-        f"{COLUMNS}x{ROWS} cells of {CELL}x{CELL}"
+        f"Built and validated {target.name}: {atlas.width}x{atlas.height}, "
+        f"{COLUMNS}x{ROWS} cells of {cell}x{cell}"
     )
+
+
+def main() -> None:
+    build_atlas(ROW_SOURCES, TARGET, buffered_equipment=True)
+    atlas = Image.open(TARGET).convert("RGBA")
+    idle_heights = [
+        solid_body_height(atlas.crop((column * CELL, 0, (column + 1) * CELL, CELL)))
+        for column in range(COLUMNS)
+    ]
+    victory_heights = [
+        solid_body_height(atlas.crop((column * CELL, 9 * CELL, (column + 1) * CELL, 10 * CELL)))
+        for column in range(COLUMNS)
+    ]
+    idle_height = median(idle_heights)
+    if any(height < idle_height * 0.94 or height > idle_height * 1.06 for height in victory_heights):
+        raise ValueError(
+            "victory: swordsman body scale differs from idle; "
+            f"idle={idle_heights}, victory={victory_heights}"
+        )
 
 
 if __name__ == "__main__":

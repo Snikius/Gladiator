@@ -18,6 +18,10 @@ BACKGROUNDS = (
         ASSETS / "arena-sand-background-source-v1.png",
         ASSETS / "arena-sand-background-v1.png",
     ),
+    (
+        ASSETS / "arena-sand-background-source-v2.png",
+        ASSETS / "arena-sand-background-v2.png",
+    ),
 )
 
 
