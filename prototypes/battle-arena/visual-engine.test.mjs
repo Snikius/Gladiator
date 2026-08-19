@@ -139,6 +139,11 @@ const injuredHealthFrame = createVisualFrame(injuredHealthSnapshot, standardInpu
   rendererMode: RENDERER_MODES.assets,
 });
 assert.equal(injuredHealthFrame.components[0].animation.clip, "idle.injured", "Ниже 45% здоровья включается раненая стойка даже при высокой усталости");
+assert.equal(injuredHealthFrame.fighters[0].injured, true, "Визуальный кадр помечает живого раненого бойца для постоянной крови");
+const injuredDrops = BattleVisualEngine.prototype.injuredBloodDrops.call(null, injuredHealthFrame, 0);
+assert.equal(injuredDrops.length, 2, "Под раненым бойцом постоянно чередуются две капли крови");
+assert.ok(injuredDrops.some((drop) => !drop.landed), "В цикле раненого видна падающая капля");
+assert.ok(injuredDrops.every((drop) => drop.fighterId === injuredHealthFrame.fighters[0].id));
 const thresholdHealthSnapshot = JSON.parse(JSON.stringify(injuredHealthSnapshot));
 thresholdHealthSnapshot.fighters[0].health = thresholdHealthSnapshot.fighters[0].maxHealth * 0.45;
 thresholdHealthSnapshot.fighters[0].fatigue = 0;
@@ -147,6 +152,12 @@ const thresholdHealthFrame = createVisualFrame(thresholdHealthSnapshot, standard
   rendererMode: RENDERER_MODES.assets,
 });
 assert.equal(thresholdHealthFrame.components[0].animation.clip, "idle.normal", "Ровно 45% ещё относится к обычной стойке");
+assert.equal(thresholdHealthFrame.fighters[0].injured, false, "Ровно при 45% постоянное кровотечение ещё не включается");
+assert.deepEqual(
+  BattleVisualEngine.prototype.injuredBloodDrops.call(null, thresholdHealthFrame, 0),
+  [],
+  "Под нераненым бойцом дополнительные капли не рисуются",
+);
 
 const neutralPressureSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 neutralPressureSnapshot.lastAction = null;
@@ -274,6 +285,36 @@ if (finalSnapshot.outcome?.type === "victory") {
     "Итоговая победная поза не заменяется восстановительной стойкой",
   );
 }
+
+const swordsmanVictorySnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
+swordsmanVictorySnapshot.label = "Итог боя";
+swordsmanVictorySnapshot.outcome = {
+  type: "victory",
+  winnerId: swordsmanVictorySnapshot.fighters[0].id,
+};
+const swordsmanVictoryFrame = createVisualFrame(swordsmanVictorySnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const swordsmanWinner = swordsmanVictoryFrame.components.find(
+  (component) => component.fighterId === swordsmanVictorySnapshot.outcome.winnerId,
+);
+assert.equal(swordsmanWinner.animation.clip, "victory", "Мечник использует победную строку");
+assert.equal(
+  swordsmanWinner.animation.renderScale,
+  1.08,
+  "Победный мечник получает явную коррекцию масштаба поверх атласа",
+);
+let victoryDrawArgs = null;
+BattleVisualEngine.prototype.drawAsset.call({
+  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
+  animationFrameIndex: () => 0,
+}, {
+  set filter(value) {},
+  scale() {},
+  drawImage(...args) { victoryDrawArgs = args; },
+}, swordsmanWinner, 0, 0);
+assert.equal(victoryDrawArgs[8], 243, "Победная ячейка мечника рисуется на 8% крупнее от линии стоп");
 
 const sandInput = JSON.parse(JSON.stringify(standardInput));
 sandInput.arena.type = "sand";

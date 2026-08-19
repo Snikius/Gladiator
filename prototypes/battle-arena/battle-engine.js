@@ -5,6 +5,10 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round = (value, digits = 2) => Number(value.toFixed(digits));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const REFERENCE_DATA = globalThis.GladiatorReferenceData;
+const MAX_BATTLE_STEPS = 2000;
+const MAX_ARENA_MULTIPLIER = 10;
+const MAX_BASE_ATTRIBUTE = 500;
+const MAX_BASE_HEALTH = 500;
 
 const COMBAT_RULES = Object.freeze({
   strikePower: Object.freeze({
@@ -109,12 +113,12 @@ const normalizeInput = (input) => ({
   schemaVersion: 1,
   rulesetVersion: "prototype-0.6",
   seed: String(input.seed || "gladiator-prototype"),
-  maxSteps: clamp(Number(input.maxSteps) || 80, 1, 500),
+  maxSteps: clamp(Number(input.maxSteps) || 80, 1, MAX_BATTLE_STEPS),
   arena: {
     type: input.arena?.type || "crowd",
     supportMultipliers: [
-      clamp(Number(input.arena?.supportMultipliers?.[0]) || 1, 0.1, 3),
-      clamp(Number(input.arena?.supportMultipliers?.[1]) || 1, 0.1, 3),
+      clamp(Number(input.arena?.supportMultipliers?.[0]) || 1, 0.1, MAX_ARENA_MULTIPLIER),
+      clamp(Number(input.arena?.supportMultipliers?.[1]) || 1, 0.1, MAX_ARENA_MULTIPLIER),
     ],
   },
   fighters: input.fighters.map((fighter, index) => {
@@ -127,9 +131,9 @@ const normalizeInput = (input) => ({
       name: fighter.name || `Боец ${index + 1}`,
       fighterClass,
       base: {
-        strength: clamp(Number(fighter.base?.strength) || 50, 1, 100),
-        health: clamp(Number(fighter.base?.health) || 100, 1, 300),
-        charisma: clamp(Number(fighter.base?.charisma) || 50, 1, 100),
+        strength: clamp(Number(fighter.base?.strength) || 50, 1, MAX_BASE_ATTRIBUTE),
+        health: clamp(Number(fighter.base?.health) || 100, 1, MAX_BASE_HEALTH),
+        charisma: clamp(Number(fighter.base?.charisma) || 50, 1, MAX_BASE_ATTRIBUTE),
       },
       criticalChance: Number.isFinite(Number(fighter.criticalChance))
         ? clamp(Number(fighter.criticalChance), 0, 1)
@@ -280,16 +284,16 @@ const applyInitializationModifiers = (data, api, modifiers, message) => {
   const arenaMultiplier = data.arena.supportMultipliers[fighterIndex];
 
   if (modifiers.strength) {
-    fighter.base.strength = clamp(round(fighter.base.strength + modifiers.strength), 1, 200);
+    fighter.base.strength = clamp(round(fighter.base.strength + modifiers.strength), 1, MAX_BASE_ATTRIBUTE);
     fighter.strength = fighter.base.strength;
   }
   if (modifiers.health) {
-    fighter.base.health = clamp(round(fighter.base.health + modifiers.health), 1, 500);
+    fighter.base.health = clamp(round(fighter.base.health + modifiers.health), 1, MAX_BASE_HEALTH);
     fighter.maxHealth = fighter.base.health;
     fighter.health = fighter.maxHealth;
   }
   if (modifiers.charisma) {
-    fighter.base.charisma = clamp(round(fighter.base.charisma + modifiers.charisma), 1, 200);
+    fighter.base.charisma = clamp(round(fighter.base.charisma + modifiers.charisma), 1, MAX_BASE_ATTRIBUTE);
     fighter.support = clamp(round(fighter.support + modifiers.charisma * arenaMultiplier), 0, 150);
   }
   if (modifiers.support) {
@@ -851,7 +855,7 @@ const createDefaultBattleInput = () => ({
     {
       id: "fighter-1",
       name: "Маркус",
-      base: { strength: 62, health: 190, charisma: 48 },
+      base: { strength: 62, health: 210, charisma: 48 },
       criticalChance: COMBAT_RULES.critical.chance,
       classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "murmillo",
@@ -866,7 +870,7 @@ const createDefaultBattleInput = () => ({
     {
       id: "fighter-2",
       name: "Тит",
-      base: { strength: 54, health: 160, charisma: 68 },
+      base: { strength: 54, health: 180, charisma: 68 },
       criticalChance: COMBAT_RULES.critical.chance,
       classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "thraex",
@@ -1793,6 +1797,10 @@ globalThis.GladiatorBattle = {
   ARMOR_ITEMS,
   ALL_MODIFIER_DEFINITIONS,
   INJURY_DEFINITIONS,
+  MAX_ARENA_MULTIPLIER,
+  MAX_BASE_ATTRIBUTE,
+  MAX_BASE_HEALTH,
+  MAX_BATTLE_STEPS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
   calculateTraumaChance,

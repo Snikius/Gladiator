@@ -69,6 +69,13 @@ const BLOOD_STAIN_PROFILES = Object.freeze({
 });
 const BLOOD_STAIN_SIZE_MULTIPLIER = 1.2;
 const BLOOD_STAIN_LIFETIME_MULTIPLIER = 1.2;
+const INJURED_BLEED_CYCLE_MS = 1050;
+
+const isInjuredFighter = (fighter) => fighter.health > 0 && (
+  fighter.health / Math.max(1, fighter.maxHealth) < INJURED_HEALTH_RATIO
+  || fighter.traumas?.length
+  || fighter.injuries?.length
+);
 
 const fighterFromInput = (fighter) => ({
   id: fighter.id,
@@ -107,8 +114,7 @@ const visualStateForFighter = (fighter, action, outcome, showOutcome) => {
   if (action?.targetId === fighter.id) {
     return ({ hit: "reaction.hit", dodge: "defense.dodge", block: "defense.block" }[action.outcome] || "idle.normal");
   }
-  const healthRatio = fighter.health / Math.max(1, fighter.maxHealth);
-  if (healthRatio < INJURED_HEALTH_RATIO || fighter.traumas?.length || fighter.injuries?.length) return "idle.injured";
+  if (isInjuredFighter(fighter)) return "idle.injured";
   if (fighter.fatigue >= 70) return "idle.tired";
   return "idle.normal";
 };
@@ -242,6 +248,7 @@ const createVisualFrame = (
         animation: freeze({
           equipmentProfileId: animationRig.id, bodyGridId: bodyGrid.id, state: visualState,
           clip: bodyClip, experimental: bodyGrid.experimental, weaponBakedIn: bodyGrid.weaponBakedIn,
+          renderScale: bodyGrid.stateRenderScales?.[visualState] || 1,
           weaponSkinId: bodyGrid.weaponBakedIn ? bodyGrid.bakedWeaponSkinId : weaponSkin.id,
           sheet: freeze({
             columns: bodyGrid.grid.columns,
@@ -271,6 +278,7 @@ const createVisualFrame = (
         animation: weaponClip
           ? freeze({
             state: visualState, clip: bodyClip, experimental: weaponSkin.spriteSheet.experimental,
+            renderScale: bodyGrid.stateRenderScales?.[visualState] || 1,
             sheet: freeze({ ...weaponSkin.spriteSheet.grid, ...weaponClip }),
             blendMode: weaponSkin.spriteSheet.blendMode,
             frameOverlay: weaponSkin.spriteSheet.frameOverlay,
@@ -312,6 +320,7 @@ const createVisualFrame = (
     }),
     fighters: freeze(fighters.map((fighter) => freeze({
       id: fighter.id, name: fighter.name, health: fighter.health, maxHealth: fighter.maxHealth,
+      injured: Boolean(isInjuredFighter(fighter)),
     }))),
     action: action ? freeze({
       actorId: action.actorId,
@@ -578,7 +587,57 @@ class BattleVisualEngine {
     fighters.forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
     weapons.filter((component) => this.weaponLayer(component, progress, animationClock) !== "behind")
       .forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
+    this.drawInjuredBlood(context, frame, performance.now());
     this.drawBlood(context, frame, progress);
+  }
+
+  injuredBloodDrops(frame, now = performance.now()) {
+    return frame.fighters.flatMap((fighter) => {
+      if (!fighter.injured || fighter.health <= 0) return [];
+      const component = frame.components.find((candidate) => (
+        candidate.kind === "fighter" && candidate.fighterId === fighter.id
+      ));
+      if (!component) return [];
+      const hash = [...fighter.id].reduce((value, character) => value + character.charCodeAt(0), 0);
+      const originX = component.transform.x - component.transform.direction * 5;
+      const assetHeight = component.animation?.assetHeight || 150;
+      const originY = frame.arena.groundY - assetHeight * 0.43;
+      return [0, 0.52].map((phaseOffset, index) => {
+        const phase = ((now + hash * 17 + phaseOffset * INJURED_BLEED_CYCLE_MS)
+          % INJURED_BLEED_CYCLE_MS) / INJURED_BLEED_CYCLE_MS;
+        const fall = clamp(phase / 0.78, 0, 1);
+        const landed = phase >= 0.78;
+        return freeze({
+          fighterId: fighter.id,
+          x: Math.round(originX + (index ? 2 : -1)),
+          y: landed
+            ? frame.arena.groundY + 3
+            : Math.round(originY + (frame.arena.groundY - originY) * fall ** 2),
+          width: landed ? 5 : fall > 0.58 ? 2 : 3,
+          height: landed ? 1 : 3,
+          color: index ? "#590916" : "#6d0c1a",
+          alpha: landed ? clamp((1 - phase) / 0.22 * 0.7, 0, 0.7) : 0.82,
+          landed,
+        });
+      });
+    });
+  }
+
+  drawInjuredBlood(context, frame, now = performance.now()) {
+    const drops = this.injuredBloodDrops(frame, now);
+    if (!drops.length) return;
+    context.save();
+    drops.forEach((drop) => {
+      context.globalAlpha = drop.alpha;
+      context.fillStyle = drop.color;
+      context.fillRect(
+        Math.round(drop.x - drop.width / 2),
+        drop.y,
+        drop.width,
+        drop.height,
+      );
+    });
+    context.restore();
   }
 
   bloodParticles(frame, progress) {
@@ -949,7 +1008,8 @@ class BattleVisualEngine {
       const sourceWidth = image.naturalWidth / sheet.columns;
       const sourceHeight = image.naturalHeight / sheet.rows;
       const logicalHeight = sheet.logicalHeight || sourceHeight;
-      const logicalAssetHeight = component.animation?.assetHeight || 255;
+      const logicalAssetHeight = (component.animation?.assetHeight || 255)
+        * (component.animation?.renderScale || 1);
       const logicalScale = logicalAssetHeight / logicalHeight;
       const assetHeight = sourceHeight * logicalScale;
       const assetWidth = sourceWidth * logicalScale;
@@ -966,7 +1026,8 @@ class BattleVisualEngine {
       );
       return true;
     }
-    const assetHeight = component.animation?.assetHeight || 255;
+    const assetHeight = (component.animation?.assetHeight || 255)
+      * (component.animation?.renderScale || 1);
     const assetWidth = assetHeight * (image.naturalWidth / image.naturalHeight);
     context.drawImage(image, -assetWidth / 2, -assetHeight, assetWidth, assetHeight);
     return true;

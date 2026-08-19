@@ -71,7 +71,6 @@ const randomPlaybackDelay = () => Math.round(PLAYBACK_STEP_MS * (
   PLAYBACK_PAUSE_MIN_MULTIPLIER
   + Math.random() * (PLAYBACK_PAUSE_MAX_MULTIPLIER - PLAYBACK_PAUSE_MIN_MULTIPLIER)
 ));
-const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1;
 const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
@@ -135,13 +134,10 @@ const effectDefinitions = {
 const effectName = (type, effectId) =>
   effectDefinitions[type].find((effect) => effect.id === effectId)?.name || effectId;
 
-/* Боевые тесты сохраняют нейтральный дефолт движка. В интерфейсе сразу
- * показываем пару, для которой уже есть полные независимые sprite-слои. */
+/* Интерфейс использует те же точные стартовые характеристики, что и фабрика
+ * движка, и меняет только класс/экипировку второго визуального бойца. */
 const createSimulatorDefaultInput = () => {
   const input = createDefaultBattleInput();
-  input.fighters.forEach((fighter) => {
-    fighter.base.health = Math.round(fighter.base.health * SIMULATOR_DEFAULT_HEALTH_MULTIPLIER);
-  });
   input.fighters[1] = {
     ...input.fighters[1],
     fighterClass: "retiarius",

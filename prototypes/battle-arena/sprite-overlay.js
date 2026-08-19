@@ -11,7 +11,12 @@ const playButton = document.querySelector("#preview-play");
 const frameLabel = document.querySelector("#preview-frame-label");
 
 const ASSET_PATHS = Object.freeze({
-  swordsman: Object.freeze({ path: "./assets/unified-swordsman-grid-v14.png", cellWidth: 384, cellHeight: 384 }),
+  swordsman: Object.freeze({
+    path: "./assets/unified-swordsman-grid-v14.png",
+    cellWidth: 384,
+    cellHeight: 384,
+    stateRenderScales: Object.freeze({ victory: 1.08 }),
+  }),
   retiarius: Object.freeze({ path: "./assets/unified-retiarius-grid-v6.png", cellWidth: 384, cellHeight: 384 }),
 });
 const CLIPS = Object.freeze({
@@ -62,20 +67,22 @@ const getImage = (assetPath) => {
 
 const currentElapsed = (now) => playing ? now - startedAt : pausedAt;
 
-const drawLayer = (image, asset, frame, row) => {
+const drawLayer = (image, asset, frame, row, renderScale = 1) => {
   if (!image.complete || !image.naturalWidth) return;
   const sourceWidth = image.naturalWidth / 6;
   const sourceHeight = image.naturalHeight / 11;
+  const renderedWidth = asset.cellWidth * renderScale;
+  const renderedHeight = asset.cellHeight * renderScale;
   context.drawImage(
     image,
     frame * sourceWidth,
     row * sourceHeight,
     sourceWidth,
     sourceHeight,
-    (canvas.width - asset.cellWidth) / 2,
-    canvas.height - asset.cellHeight,
-    asset.cellWidth,
-    asset.cellHeight,
+    (canvas.width - renderedWidth) / 2,
+    canvas.height - renderedHeight,
+    renderedWidth,
+    renderedHeight,
   );
 };
 
@@ -103,7 +110,13 @@ const renderPreview = (now) => {
     context.translate(canvas.width, 0);
     context.scale(-1, 1);
   }
-  drawLayer(getImage(asset.path), asset, frame, clip.row);
+  drawLayer(
+    getImage(asset.path),
+    asset,
+    frame,
+    clip.row,
+    asset.stateRenderScales?.[stateSelect.value] || 1,
+  );
   context.restore();
   frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS`;
   frameLabel.textContent = frameLabel.value;

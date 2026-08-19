@@ -9,6 +9,10 @@ const {
   COMBAT_RULES,
   FIGHTER_CLASS_DEFINITIONS,
   INJURY_DEFINITIONS,
+  MAX_ARENA_MULTIPLIER,
+  MAX_BASE_ATTRIBUTE,
+  MAX_BASE_HEALTH,
+  MAX_BATTLE_STEPS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
   calculateTraumaChance,
@@ -32,6 +36,44 @@ const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
 assert.equal(first.input.arena.type, "crowd", "Новый бой по умолчанию проходит на арене со зрителями");
+assert.deepEqual(
+  first.input.fighters.map((fighter) => fighter.base.health),
+  [210, 180],
+  "Стартовое здоровье бойцов по умолчанию зафиксировано отдельно для каждого",
+);
+assert.equal(MAX_BASE_HEALTH, 500, "Предельное базовое здоровье равно 500");
+const cappedHealthInput = createDefaultBattleInput();
+cappedHealthInput.fighters[0].base.health = 500;
+cappedHealthInput.fighters[1].base.health = 900;
+assert.deepEqual(
+  new BattleEngine(cappedHealthInput).input.fighters.map((fighter) => fighter.base.health),
+  [500, 500],
+  "Значение 500 сохраняется, а превышение предела обрезается движком",
+);
+assert.deepEqual(
+  [MAX_BATTLE_STEPS, MAX_ARENA_MULTIPLIER, MAX_BASE_ATTRIBUTE],
+  [2000, 10, 500],
+  "Расширенные пределы калькулятора опубликованы движком",
+);
+const expandedLimitsInput = createDefaultBattleInput();
+expandedLimitsInput.maxSteps = 9000;
+expandedLimitsInput.arena.supportMultipliers = [25, 10];
+expandedLimitsInput.fighters[0].base.strength = 900;
+expandedLimitsInput.fighters[0].base.charisma = 700;
+expandedLimitsInput.fighters[0].criticalChance = 1;
+expandedLimitsInput.fighters[0].classTechniqueChance = 1;
+const expandedLimits = new BattleEngine(expandedLimitsInput).input;
+assert.equal(expandedLimits.maxSteps, 2000, "Число шагов ограничивается новым пределом 2000");
+assert.deepEqual(expandedLimits.arena.supportMultipliers, [10, 10]);
+assert.deepEqual(
+  [expandedLimits.fighters[0].base.strength, expandedLimits.fighters[0].base.charisma],
+  [500, 500],
+);
+assert.deepEqual(
+  [expandedLimits.fighters[0].criticalChance, expandedLimits.fighters[0].classTechniqueChance],
+  [1, 1],
+  "Калькулятор допускает стопроцентные шансы",
+);
 assert.equal(COMBAT_RULES.critical.chance, 0.03, "Базовый шанс критического удара равен 3%");
 assert.equal(COMBAT_RULES.critical.damageMultiplier, 2, "Критический удар удваивает урон");
 assert.equal(COMBAT_RULES.classTechnique.chance, 0.1, "Базовый шанс классового приёма равен 10%");

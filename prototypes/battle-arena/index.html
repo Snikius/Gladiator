@@ -47,7 +47,7 @@
             </label>
             <label>
               <span>Максимум шагов</span>
-              <input id="max-steps" name="maxSteps" type="number" min="1" max="500" value="80" />
+              <input id="max-steps" name="maxSteps" type="number" min="1" max="2000" value="80" />
             </label>
           </div>
 
@@ -60,11 +60,11 @@
             <div class="form-grid compact-grid">
               <label>
                 <span>Множитель I</span>
-                <input id="arena-multiplier-1" type="number" min="0.1" max="3" step="0.1" value="1" />
+                <input id="arena-multiplier-1" type="number" min="0.1" max="10" step="0.1" value="1" />
               </label>
               <label>
                 <span>Множитель II</span>
-                <input id="arena-multiplier-2" type="number" min="0.1" max="3" step="0.1" value="1" />
+                <input id="arena-multiplier-2" type="number" min="0.1" max="10" step="0.1" value="1" />
               </label>
             </div>
           </fieldset>
@@ -78,18 +78,20 @@
               </label>
               <div class="equipment-picker" data-equipment-picker="0"></div>
               <div class="form-grid stats-input-grid">
-                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="190" /></label>
-                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="48" /></label>
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="62" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="210" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="48" /></label>
               </div>
               <div class="fighter-chance-grid">
                 <label><span>Критический удар</span><select data-field="criticalChance">
                   <option value="0">0%</option><option value="0.03" selected>3%</option><option value="0.05">5%</option>
                   <option value="0.1">10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                  <option value="0.75">75%</option><option value="1">100%</option>
                 </select></label>
                 <label><span>Классовый приём</span><select data-field="classTechniqueChance">
                   <option value="0">0%</option><option value="0.03">3%</option><option value="0.05">5%</option>
                   <option value="0.1" selected>10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                  <option value="0.75">75%</option><option value="1">100%</option>
                 </select></label>
               </div>
               <div class="perk-list" data-perks="0"></div>
@@ -103,18 +105,20 @@
               </label>
               <div class="equipment-picker" data-equipment-picker="1"></div>
               <div class="form-grid stats-input-grid">
-                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="160" /></label>
-                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="68" /></label>
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="54" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="180" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="68" /></label>
               </div>
               <div class="fighter-chance-grid">
                 <label><span>Критический удар</span><select data-field="criticalChance">
                   <option value="0">0%</option><option value="0.03" selected>3%</option><option value="0.05">5%</option>
                   <option value="0.1">10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                  <option value="0.75">75%</option><option value="1">100%</option>
                 </select></label>
                 <label><span>Классовый приём</span><select data-field="classTechniqueChance">
                   <option value="0">0%</option><option value="0.03">3%</option><option value="0.05">5%</option>
                   <option value="0.1" selected>10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                  <option value="0.75">75%</option><option value="1">100%</option>
                 </select></label>
               </div>
               <div class="perk-list" data-perks="1"></div>
@@ -243,10 +247,10 @@
     </main>
 
     <script src="./reference-data.js?v=2"></script>
-    <script src="./battle-engine.js?v=26"></script>
-    <script src="./sprite-library.js?v=25"></script>
-    <script src="./visual-engine.js?v=23"></script>
+    <script src="./battle-engine.js?v=29"></script>
+    <script src="./sprite-library.js?v=26"></script>
+    <script src="./visual-engine.js?v=24"></script>
     <script src="./battle-story.js?v=1"></script>
-    <script src="./app.js?v=49"></script>
+    <script src="./app.js?v=50"></script>
   </body>
 </html>
