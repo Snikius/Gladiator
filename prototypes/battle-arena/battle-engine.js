@@ -373,12 +373,11 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
   "weapon.murmillo-shield-advance": {
     beforeInitialize: (data, api) => applyClassEquipment(data, api, "murmillo"),
     afterAction(data, api, runtime) {
-      if (runtime.shieldWallUsed || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      if (runtime.counterStrike || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
       const check = checkClassTechniqueChance(data, api);
       if (!check.activated) return check.data;
-      runtime.shieldWallUsed = true;
       runtime.counterStrike = { chance: check.chance, roll: check.roll };
-      api.activate("Стена скутума: первое попадание превращено в блок");
+      api.activate("Стена скутума: попадание превращено в блок");
       api.emit("modifier.runtime.changed", "Мурмиллон подготовил ответный удар", {
         counterStrike: runtime.counterStrike,
       });

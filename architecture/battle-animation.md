@@ -96,7 +96,7 @@ interface BattleVisualCue {
 
 | Классовая техника | Визуальное состояние | Момент показа |
 |---|---|---|
-| `weapon.murmillo-shield-advance` | `defense.block` → `special` | первое попадание превращается в блок, следующий удар Мурмиллона становится усиленным ответом |
+| `weapon.murmillo-shield-advance` | `defense.block` → `special` | подходящее попадание превращается в блок, следующий удар Мурмиллона становится усиленным ответом; после него связка снова доступна |
 | `weapon.thraex-hooking-slash` | `special` | следующий удар после подготовленного рывка инициативы |
 | `weapon.retiarius-net-cast` | `special` без X-выпада | Ретиарий перехватывает ход броском сети |
 | `weapon.secutor-relentless-pursuit` | `special` | следующая атака после усиленного преследования |

@@ -232,12 +232,21 @@ assert.ok(
   shieldWallResult.events.some((event) => event.type === "modifier.activated"
     && event.data.modifierId === "weapon.murmillo-shield-advance"
     && event.message.includes("Стена скутума")),
-  "Мурмиллон должен один раз превратить попадание в блок",
+  "Мурмиллон должен превратить подходящее попадание в блок",
 );
-const murmilloCounterStrike = shieldWallResult.snapshots
+const murmilloCounterStrikes = shieldWallResult.snapshots
   .map((snapshot) => snapshot.lastAction)
-  .find((action) => action?.classTechnique === "weapon.murmillo-shield-advance");
+  .filter((action) => action?.classTechnique === "weapon.murmillo-shield-advance");
+const murmilloCounterStrike = murmilloCounterStrikes[0];
 assert.ok(murmilloCounterStrike, "После блока Мурмиллон должен выполнить видимый классовый ответный удар");
+assert.ok(murmilloCounterStrikes.length >= 2, "При 100% связка Мурмиллона повторяется после расходования контратаки");
+assert.equal(
+  shieldWallResult.snapshots.filter(
+    (snapshot) => snapshot.lastAction?.equipmentReaction === "murmillo-shield-wall",
+  ).length,
+  murmilloCounterStrikes.length,
+  "Каждый подготовительный блок создаёт ровно одну ответную атаку",
+);
 assert.equal(murmilloCounterStrike.actorId, "fighter-1", "Ответный классовый удар выполняет владелец техники");
 assert.equal(murmilloCounterStrike.strengthMultiplier, 1.25, "Ответный удар получает усиление силы 25%");
 const disabledShieldInput = createDefaultBattleInput();
