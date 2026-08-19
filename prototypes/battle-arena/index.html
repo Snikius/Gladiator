@@ -5,13 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=20" />
+    <link rel="stylesheet" href="./styles.css?v=23" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
-    <link rel="preload" as="image" href="./assets/murmillo-body-overlay-grid-v3.png" />
-    <link rel="preload" as="image" href="./assets/retiarius-body-overlay-grid-v4.png" />
-    <link rel="preload" as="image" href="./assets/gladius-overlay-grid-v3.png" />
-    <link rel="preload" as="image" href="./assets/trident-overlay-grid-v4.png" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v8.png" />
+    <link rel="preload" as="image" href="./assets/arena-normal-background-v1.png" />
+    <link rel="preload" as="image" href="./assets/arena-sand-background-v1.png" />
   </head>
   <body>
     <header class="topbar">
@@ -131,9 +130,9 @@
         <section class="mobile-preview-panel panel" aria-labelledby="mobile-preview-title">
           <div class="mobile-preview-heading">
             <div>
-              <p class="eyebrow">SPRITE · FRAME LAB</p>
-              <h2 id="mobile-preview-title">Спрайтовая анимация</h2>
-              <p>Мурмиллон и ретиарий: тело без оружия + отдельный прозрачный слой гладиуса или трезубца.</p>
+              <p class="eyebrow">MOBILE · BATTLE VIEW</p>
+              <h2 id="mobile-preview-title">Боевая арена</h2>
+              <p>Игровой экран: участники, бой и краткая история последних ходов.</p>
             </div>
             <div class="view-mode-switch" role="group" aria-label="Режим отображения">
               <button type="button" data-renderer-mode="lines">Линии</button>
@@ -142,9 +141,19 @@
           </div>
           <div class="mobile-device">
             <div class="mobile-device-speaker"></div>
-            <canvas id="mobile-arena-canvas" width="360" height="560" aria-label="Покадровая боевая сцена"></canvas>
+            <header id="mobile-arena-header" class="mobile-arena-header" aria-label="Участники боя">
+              <div class="mobile-arena-title"><b>АРЕНА</b><span>Подготовка боя</span></div>
+              <div class="mobile-versus-placeholder">БОЙЦЫ ЗАГРУЖАЮТСЯ</div>
+            </header>
+            <canvas id="mobile-arena-canvas" width="360" height="300" aria-label="Покадровая боевая сцена"></canvas>
+            <section class="mobile-battle-story" aria-labelledby="mobile-battle-story-title">
+              <div class="mobile-story-title"><span></span><h3 id="mobile-battle-story-title">ХОД БОЯ</h3><span></span></div>
+              <ol id="mobile-battle-feed" class="mobile-battle-feed" aria-live="polite">
+                <li class="empty">Бой ещё не начался.</li>
+              </ol>
+            </section>
           </div>
-          <p class="pixi-preview-note">Каждый слой — одинаковая сетка 6×7. Оружие накладывается на одноимённый кадр тела без сдвига; противник зеркалит оба слоя вместе.</p>
+          <p class="pixi-preview-note">В игровом блоке остаются только три последних ранения без чисел. Полная диагностика и журнал находятся ниже.</p>
         </section>
 
         <section class="numbers-panel panel">
@@ -210,9 +219,9 @@
     </main>
 
     <script src="./reference-data.js?v=2"></script>
-    <script src="./battle-engine.js?v=20"></script>
-    <script src="./sprite-library.js?v=5"></script>
-    <script src="./visual-engine.js?v=4"></script>
-    <script src="./app.js?v=34"></script>
+    <script src="./battle-engine.js?v=21"></script>
+    <script src="./sprite-library.js?v=16"></script>
+    <script src="./visual-engine.js?v=15"></script>
+    <script src="./app.js?v=44"></script>
   </body>
 </html>

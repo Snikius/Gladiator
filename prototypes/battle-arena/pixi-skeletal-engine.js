@@ -16,6 +16,7 @@ const WEAPON_COLORS = Object.freeze({
 const FIGHTER_COLORS = Object.freeze([0xc65252, 0x2caabd]);
 const SKIN_COLOR = 0xcf9a6e;
 const SLEEVE_COLOR = 0x6b4a35;
+const INJURED_HEALTH_RATIO = 0.45;
 
 /*
  * Углы руки подобраны офлайн через прямую кинематику (плечо → локоть →
@@ -49,8 +50,9 @@ const visualStateForFighter = (fighter, action) => {
   if (action?.targetId === fighter.id) {
     return ({ hit: "reaction.hit", dodge: "defense.dodge", block: "defense.block" }[action.outcome] || "idle.normal");
   }
+  const healthRatio = fighter.health / Math.max(1, fighter.maxHealth);
+  if (healthRatio < INJURED_HEALTH_RATIO || fighter.traumas?.length || fighter.injuries?.length) return "idle.injured";
   if (fighter.fatigue >= 70) return "idle.tired";
-  if (fighter.traumas?.length || fighter.injuries?.length) return "idle.injured";
   return "idle.normal";
 };
 

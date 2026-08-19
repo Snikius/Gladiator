@@ -6,6 +6,20 @@ const round = (value, digits = 2) => Number(value.toFixed(digits));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const REFERENCE_DATA = globalThis.GladiatorReferenceData;
 
+const COMBAT_RULES = Object.freeze({
+  strikePower: Object.freeze({
+    baseCoefficient: 0.625,
+    minMultiplier: 0.85,
+    maxMultiplier: 1.15,
+    lightBelow: 0.95,
+    strongFrom: 1.08,
+  }),
+  critical: Object.freeze({
+    chance: 0.03,
+    damageMultiplier: 2,
+  }),
+});
+
 if (!REFERENCE_DATA) {
   throw new Error("Сначала подключите reference-data.js — он содержит каталог экипировки");
 }
@@ -998,13 +1012,29 @@ class BattleEngine {
       (data) => ({ ...data, action: "attack" }),
     );
 
-    const action = this.runPhase(
+    const resolvedAction = this.runPhase(
       "action",
       "beforeAction",
       "afterAction",
       actionSelection,
       (data) => this.resolveAction(data),
     );
+    const action = this.finalizeActionDamage(resolvedAction);
+    if (action.outcome === "hit") {
+      this.emit("action.damage.resolved", "Рассчитаны сила попадания и критический удар", {
+        actorId: action.actorId,
+        targetId: action.targetId,
+        strikePowerRoll: action.strikePowerRoll,
+        strikePowerMultiplier: action.strikePowerMultiplier,
+        damageBeforeCritical: action.damageBeforeCritical,
+        criticalChance: action.criticalChance,
+        criticalRoll: action.criticalRoll,
+        critical: action.critical,
+        criticalMultiplier: action.criticalMultiplier,
+        damage: action.damage,
+        impact: action.impact,
+      });
+    }
 
     const effects = this.createEffects(action);
     const effectsResult = this.runPhase(
@@ -1077,13 +1107,8 @@ class BattleEngine {
     const effectiveStrength = actor.strength * fatigueEfficiency * strengthMultiplier;
 
     if (data.attackType === "achilles-leap") {
-      const damage = Math.max(
-        1,
-        Math.round(
-          (effectiveStrength + actor.equipment.weaponPower) * (0.45 + this.random() * 0.35)
-            - target.equipment.armor * 0.6,
-        ),
-      );
+      const strike = this.rollStrikeDamage(actor, target, effectiveStrength);
+      const damage = strike.damage;
       const traumaChance = clamp(0.03 + (damage / target.maxHealth) * 0.42, 0.03, 0.45);
       return {
         ...data,
@@ -1092,6 +1117,7 @@ class BattleEngine {
         actorFatigueBefore: actor.fatigue,
         targetFatigueBefore: target.fatigue,
         effectiveStrength: round(effectiveStrength),
+        ...strike,
         damage,
         traumaChance: round(traumaChance, 4),
         traumaRoll: round(this.random(), 6),
@@ -1116,15 +1142,10 @@ class BattleEngine {
     ];
     const selectedOutcome = weightedPick(weights, this.random);
     const outcome = selectedOutcome.outcome;
-    const damage = outcome === "hit"
-      ? Math.max(
-          1,
-          Math.round(
-            (effectiveStrength + actor.equipment.weaponPower) * (0.45 + this.random() * 0.35)
-              - target.equipment.armor * 0.6,
-          ),
-        )
-      : 0;
+    const strike = outcome === "hit"
+      ? this.rollStrikeDamage(actor, target, effectiveStrength)
+      : { strikePowerRoll: null, strikePowerMultiplier: null, damage: 0 };
+    const damage = strike.damage;
     const traumaChance = outcome === "hit"
       ? clamp(0.03 + (damage / target.maxHealth) * 0.42, 0.03, 0.45)
       : 0;
@@ -1136,11 +1157,68 @@ class BattleEngine {
       actorFatigueBefore: actor.fatigue,
       targetFatigueBefore: target.fatigue,
       effectiveStrength: round(effectiveStrength),
+      ...strike,
       damage,
       traumaChance: round(traumaChance, 4),
       traumaRoll: round(this.random(), 6),
       outcomeRoll: selectedOutcome.roll,
       totalOutcomeWeight: selectedOutcome.totalWeight,
+    };
+  }
+
+  rollStrikeDamage(actor, target, effectiveStrength) {
+    const rules = COMBAT_RULES.strikePower;
+    const rawStrikePowerRoll = this.random();
+    const strikePowerRoll = round(rawStrikePowerRoll, 6);
+    const strikePowerMultiplier = round(
+      rules.minMultiplier + rawStrikePowerRoll * (rules.maxMultiplier - rules.minMultiplier),
+      4,
+    );
+    const attackPower = (effectiveStrength + actor.equipment.weaponPower)
+      * rules.baseCoefficient
+      * strikePowerMultiplier;
+    return {
+      strikePowerRoll,
+      strikePowerMultiplier,
+      damage: Math.max(1, Math.round(attackPower - target.equipment.armor * 0.6)),
+    };
+  }
+
+  finalizeActionDamage(action) {
+    if (action.outcome !== "hit") {
+      return {
+        ...action,
+        damage: 0,
+        damageBeforeCritical: 0,
+        criticalChance: COMBAT_RULES.critical.chance,
+        criticalRoll: null,
+        critical: false,
+        criticalMultiplier: 1,
+        impact: null,
+      };
+    }
+    const damageBeforeCritical = Math.max(1, Math.round(action.damage));
+    const rawCriticalRoll = this.random();
+    const criticalRoll = round(rawCriticalRoll, 6);
+    const critical = rawCriticalRoll < COMBAT_RULES.critical.chance;
+    const criticalMultiplier = critical ? COMBAT_RULES.critical.damageMultiplier : 1;
+    const strikePowerMultiplier = action.strikePowerMultiplier ?? 1;
+    const impact = critical
+      ? "critical"
+      : strikePowerMultiplier < COMBAT_RULES.strikePower.lightBelow
+        ? "light"
+        : strikePowerMultiplier >= COMBAT_RULES.strikePower.strongFrom
+          ? "strong"
+          : "normal";
+    return {
+      ...action,
+      damageBeforeCritical,
+      criticalChance: COMBAT_RULES.critical.chance,
+      criticalRoll,
+      critical,
+      criticalMultiplier,
+      damage: damageBeforeCritical * criticalMultiplier,
+      impact,
     };
   }
 
@@ -1530,6 +1608,9 @@ class BattleEngine {
   describeAction(action) {
     const actor = this.getFighter(action.actorId).name;
     const target = this.getFighter(action.targetId).name;
+    if (action.outcome === "hit" && action.critical) {
+      return `${actor} наносит критический удар ${target}: ${action.damageBeforeCritical} × 2 = ${action.damage}`;
+    }
     if (action.attackType === "achilles-leap") {
       return `${actor} выполняет Прыжок Ахилла и ранит ${target} на ${action.damage}`;
     }
@@ -1577,6 +1658,7 @@ globalThis.GladiatorBattle = {
   ARENA_TYPES,
   BattleEngine,
   BattleModifierManager,
+  COMBAT_RULES,
   FIGHTER_CLASS_DEFINITIONS,
   EQUIPMENT_QUALITIES,
   WEAPON_SET_DEFINITIONS,

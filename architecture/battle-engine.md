@@ -616,6 +616,29 @@ interface BattleSnapshot {
 }
 ```
 
+Для успешного попадания `ActionResultData` дополнительно содержит техническую
+трассировку силы и критической проверки:
+
+```ts
+interface HitActionResultData extends ActionResultData {
+  strikePowerRoll: number;
+  strikePowerMultiplier: number; // 0.85…1.15
+  damageBeforeCritical: number;
+  criticalChance: 0.03;
+  criticalRoll: number;
+  critical: boolean;
+  criticalMultiplier: 1 | 2;
+  damage: number;
+  impact: "light" | "normal" | "strong" | "critical";
+}
+```
+
+Эти поля записываются в событие `action.damage.resolved`, технический replay и
+пошаговый снимок. Игровая лента использует только `impact`; источником точных
+чисел она не является. Формула и временный TODO для развития критического шанса
+зафиксированы в
+[`combat-spec/02-combat-mechanics.md`](../combat-spec/02-combat-mechanics.md).
+
 При `BattleOutcome.type = "draw"` оба бойца получают
 `battleOutcome = "draw"`. Последним элементом журнала становится событие завершения
 боя с итогом и причиной `step_limit`.

@@ -29,6 +29,8 @@ const elements = {
   multiplier2: document.querySelector("#arena-multiplier-2"),
   restoreDefaults: document.querySelector("#restore-defaults"),
   spriteVisualCanvas: document.querySelector("#mobile-arena-canvas"),
+  mobileArenaHeader: document.querySelector("#mobile-arena-header"),
+  mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
   arenaName: document.querySelector("#arena-name"),
   arenaSeed: document.querySelector("#arena-seed"),
   arenaStep: document.querySelector("#arena-step"),
@@ -60,7 +62,15 @@ let currentResult = null;
 let currentSnapshotIndex = 0;
 let playbackTimer = null;
 let isPlaying = false;
-const PLAYBACK_STEP_MS = 1500;
+const PLAYBACK_STEP_MS = 1000;
+const INTRO_PLAYBACK_STEP_MS = 3600;
+const PLAYBACK_PAUSE_MIN_MULTIPLIER = 1;
+const PLAYBACK_PAUSE_MAX_MULTIPLIER = 3;
+const randomPlaybackDelay = () => Math.round(PLAYBACK_STEP_MS * (
+  PLAYBACK_PAUSE_MIN_MULTIPLIER
+  + Math.random() * (PLAYBACK_PAUSE_MAX_MULTIPLIER - PLAYBACK_PAUSE_MIN_MULTIPLIER)
+));
+const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1.3;
 const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
@@ -124,10 +134,27 @@ const effectDefinitions = {
 const effectName = (type, effectId) =>
   effectDefinitions[type].find((effect) => effect.id === effectId)?.name || effectId;
 
+const playerHitText = (snapshot) => {
+  const action = snapshot.lastAction;
+  if (!action || action.outcome !== "hit") return null;
+  const actor = snapshot.fighters.find((fighter) => fighter.id === action.actorId)?.name || action.actorId;
+  const target = snapshot.fighters.find((fighter) => fighter.id === action.targetId)?.name || action.targetId;
+  const labels = {
+    light: `${actor} слегка ранит ${target}`,
+    normal: `${actor} ранит ${target}`,
+    strong: `${actor} наносит ${target} сильный удар`,
+    critical: `${actor} наносит ${target} критический удар`,
+  };
+  return labels[action.impact] || labels.normal;
+};
+
 /* Боевые тесты сохраняют нейтральный дефолт движка. В интерфейсе сразу
  * показываем пару, для которой уже есть полные независимые sprite-слои. */
 const createSimulatorDefaultInput = () => {
   const input = createDefaultBattleInput();
+  input.fighters.forEach((fighter) => {
+    fighter.base.health = Math.round(fighter.base.health * SIMULATOR_DEFAULT_HEALTH_MULTIPLIER);
+  });
   input.fighters[1] = {
     ...input.fighters[1],
     fighterClass: "retiarius",
@@ -362,6 +389,7 @@ const statusLabel = (fighter) => {
   const healthRatio = fighter.health / fighter.maxHealth;
   if (fighter.health <= 0) return "ПОВЕРЖЕН";
   if (healthRatio <= 0.2) return "ЕДВА СТОИТ";
+  if (healthRatio < 0.45) return "РАНЕН";
   if (fighter.fatigue >= 85) return "ИЗМОЖДЁН";
   if (fighter.fatigue >= 55) return "ТЯЖЕЛО ДЫШИТ";
   if (healthRatio <= 0.55) return "ДЕРЖИТСЯ";
@@ -379,6 +407,56 @@ const meterRow = (label, value, max, className, displayValue = null) => {
   `;
 };
 
+const renderMobileBattleUi = (snapshot, input) => {
+  if (!snapshot || !elements.mobileArenaHeader || !elements.mobileBattleFeed) return;
+  const arena = arenaName(snapshot.arena?.type || input.arena.type);
+  const fighters = snapshot.fighters.map((fighter, index) => {
+    const health = Math.max(0, fighter.health);
+    const healthRatio = Math.max(0, Math.min(1, health / fighter.maxHealth));
+    return `
+      <article class="mobile-fighter-card side-${index + 1}">
+        <span class="mobile-fighter-avatar" aria-hidden="true"></span>
+        <div class="mobile-fighter-copy">
+          <strong>${escapeHtml(fighter.name)}</strong>
+          <small>${escapeHtml(fighterClassName(fighter.fighterClass))}</small>
+          <div class="mobile-health-track" aria-label="Здоровье ${escapeHtml(fighter.name)}">
+            <i style="width:${healthRatio * 100}%"></i>
+            <span>${formatNumber(health)} / ${formatNumber(fighter.maxHealth)}</span>
+          </div>
+        </div>
+      </article>
+    `;
+  });
+  elements.mobileArenaHeader.innerHTML = `
+    <div class="mobile-arena-title">
+      <b>АРЕНА</b>
+      <span>${escapeHtml(arena)} · раунд ${formatNumber(snapshot.step)}</span>
+    </div>
+    <div class="mobile-versus">
+      ${fighters[0]}
+      <strong class="mobile-vs">VS</strong>
+      ${fighters[1]}
+    </div>
+  `;
+
+  const recentActions = currentResult
+    ? currentResult.snapshots
+      .filter((candidate) => (
+        candidate.step <= snapshot.step
+          && candidate.label !== "Итог боя"
+          && candidate.lastAction?.outcome === "hit"
+      ))
+      .slice(-3)
+    : [];
+  elements.mobileBattleFeed.innerHTML = recentActions.length
+    ? recentActions.map((actionSnapshot) => `
+        <li class="impact-${escapeHtml(actionSnapshot.lastAction.impact || "normal")}">
+          <span>${escapeHtml(playerHitText(actionSnapshot))}</span>
+        </li>
+      `).join("")
+    : "<li class=\"empty\">Бой ещё не начался.</li>";
+};
+
 const renderNumbers = (snapshot) => {
   if (!snapshot) return;
   const input = currentResult?.input || readInput();
@@ -388,6 +466,7 @@ const renderNumbers = (snapshot) => {
   const actionState = lastAction
     ? `${actor?.name || lastAction.actorId} → ${target?.name || lastAction.targetId} · ${lastAction.attackType || "действие"} · ${lastAction.outcome || "без исхода"}`
     : "Ожидание симуляции";
+  renderMobileBattleUi(snapshot, input);
   elements.snapshotDetails.innerHTML = `
     <div><span>АРЕНА</span><strong>${escapeHtml(arenaName(snapshot.arena?.type || input.arena.type))}</strong></div>
     <div><span>SEED</span><strong>${escapeHtml(currentResult?.seed || input.seed)}</strong></div>
@@ -527,7 +606,7 @@ const completePlayback = () => {
   renderBattleReport();
 };
 
-const scheduleNextSnapshot = (delay = PLAYBACK_STEP_MS) => {
+const scheduleNextSnapshot = (delay = randomPlaybackDelay()) => {
   if (!isPlaying) return;
   playbackTimer = window.setTimeout(() => {
     if (!isPlaying || !currentResult) return;
@@ -550,12 +629,13 @@ const playBattle = ({ restart = false } = {}) => {
   clearPlayback();
   if (restart || currentSnapshotIndex >= currentResult.snapshots.length - 1) {
     hideBattleReport();
+    spriteVisualEngine?.resetEncounter();
     renderSnapshot(0);
   }
   isPlaying = true;
   elements.playPause.textContent = "Ⅱ";
   elements.playPause.title = "Поставить на паузу";
-  scheduleNextSnapshot(restart ? 900 : PLAYBACK_STEP_MS);
+  scheduleNextSnapshot(restart ? INTRO_PLAYBACK_STEP_MS : randomPlaybackDelay());
 };
 
 const pauseAndRender = (index) => {
@@ -734,7 +814,6 @@ const startBattle = (event) => {
     elements.slider.value = 0;
     hideBattleReport();
     elements.startButton.textContent = "↻ Запустить заново";
-    renderSnapshot(0);
     playBattle({ restart: true });
   } catch (error) {
     console.error(error);

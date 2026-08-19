@@ -4,18 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>Gladiator — проверка наложения спрайтов</title>
-    <link rel="stylesheet" href="./sprite-overlay.css?v=2" />
-    <link rel="preload" as="image" href="./assets/murmillo-body-overlay-grid-v3.png" />
-    <link rel="preload" as="image" href="./assets/retiarius-body-overlay-grid-v4.png" />
-    <link rel="preload" as="image" href="./assets/gladius-overlay-grid-v3.png" />
-    <link rel="preload" as="image" href="./assets/trident-overlay-grid-v4.png" />
+    <title>Gladiator — проверка единого спрайта</title>
+    <link rel="stylesheet" href="./sprite-overlay.css?v=4" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v8.png" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <p class="eyebrow">GLADIATOR / ASSET CHECK</p>
-        <h1>Наложение спрайтов</h1>
+        <h1>Матрица спрайта</h1>
       </div>
       <nav class="topnav" aria-label="Навигация прототипа">
         <a href="./index.html">← Боевая арена</a>
@@ -26,52 +23,44 @@
     <main class="overlay-shell">
       <section class="intro panel">
         <div>
-          <p class="eyebrow">ПРОВЕРКА РЕГИСТРАЦИИ · БЕЗ БОЯ</p>
-          <h2>Тело + оружие в одной сетке</h2>
-          <p>Каждый лист имеет 1536×1792 px: 6 колонок × 7 строк, кадр 256×256 px. Внутри кадра оставлено безопасное поле 32 px, а одноимённые кадры тела и оружия лежат друг над другом без дополнительного смещения.</p>
+          <p class="eyebrow">ПРОВЕРКА МАТРИЦЫ · БЕЗ БОЯ</p>
+          <h2>Боец и меч в одном спрайте</h2>
+          <p>Единый лист имеет 1536×2560 px: 6 колонок × 10 строк, кадр 256×256 px. Тело и гладиус уже запечены вместе. На время разработки этот мечник назначается всем пяти классам.</p>
         </div>
         <dl class="contract">
           <div><dt>НАПРАВЛЕНИЕ</dt><dd>вправо</dd></div>
           <div><dt>ОППОНЕНТ</dt><dd>зеркалится рендером</dd></div>
-          <div><dt>БАЗА СТОП</dt><dd>Y 86%</dd></div>
-          <div><dt>ХВАТ</dt><dd>X 56% · Y 48%</dd></div>
+          <div><dt>КАДР</dt><dd>256 × 256 px</dd></div>
+          <div><dt>КЛАССЫ</dt><dd>один временный лист</dd></div>
         </dl>
-      </section>
-
-      <section class="controls panel" aria-label="Слои матриц">
-        <div class="layer-switch" role="group" aria-label="Видимые слои">
-          <button type="button" data-layer-mode="combined" class="selected">Тело + оружие</button>
-          <button type="button" data-layer-mode="body">Только тело</button>
-          <button type="button" data-layer-mode="weapon">Только оружие</button>
-        </div>
-        <label class="opacity-control">
-          <span>Непрозрачность оружия</span>
-          <input id="weapon-opacity" type="range" min="0" max="100" value="100" />
-          <output id="weapon-opacity-value">100%</output>
-        </label>
       </section>
 
       <section class="preview-panel panel" aria-labelledby="preview-title">
         <div class="preview-copy">
           <p class="eyebrow">ПОКАДРОВАЯ ПРОВЕРКА</p>
           <h2 id="preview-title">Отдельный кадр анимации</h2>
-          <p>Выберите персонажа — список покажет только совместимое с его классом оружие. Окно использует ту же ячейку 256×256 для обоих слоёв и помогает увидеть проблему регистрации в движении.</p>
+          <p>Выбор класса оставлен для проверки интерфейса, но визуально все варианты используют один и тот же спрайт мечника. Состояния автоматически переключаются каждые четыре секунды.</p>
           <div class="preview-controls">
             <label><span>Персонаж</span><select id="preview-body">
               <option value="murmillo">Мурмиллон</option>
+              <option value="thraex">Фракиец</option>
               <option value="retiarius">Ретиарий</option>
-            </select></label>
-            <label><span>Оружие</span><select id="preview-weapon">
-              <option value="sword">Гладиус</option>
+              <option value="secutor">Секутор</option>
+              <option value="hoplomachus">Гопломах</option>
             </select></label>
             <label><span>Состояние</span><select id="preview-state">
               <option value="idle.normal">Обычная стойка</option>
               <option value="idle.tired">Уставшая стойка</option>
               <option value="idle.injured" selected>Раненая стойка</option>
+              <option value="greeting">Приветствие</option>
               <option value="attack">Атака</option>
               <option value="defense.block">Блок</option>
               <option value="defense.dodge">Уворот</option>
               <option value="reaction.hit">Попадание</option>
+              <option value="defeated">Смерть</option>
+              <option value="victory">Победа</option>
+              <option value="advance">Движение вперёд</option>
+              <option value="retreat">Движение назад (обратно)</option>
             </select></label>
             <label class="mirror-control"><input id="preview-mirrored" type="checkbox" /> Зеркально</label>
             <label class="auto-cycle-control"><input id="preview-auto-cycle" type="checkbox" checked /> Состояния каждые 4 сек</label>
@@ -79,41 +68,23 @@
           </div>
         </div>
         <div class="preview-stage-wrap">
-          <canvas id="sprite-preview-canvas" width="288" height="288" aria-label="Предпросмотр наложения кадра"></canvas>
+          <canvas id="sprite-preview-canvas" width="288" height="288" aria-label="Предпросмотр единого кадра"></canvas>
           <output id="preview-frame-label">Строка 2 · кадр 0 · 5 FPS</output>
         </div>
       </section>
 
-      <section class="atlas-pair" aria-label="Матрицы наложения">
+      <section class="atlas-pair single-atlas" aria-label="Матрица единого спрайта">
         <article class="atlas-card panel">
           <header>
-            <p class="eyebrow">MURMILLO + GLADIUS</p>
-            <h2>Мурмиллон · гладиус</h2>
-            <p>Красный тяжёлый боец без щита и меча. Гладиус рисуется первым, а тело закрывает рукоять и часть клинка.</p>
+            <p class="eyebrow">UNIFIED SWORDSMAN · V8</p>
+            <h2>Временный мечник для всех классов</h2>
+            <p>Десять анимаций сгенерированы отдельными строками и затем проверены и собраны в точную сетку. Последние две строки — приветствие перед боем и победа с поднятым мечом.</p>
           </header>
           <div class="atlas-layout">
             <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
-            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ol>
-            <figure class="overlay-atlas" data-layer-order="weapon-body" aria-label="Матрица тела мурмиллона и гладиуса">
-              <img class="body-layer" src="./assets/murmillo-body-overlay-grid-v3.png" alt="Матрица тела мурмиллона без оружия" />
-              <img class="weapon-layer" src="./assets/gladius-overlay-grid-v3.png" alt="Матрица гладиуса" />
-              <span class="grid-overlay" aria-hidden="true"></span>
-            </figure>
-          </div>
-        </article>
-
-        <article class="atlas-card panel">
-          <header>
-            <p class="eyebrow">RETIARIUS + TRIDENT</p>
-            <h2>Ретиарий · трезубец</h2>
-            <p>Новый ретиарий держит древко задней рукой. Глубина трезубца задаётся отдельно для каждого кадра.</p>
-          </header>
-          <div class="atlas-layout">
-            <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
-            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ol>
-            <figure class="overlay-atlas" data-layer-order="weapon-body" aria-label="Матрица тела ретиария и трезубца">
-              <img class="body-layer" src="./assets/retiarius-body-overlay-grid-v4.png" alt="Матрица тела ретиария с пустым хватом задней руки" />
-              <img class="weapon-layer" src="./assets/trident-overlay-grid-v4.png" alt="Матрица прямого трезубца" />
+            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li></ol>
+            <figure class="overlay-atlas" aria-label="Матрица единого спрайта мечника">
+              <img class="body-layer" src="./assets/unified-swordsman-grid-v8.png" alt="Матрица мечника с оружием" />
               <span class="grid-overlay" aria-hidden="true"></span>
             </figure>
           </div>
@@ -130,11 +101,14 @@
           <div><b>4</b><span>Блок / парирование</span></div>
           <div><b>5</b><span>Уворот / восстановление</span></div>
           <div><b>6</b><span>Попадание / падение</span></div>
+          <div><b>7</b><span>Движение вперёд; назад — обратный порядок кадров</span></div>
+          <div><b>8</b><span>Приветствие перед стартовым сближением</span></div>
+          <div><b>9</b><span>Победа · меч поднимается вверх, финальная поза удерживается</span></div>
         </div>
-        <p class="warning">Если рукоять не попадает в пустую кисть или выходят за ячейку стопы/пика, это дефект исходного листа. Исправлять нужно генерацией или нарезкой ассета, не логикой боя.</p>
+        <p class="warning">Если тело или меч выходят за границы ячейки, исправлять нужно исходный единый лист или его нарезку, а не логику боя.</p>
       </section>
     </main>
 
-    <script src="./sprite-overlay.js?v=7"></script>
+    <script src="./sprite-overlay.js?v=18"></script>
   </body>
 </html>

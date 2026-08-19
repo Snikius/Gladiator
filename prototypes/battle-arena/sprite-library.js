@@ -12,13 +12,14 @@ const CORE_VISUAL_STATES = Object.freeze({
   "idle.normal": Object.freeze({ kind: "loop", description: "Обычная стойка: лёгкое дыхание и перенос веса." }),
   "idle.tired": Object.freeze({ kind: "loop", description: "Уставшая стойка: опущенная защита и тяжёлое дыхание." }),
   "idle.injured": Object.freeze({ kind: "loop", description: "Раненая стойка: бережёт повреждённую сторону." }),
+  greeting: Object.freeze({ kind: "one-shot", description: "Приветствие соперника перед стартовым сближением." }),
   advance: Object.freeze({ kind: "one-shot", description: "Сближение перед атакой." }),
   attack: Object.freeze({ kind: "one-shot", description: "Полная линия атаки, минимум пять кадров." }),
   "defense.block": Object.freeze({ kind: "one-shot", description: "Принятие удара щитом или оружием." }),
   "defense.dodge": Object.freeze({ kind: "one-shot", description: "Уход или backstep." }),
   "reaction.hit": Object.freeze({ kind: "one-shot", description: "Реакция на попадание." }),
   defeated: Object.freeze({ kind: "terminal", description: "Падение и лежачая поза." }),
-  victory: Object.freeze({ kind: "loop", description: "Будущий победный loop после результата." }),
+  victory: Object.freeze({ kind: "terminal", description: "Победитель поднимает меч и удерживает финальную позу." }),
   special: Object.freeze({ kind: "one-shot", description: "Классовый или перковый приём." }),
 });
 
@@ -28,142 +29,70 @@ const ANIMATION_SPRITE_ROWS = Object.freeze({
   "idle.tired": Object.freeze({ row: 1, frames: SIX_FRAMES, fps: 5, loop: true }),
   "idle.injured": Object.freeze({ row: 2, frames: SIX_FRAMES, fps: 5, loop: true }),
   attack: Object.freeze({ row: 3, frames: SIX_FRAMES, fps: 12, loop: false }),
-  "defense.block": Object.freeze({ row: 4, frames: SIX_FRAMES, fps: 10, loop: false }),
-  "defense.dodge": Object.freeze({ row: 5, frames: SIX_FRAMES, fps: 12, loop: false }),
+  "defense.block": Object.freeze({ row: 4, frames: SIX_FRAMES, fps: 20, loop: false, durationMs: 300 }),
+  "defense.dodge": Object.freeze({ row: 5, frames: SIX_FRAMES, fps: 10, loop: false }),
   /* Вторая половина строки 6 — падение. Реакция на обычный удар использует
    * только первые три позы и возвращается в стойку, не изображая смерть. */
   "reaction.hit": Object.freeze({ row: 6, frames: Object.freeze([0, 1, 2, 1, 0]), fps: 10, loop: false }),
   defeated: Object.freeze({ row: 6, frames: Object.freeze([3, 4, 5]), fps: 8, loop: false }),
 });
-
-/* Старые листы v1 не выдерживают границы ячеек 6×7. */
-const SAFE_GENERATED_BODY_ROWS = Object.freeze({
-  "idle.normal": ANIMATION_SPRITE_ROWS["idle.normal"],
-  "idle.tired": ANIMATION_SPRITE_ROWS["idle.tired"],
-  "idle.injured": ANIMATION_SPRITE_ROWS["idle.injured"],
-  attack: Object.freeze({ row: 0, frames: SIX_FRAMES, fps: 8, loop: false }),
-  "defense.block": Object.freeze({ row: 0, frames: SIX_FRAMES, fps: 8, loop: false }),
-  "defense.dodge": Object.freeze({ row: 0, frames: SIX_FRAMES, fps: 8, loop: false }),
-  "reaction.hit": Object.freeze({ row: 0, frames: SIX_FRAMES, fps: 8, loop: false }),
-  defeated: Object.freeze({ row: 2, frames: Object.freeze([3, 4, 5]), fps: 6, loop: false }),
+const UNIFIED_ANIMATION_SPRITE_ROWS = Object.freeze({
+  ...ANIMATION_SPRITE_ROWS,
+  advance: Object.freeze({ row: 7, frames: SIX_FRAMES, fps: 7, loop: true, durationMs: 900 }),
+  retreat: Object.freeze({ row: 7, frames: Object.freeze([5, 4, 3, 2, 1, 0]), fps: 7, loop: true, durationMs: 900 }),
+  greeting: Object.freeze({ row: 8, frames: SIX_FRAMES, fps: 4, loop: false, durationMs: 1400 }),
+  victory: Object.freeze({ row: 9, frames: SIX_FRAMES, fps: 7, loop: false, durationMs: 860 }),
 });
 
 /*
- * Контракт overlay v4: тело и оружие — листы ровно 6×7, 1536×1792 px.
- * Следовательно, кадр всегда 256×256 px с безопасным полем 32 px. Накладывается одноимённая ячейка
- * без дополнительного сдвига или поворота. Оба исходных листа смотрят вправо;
- * боец справа и его оружие синхронно зеркалятся визуальным адаптером.
+ * Временный контракт unified v8: тело и меч запечены в один лист 6×10,
+ * 1536×2560 px. Кадр всегда 256×256 px; все классы используют этот лист,
+ * а боец справа получает то же изображение зеркально.
  */
-const OVERLAY_ATLAS = Object.freeze({ columns: 6, rows: 7, cellWidth: 256, cellHeight: 256 });
-const WEAPON_OVERLAY_CLIPS = ANIMATION_SPRITE_ROWS;
-const SIX_BEHIND = Object.freeze(["behind", "behind", "behind", "behind", "behind", "behind"]);
-const MURMILLO_WEAPON_LAYERS = Object.freeze(Object.fromEntries(
-  Object.keys(ANIMATION_SPRITE_ROWS).map((clip) => [clip, SIX_BEHIND]),
-));
-const RETIARIUS_WEAPON_LAYERS = Object.freeze({
-  "idle.normal": SIX_BEHIND,
-  "idle.tired": SIX_BEHIND,
-  "idle.injured": SIX_BEHIND,
-  attack: Object.freeze(["behind", "behind", "front", "front", "front", "behind"]),
-  "defense.block": SIX_BEHIND,
-  "defense.dodge": SIX_BEHIND,
-  "reaction.hit": SIX_BEHIND,
-  defeated: Object.freeze(["behind", "behind", "behind"]),
-});
+const UNIFIED_ATLAS = Object.freeze({ columns: 6, rows: 10, cellWidth: 256, cellHeight: 256 });
+const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v8";
 
-const weaponOverlaySheet = (assetPath) => Object.freeze({
-  assetPath,
-  experimental: true,
-  frameOverlay: true,
-  grid: OVERLAY_ATLAS,
-  clips: WEAPON_OVERLAY_CLIPS,
-});
-
-const bodySpriteGrid = (
-  id,
-  assetPath,
-  facing,
-  handSocket,
-  clips = SAFE_GENERATED_BODY_ROWS,
-  weaponLayers = Object.freeze({}),
-  displayScale = 1,
-) => Object.freeze({
-  id,
-  assetPath,
-  facing,
-  renderable: true,
-  experimental: true,
-  grid: OVERLAY_ATLAS,
-  clips,
-  weaponLayers,
-  displayScale,
-  baselineInset: 32 / OVERLAY_ATLAS.cellHeight,
-  sockets: Object.freeze({
-    "hand.primary": Object.freeze(handSocket),
-    "hand.rear": Object.freeze(handSocket),
+const ARENA_BACKGROUNDS = Object.freeze({
+  normal: Object.freeze({
+    id: "normal",
+    assetPath: "./assets/arena-normal-background-v1.png",
+    fallbackColor: "#050607",
+    groundY: 500,
+  }),
+  sand: Object.freeze({
+    id: "sand",
+    assetPath: "./assets/arena-sand-background-v1.png",
+    fallbackColor: "#171008",
+    groundY: 500,
   }),
 });
 
-/* Сетки содержат только тело, одежду и броню — без оружия и щита. */
 const BODY_ANIMATION_GRIDS = Object.freeze({
-  "murmillo-body-overlay-v3": bodySpriteGrid(
-    "murmillo-body-overlay-v3",
-    "./assets/murmillo-body-overlay-grid-v3.png",
-    "right",
-    { x: 0.56, y: 0.48, rotation: 0 },
-    ANIMATION_SPRITE_ROWS,
-    MURMILLO_WEAPON_LAYERS,
-  ),
-  "retiarius-body-overlay-v4": bodySpriteGrid(
-    "retiarius-body-overlay-v4",
-    "./assets/retiarius-body-overlay-grid-v4.png",
-    "right",
-    { x: 0.56, y: 0.48, rotation: 0 },
-    ANIMATION_SPRITE_ROWS,
-    RETIARIUS_WEAPON_LAYERS,
-    1.3,
-  ),
-  "murmillo-body-unarmed-v1": bodySpriteGrid(
-    "murmillo-body-unarmed-v1",
-    "./assets/murmillo-body-unarmed-sprite-sheet-v1.png",
-    "right",
-    { x: 0.72, y: 0.42, rotation: -0.12 },
-  ),
-  "thraex-body-unarmed-v1": bodySpriteGrid(
-    "thraex-body-unarmed-v1",
-    "./assets/thraex-body-unarmed-sprite-sheet-v1.png",
-    "left",
-    { x: 0.28, y: 0.42, rotation: 0.12 },
-  ),
-  "crimson-unarmed-v1": Object.freeze({
-    id: "crimson-unarmed-v1",
-    assetPath: "./assets/gladiator-crimson-body-grid-v1.png",
+  [UNIFIED_SWORDSMAN_GRID_ID]: Object.freeze({
+    id: UNIFIED_SWORDSMAN_GRID_ID,
+    assetPath: "./assets/unified-swordsman-grid-v8.png",
     facing: "right",
+    renderable: true,
     experimental: true,
-    grid: Object.freeze({ columns: 4, rows: 3, cellWidth: 256, cellHeight: 512 }),
-    clips: Object.freeze({
-      idle: Object.freeze({ frames: [0, 1], fps: 4, loop: true }),
-      advance: Object.freeze({ frames: [1, 2], fps: 8, loop: false }),
-      attack: Object.freeze({ frames: [2, 3], fps: 10, loop: false }),
-      dodge: Object.freeze({ frames: [4, 5], fps: 10, loop: false }),
-      block: Object.freeze({ frames: [6], fps: 1, loop: false }),
-      hit: Object.freeze({ frames: [7, 8], fps: 10, loop: false }),
-      defeated: Object.freeze({ frames: [9, 10, 11], fps: 8, loop: false }),
-    }),
+    grid: UNIFIED_ATLAS,
+    clips: UNIFIED_ANIMATION_SPRITE_ROWS,
+    weaponLayers: Object.freeze({}),
+    displayScale: 1,
+    weaponBakedIn: true,
+    baselineInset: 16 / UNIFIED_ATLAS.cellHeight,
     sockets: Object.freeze({
-      // Нормализованные точки в пределах клетки. Отсюда крепится оружие.
-      "hand.primary": Object.freeze({ x: 0.72, y: 0.42, rotation: -0.12 }),
-      "hand.secondary": Object.freeze({ x: 0.31, y: 0.45, rotation: 0.08 }),
+      "hand.primary": Object.freeze({ x: 0.56, y: 0.48, rotation: 0 }),
+      "hand.rear": Object.freeze({ x: 0.56, y: 0.48, rotation: 0 }),
     }),
   }),
 });
 
 const EQUIPMENT_ANIMATION_PROFILES = Object.freeze({
-  "murmillo-armor": Object.freeze({ id: "murmillo-armor", bodyGridId: "murmillo-body-overlay-v3", weaponSocket: "hand.primary", attackClip: "attack", weaponMotion: "slash" }),
-  "thraex-armor": Object.freeze({ id: "thraex-armor", bodyGridId: "thraex-body-unarmed-v1", weaponSocket: "hand.primary", attackClip: "attack", weaponMotion: "hook-slash" }),
-  "retiarius-armor": Object.freeze({ id: "retiarius-armor", bodyGridId: "retiarius-body-overlay-v4", weaponSocket: "hand.rear", attackClip: "attack", weaponMotion: "thrust" }),
-  "secutor-armor": Object.freeze({ id: "secutor-armor", bodyGridId: "crimson-unarmed-v1", weaponSocket: "hand.primary", attackClip: "attack", weaponMotion: "thrust" }),
-  "hoplomachus-armor": Object.freeze({ id: "hoplomachus-armor", bodyGridId: "crimson-unarmed-v1", weaponSocket: "hand.primary", attackClip: "attack", weaponMotion: "thrust" }),
+  "murmillo-armor": Object.freeze({ id: "murmillo-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
+  "thraex-armor": Object.freeze({ id: "thraex-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
+  "retiarius-armor": Object.freeze({ id: "retiarius-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
+  "secutor-armor": Object.freeze({ id: "secutor-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
+  "hoplomachus-armor": Object.freeze({ id: "hoplomachus-armor", bodyGridId: UNIFIED_SWORDSMAN_GRID_ID, weaponSocket: null, attackClip: "attack", weaponMotion: "baked" }),
 });
 
 const EQUIPMENT_PROFILE_BY_CLASS = Object.freeze({
@@ -179,21 +108,18 @@ const FIGHTER_SKINS = Object.freeze({
     id: "arena-red",
     component: "fighter",
     placeholder: Object.freeze({ shape: "bar", color: "#ef5b5b", accent: "#ffc0a5" }),
-    assetPath: "./assets/gladiator-crimson-placeholder.png",
     spriteSheet: null,
   }),
   "arena-cyan": Object.freeze({
     id: "arena-cyan",
     component: "fighter",
     placeholder: Object.freeze({ shape: "bar", color: "#3cc8df", accent: "#b9f5ff" }),
-    assetPath: "./assets/gladiator-cyan-placeholder.png",
     spriteSheet: null,
   }),
   "arena-gold": Object.freeze({
     id: "arena-gold",
     component: "fighter",
     placeholder: Object.freeze({ shape: "bar", color: "#f2b84b", accent: "#fff0a3" }),
-    assetPath: "./assets/gladiator-crimson-placeholder.png",
     spriteSheet: null,
   }),
 });
@@ -203,20 +129,18 @@ const WEAPON_SKINS = Object.freeze({
     id: "sword", component: "weapon", placeholder: Object.freeze({ shape: "bar", color: "#f7df83", length: 40 }),
     facing: "right",
     vectorStyle: "gladius",
-    assetPath: "./assets/gladius-overlay-grid-v3.png",
-    spriteSheet: weaponOverlaySheet("./assets/gladius-overlay-grid-v3.png"),
+    spriteSheet: null,
   }),
   sica: Object.freeze({
     id: "sica", component: "weapon", placeholder: Object.freeze({ shape: "bar", color: "#ff9e5f", length: 33 }),
     facing: "left",
     vectorStyle: "sica",
-    assetPath: "./assets/sica-overlay-sheet-v2.png",
-    spriteSheet: weaponOverlaySheet("./assets/sica-overlay-sheet-v2.png"),
+    spriteSheet: null,
   }),
   trident: Object.freeze({
     id: "trident", component: "weapon", facing: "right", placeholder: Object.freeze({ shape: "bar", color: "#c59dff", length: 58 }),
-    assetPath: "./assets/trident-overlay-grid-v4.png",
-    spriteSheet: weaponOverlaySheet("./assets/trident-overlay-grid-v4.png"),
+    vectorStyle: "trident",
+    spriteSheet: null,
   }),
   spear: Object.freeze({
     id: "spear", component: "weapon", facing: "right", placeholder: Object.freeze({ shape: "bar", color: "#8ee38c", length: 54 }), spriteSheet: null,
@@ -232,9 +156,14 @@ const WEAPON_BY_CLASS = Object.freeze({
 });
 
 class SpriteLibrary {
-  constructor({ fighterSkins = FIGHTER_SKINS, weaponSkins = WEAPON_SKINS } = {}) {
+  constructor({
+    fighterSkins = FIGHTER_SKINS,
+    weaponSkins = WEAPON_SKINS,
+    arenaBackgrounds = ARENA_BACKGROUNDS,
+  } = {}) {
     this.fighterSkins = fighterSkins;
     this.weaponSkins = weaponSkins;
+    this.arenaBackgrounds = arenaBackgrounds;
   }
 
   resolveFighter(fighter, side) {
@@ -264,7 +193,11 @@ class SpriteLibrary {
 
   resolveBodyGrid(rig) {
     return BODY_ANIMATION_GRIDS[rig.bodyGridId]
-      || BODY_ANIMATION_GRIDS["crimson-unarmed-v1"];
+      || BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID];
+  }
+
+  resolveArenaBackground(arenaType) {
+    return this.arenaBackgrounds[arenaType] || this.arenaBackgrounds.normal;
   }
 }
 
@@ -275,8 +208,10 @@ globalThis.GladiatorSpriteLibrary = {
   WEAPON_BY_CLASS,
   CORE_VISUAL_STATES,
   ANIMATION_SPRITE_ROWS,
-  SAFE_GENERATED_BODY_ROWS,
-  OVERLAY_ATLAS,
+  UNIFIED_ANIMATION_SPRITE_ROWS,
+  UNIFIED_ATLAS,
+  UNIFIED_SWORDSMAN_GRID_ID,
+  ARENA_BACKGROUNDS,
   BODY_ANIMATION_GRIDS,
   EQUIPMENT_ANIMATION_PROFILES,
   EQUIPMENT_PROFILE_BY_CLASS,

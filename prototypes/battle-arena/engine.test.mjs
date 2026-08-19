@@ -6,6 +6,7 @@ const {
   ARENA_TYPES,
   BattleEngine,
   BattleModifierManager,
+  COMBAT_RULES,
   FIGHTER_CLASS_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
@@ -29,6 +30,56 @@ const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
+assert.equal(COMBAT_RULES.critical.chance, 0.03, "Базовый шанс критического удара равен 3%");
+assert.equal(COMBAT_RULES.critical.damageMultiplier, 2, "Критический удар удваивает урон");
+assert.deepEqual(
+  [COMBAT_RULES.strikePower.minMultiplier, COMBAT_RULES.strikePower.maxMultiplier],
+  [0.85, 1.15],
+  "Случайная сила попадания ограничена диапазоном 85–115%",
+);
+const hitActions = first.snapshots
+  .slice(1, -1)
+  .map((snapshot) => snapshot.lastAction)
+  .filter((action) => action?.outcome === "hit");
+assert.ok(hitActions.length > 0, "Детерминированный бой должен содержать успешные попадания");
+assert.ok(hitActions.every((action) => (
+  action.strikePowerMultiplier >= COMBAT_RULES.strikePower.minMultiplier
+    && action.strikePowerMultiplier <= COMBAT_RULES.strikePower.maxMultiplier
+)), "Множитель каждого попадания остаётся в заданных границах");
+assert.ok(hitActions.every((action) => (
+  action.damage === action.damageBeforeCritical * action.criticalMultiplier
+)), "Финальный урон явно выводится из урона до критической проверки");
+assert.ok(
+  first.events.some((event) => event.type === "action.damage.resolved"
+    && typeof event.data.strikePowerRoll === "number"
+    && typeof event.data.criticalRoll === "number"),
+  "Точные броски силы и крита сохраняются в техническом журнале",
+);
+
+const forcedCritical = BattleEngine.prototype.finalizeActionDamage.call(
+  { random: () => 0.029999 },
+  { outcome: "hit", damage: 19, strikePowerMultiplier: 1 },
+);
+assert.equal(forcedCritical.critical, true, "Бросок ниже 3% создаёт критический удар");
+assert.equal(forcedCritical.damage, 38, "Критический удар удваивает рассчитанный урон");
+assert.equal(forcedCritical.impact, "critical", "Крит имеет отдельную качественную категорию");
+const criticalBoundary = BattleEngine.prototype.finalizeActionDamage.call(
+  { random: () => 0.03 },
+  { outcome: "hit", damage: 19, strikePowerMultiplier: 1 },
+);
+assert.equal(criticalBoundary.critical, false, "Граница 0.03 не входит в успешный критический бросок");
+const impactCases = [
+  [0.9, "light"],
+  [1, "normal"],
+  [1.1, "strong"],
+];
+impactCases.forEach(([strikePowerMultiplier, expectedImpact]) => {
+  const categorized = BattleEngine.prototype.finalizeActionDamage.call(
+    { random: () => 0.5 },
+    { outcome: "hit", damage: 19, strikePowerMultiplier },
+  );
+  assert.equal(categorized.impact, expectedImpact, `Множитель ${strikePowerMultiplier} получает категорию ${expectedImpact}`);
+});
 const defaultMurmillo = first.snapshots[0].fighters[0];
 assert.equal(defaultMurmillo.fighterClass, "murmillo");
 assert.deepEqual(
@@ -49,8 +100,12 @@ assert.ok(
     && event.data.kind === "class-technique"),
   "Оружейный комплект должен создавать классовый приём",
 );
+const shieldWallInput = createDefaultBattleInput();
+shieldWallInput.seed = "shield-0";
+shieldWallInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
+const shieldWallResult = new BattleEngine(shieldWallInput).simulate();
 assert.ok(
-  first.events.some((event) => event.type === "modifier.activated"
+  shieldWallResult.events.some((event) => event.type === "modifier.activated"
     && event.data.modifierId === "weapon.murmillo-shield-advance"
     && event.message.includes("Стена скутума")),
   "Мурмиллон должен один раз превратить попадание в блок",
