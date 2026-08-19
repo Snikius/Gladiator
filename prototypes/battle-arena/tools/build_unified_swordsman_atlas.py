@@ -22,7 +22,7 @@ ROW_SOURCES = [
     ("victory", ASSETS / "unified-swordsman-row-9-victory-source-v1.png"),
     ("special", ASSETS / "unified-swordsman-row-10-special-source-v1.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v9.png"
+TARGET = ASSETS / "unified-swordsman-grid-v14.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
@@ -33,6 +33,7 @@ ALPHA_THRESHOLD = 64
 SIGNIFICANT_COMPONENT_PIXELS = 80
 DETACHED_COMPONENT_PIXELS = 600
 TARGET_BODY_HEIGHT = 196
+VICTORY_VISUAL_SCALE = 1.20
 CHECKER_DIFFERENCE_THRESHOLD = 20
 ENCLOSED_BACKGROUND_PIXELS = 150
 
@@ -400,11 +401,16 @@ def build_atlas(
             ] + [base_scale] * 3
         elif row == 9 and buffered_equipment:
             # A raised sword is deliberately taller than the fighter and must
-            # not reduce body scale. Use a stricter solid-width measurement and
-            # normalize every victory pose independently.
+            # not reduce body scale. The upright salute is also much narrower
+            # than the combat stance, so it receives a small perceptual scale
+            # correction while every frame remains normalized independently.
             victory_body_heights = [solid_body_height(frame) for frame in frames]
             frame_scales = [
-                min(target_body_height / height, safe_frame / frame.height, safe_frame / frame.width)
+                min(
+                    target_body_height * VICTORY_VISUAL_SCALE / height,
+                    safe_frame / frame.height,
+                    safe_frame / frame.width,
+                )
                 for frame, height in zip(frames, victory_body_heights)
             ]
         elif row in (0, 7) and not buffered_equipment:
@@ -472,9 +478,9 @@ def main() -> None:
         for column in range(COLUMNS)
     ]
     idle_height = median(idle_heights)
-    if any(height < idle_height * 0.94 or height > idle_height * 1.06 for height in victory_heights):
+    if any(height < idle_height * 1.18 or height > idle_height * 1.23 for height in victory_heights):
         raise ValueError(
-            "victory: swordsman body scale differs from idle; "
+            "victory: swordsman perceptual scale is outside its correction range; "
             f"idle={idle_heights}, victory={victory_heights}"
         )
 

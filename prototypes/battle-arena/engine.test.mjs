@@ -16,7 +16,7 @@ const {
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
 
-assert.deepEqual(ARENA_TYPES.map((arena) => arena.id), ["normal", "sand"]);
+assert.deepEqual(ARENA_TYPES.map((arena) => arena.id), ["crowd", "normal", "sand"]);
 assert.deepEqual(
   FIGHTER_CLASS_DEFINITIONS.map((type) => [type.id, type.beats]),
   [["murmillo", "thraex"], ["thraex", "hoplomachus"], ["retiarius", "murmillo"], ["secutor", "retiarius"], ["hoplomachus", "secutor"]],
@@ -31,8 +31,48 @@ const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
+assert.equal(first.input.arena.type, "crowd", "Новый бой по умолчанию проходит на арене со зрителями");
 assert.equal(COMBAT_RULES.critical.chance, 0.03, "Базовый шанс критического удара равен 3%");
 assert.equal(COMBAT_RULES.critical.damageMultiplier, 2, "Критический удар удваивает урон");
+assert.equal(COMBAT_RULES.classTechnique.chance, 0.1, "Базовый шанс классового приёма равен 10%");
+assert.deepEqual(
+  first.input.fighters.map((fighter) => fighter.criticalChance),
+  [0.03, 0.03],
+  "Каждый боец получает собственный базовый шанс крита 3%",
+);
+assert.deepEqual(
+  first.input.fighters.map((fighter) => fighter.classTechniqueChance),
+  [0.1, 0.1],
+  "Каждый боец получает собственный базовый шанс классового приёма 10%",
+);
+const configuredCriticalInput = createDefaultBattleInput();
+configuredCriticalInput.fighters[0].criticalChance = 0;
+configuredCriticalInput.fighters[1].criticalChance = 0.5;
+configuredCriticalInput.fighters[0].classTechniqueChance = 0;
+configuredCriticalInput.fighters[1].classTechniqueChance = 0.5;
+const configuredCriticalEngine = new BattleEngine(configuredCriticalInput);
+assert.deepEqual(
+  configuredCriticalEngine.input.fighters.map((fighter) => fighter.criticalChance),
+  [0, 0.5],
+  "Индивидуальные шансы крита сохраняются во входе боя",
+);
+assert.deepEqual(
+  configuredCriticalEngine.input.fighters.map((fighter) => fighter.classTechniqueChance),
+  [0, 0.5],
+  "Индивидуальные шансы классового приёма сохраняются во входе боя",
+);
+const configuredCriticalResult = configuredCriticalEngine.simulate();
+const configuredChanceByFighter = new Map([
+  ["fighter-1", 0],
+  ["fighter-2", 0.5],
+]);
+assert.ok(
+  configuredCriticalResult.snapshots
+    .map((snapshot) => snapshot.lastAction)
+    .filter(Boolean)
+    .every((action) => action.criticalChance === configuredChanceByFighter.get(action.actorId)),
+  "Каждое действие использует шанс крита именно атакующего бойца",
+);
 assert.deepEqual(
   COMBAT_RULES.trauma,
   { baseChance: 0.12, damageRatioMultiplier: 0.9, maxChance: 0.45, armChance: 0.5 },
@@ -98,6 +138,17 @@ const criticalBoundary = BattleEngine.prototype.finalizeActionDamage.call(
   { outcome: "hit", damage: 19, strikePowerMultiplier: 1 },
 );
 assert.equal(criticalBoundary.critical, false, "Граница 0.03 не входит в успешный критический бросок");
+const disabledCritical = BattleEngine.prototype.finalizeActionDamage.call(
+  { random: () => 0 },
+  { outcome: "hit", damage: 19, strikePowerMultiplier: 1, criticalChance: 0 },
+);
+assert.equal(disabledCritical.critical, false, "При настройке 0% критический удар невозможен");
+const frequentCritical = BattleEngine.prototype.finalizeActionDamage.call(
+  { random: () => 0.3 },
+  { outcome: "hit", damage: 19, strikePowerMultiplier: 1, criticalChance: 0.5 },
+);
+assert.equal(frequentCritical.critical, true, "Настройка 50% применяется к конкретному атакующему");
+assert.equal(frequentCritical.criticalChance, 0.5, "Использованный шанс сохраняется в результате действия");
 const impactCases = [
   [0.9, "light"],
   [1, "normal"],
@@ -133,12 +184,31 @@ assert.ok(
 const shieldWallInput = createDefaultBattleInput();
 shieldWallInput.seed = "shield-0";
 shieldWallInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
+shieldWallInput.fighters[0].classTechniqueChance = 1;
 const shieldWallResult = new BattleEngine(shieldWallInput).simulate();
 assert.ok(
   shieldWallResult.events.some((event) => event.type === "modifier.activated"
     && event.data.modifierId === "weapon.murmillo-shield-advance"
     && event.message.includes("Стена скутума")),
   "Мурмиллон должен один раз превратить попадание в блок",
+);
+const murmilloCounterStrike = shieldWallResult.snapshots
+  .map((snapshot) => snapshot.lastAction)
+  .find((action) => action?.classTechnique === "weapon.murmillo-shield-advance");
+assert.ok(murmilloCounterStrike, "После блока Мурмиллон должен выполнить видимый классовый ответный удар");
+assert.equal(murmilloCounterStrike.actorId, "fighter-1", "Ответный классовый удар выполняет владелец техники");
+assert.equal(murmilloCounterStrike.strengthMultiplier, 1.25, "Ответный удар получает усиление силы 25%");
+const disabledShieldInput = createDefaultBattleInput();
+disabledShieldInput.maxSteps = 80;
+disabledShieldInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
+disabledShieldInput.fighters[0].classTechniqueChance = 0;
+const disabledShieldResult = new BattleEngine(disabledShieldInput).simulate();
+assert.equal(
+  disabledShieldResult.events.some((event) => event.type === "modifier.activated"
+    && event.data.modifierId === "weapon.murmillo-shield-advance"
+    && event.message.includes("Стена скутума")),
+  false,
+  "Настройка 0% полностью отключает классовый приём",
 );
 
 const equipmentMechanicsInput = createDefaultBattleInput();
@@ -151,6 +221,7 @@ equipmentMechanicsInput.fighters[0].equipment = {
   armorSet: { definitionId: "thraex-armor.good" },
 };
 equipmentMechanicsInput.fighters[0].perks = [];
+equipmentMechanicsInput.fighters[0].classTechniqueChance = 1;
 equipmentMechanicsInput.fighters[1].base.health = 300;
 equipmentMechanicsInput.fighters[1].fighterClass = "retiarius";
 equipmentMechanicsInput.fighters[1].equipment = {
@@ -158,6 +229,7 @@ equipmentMechanicsInput.fighters[1].equipment = {
   armorSet: { definitionId: "retiarius-armor.good" },
 };
 equipmentMechanicsInput.fighters[1].perks = [];
+equipmentMechanicsInput.fighters[1].classTechniqueChance = 1;
 const equipmentMechanics = new BattleEngine(equipmentMechanicsInput).simulate();
 assert.ok(
   equipmentMechanics.events.some((event) => event.type === "modifier.activated"
@@ -174,8 +246,10 @@ assert.ok(
 assert.ok(
   equipmentMechanics.snapshots.some((snapshot) => (
     snapshot.lastAction?.classTechnique === "weapon.retiarius-net-cast"
+      && snapshot.lastAction.classTechniqueChance === 1
+      && snapshot.lastAction.classTechniqueRoll < 1
   )),
-  "Перехват сетью должен сохраняться в действии для визуального реплея",
+  "Перехват сетью должен сохранять шанс и бросок в действии для визуального реплея",
 );
 assert.ok(
   equipmentMechanics.snapshots.some((snapshot) => (
@@ -212,6 +286,7 @@ for (const fighterClass of ["secutor", "hoplomachus"]) {
     });
   }
   classInput.fighters[0].fighterClass = fighterClass;
+  classInput.fighters[0].classTechniqueChance = 1;
   classInput.fighters[0].equipment = {
     weaponSet: { definitionId: `${fighterClass}-arms.good` },
     armorSet: { definitionId: `${fighterClass}-armor.good` },
@@ -370,7 +445,11 @@ temporaryInput.fighters[0].buffs = ["bath-effect", "wine", "bath-effect"];
 temporaryInput.fighters[0].injuries = ["leg-damage", "arm-damage", "head-damage"];
 const temporaryResult = new BattleEngine(temporaryInput).simulate();
 const initialFighter = temporaryResult.snapshots[0].fighters[0];
-assert.equal(initialFighter.maxHealth, 151, "Временные эффекты должны суммировать здоровье");
+assert.equal(
+  initialFighter.maxHealth,
+  temporaryInput.fighters[0].base.health + 26,
+  "Временные эффекты должны суммировать здоровье поверх текущего базового значения",
+);
 assert.equal(initialFighter.strength, 63.15, "Травма руки должна примениться после экипировки и временных бонусов");
 assert.equal(initialFighter.support, 52, "Харизма и травма головы должны менять поддержку");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");

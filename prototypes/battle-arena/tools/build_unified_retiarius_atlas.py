@@ -24,7 +24,7 @@ ROW_SOURCES = [
     ("victory", ASSETS / "unified-retiarius-row-9-victory-source-v2.png"),
     ("special", ASSETS / "unified-retiarius-row-10-special-source-v1.png"),
 ]
-TARGET = ASSETS / "unified-retiarius-grid-v5.png"
+TARGET = ASSETS / "unified-retiarius-grid-v6.png"
 CELL = 384
 SAFE_FRAME = 368
 TARGET_BODY_HEIGHT = 196

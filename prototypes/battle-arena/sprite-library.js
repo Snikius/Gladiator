@@ -68,10 +68,38 @@ const RETIARIUS_ATLAS = Object.freeze({
   logicalHeight: 256,
   equipmentBuffer: Object.freeze({ top: 128, right: 64, bottom: 0, left: 64 }),
 });
-const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v9";
-const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v5";
+const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v14";
+const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v6";
 
 const ARENA_BACKGROUNDS = Object.freeze({
+  crowd: Object.freeze({
+    id: "crowd",
+    assetPath: "./assets/arena-crowd-background-v1.png",
+    fallbackColor: "#100b09",
+    groundY: 470,
+    ambientLights: Object.freeze([
+      Object.freeze({ x: 84, y: 354, scale: 0.9, phase: 0.14 }),
+      Object.freeze({ x: 278, y: 354, scale: 0.9, phase: 0.67 }),
+    ]),
+    crowdMotion: Object.freeze([
+      Object.freeze({ x: 18, y: 214, scale: 0.8, phase: 0.04 }),
+      Object.freeze({ x: 39, y: 236, scale: 1, phase: 0.31 }),
+      Object.freeze({ x: 61, y: 208, scale: 0.8, phase: 0.72 }),
+      Object.freeze({ x: 82, y: 252, scale: 1, phase: 0.19 }),
+      Object.freeze({ x: 106, y: 224, scale: 0.9, phase: 0.53 }),
+      Object.freeze({ x: 128, y: 258, scale: 1, phase: 0.87 }),
+      Object.freeze({ x: 151, y: 211, scale: 0.8, phase: 0.38 }),
+      Object.freeze({ x: 174, y: 242, scale: 1, phase: 0.08 }),
+      Object.freeze({ x: 196, y: 218, scale: 0.9, phase: 0.61 }),
+      Object.freeze({ x: 218, y: 258, scale: 1, phase: 0.27 }),
+      Object.freeze({ x: 241, y: 229, scale: 0.9, phase: 0.94 }),
+      Object.freeze({ x: 263, y: 207, scale: 0.8, phase: 0.45 }),
+      Object.freeze({ x: 284, y: 249, scale: 1, phase: 0.13 }),
+      Object.freeze({ x: 306, y: 220, scale: 0.9, phase: 0.79 }),
+      Object.freeze({ x: 326, y: 256, scale: 1, phase: 0.35 }),
+      Object.freeze({ x: 344, y: 211, scale: 0.8, phase: 0.57 }),
+    ]),
+  }),
   normal: Object.freeze({
     id: "normal",
     assetPath: "./assets/arena-normal-background-v1.png",
@@ -102,7 +130,7 @@ const ARENA_BACKGROUNDS = Object.freeze({
 const BODY_ANIMATION_GRIDS = Object.freeze({
   [UNIFIED_SWORDSMAN_GRID_ID]: Object.freeze({
     id: UNIFIED_SWORDSMAN_GRID_ID,
-    assetPath: "./assets/unified-swordsman-grid-v9.png",
+    assetPath: "./assets/unified-swordsman-grid-v14.png",
     facing: "right",
     renderable: true,
     experimental: true,
@@ -120,7 +148,7 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
   }),
   [UNIFIED_RETIARIUS_GRID_ID]: Object.freeze({
     id: UNIFIED_RETIARIUS_GRID_ID,
-    assetPath: "./assets/unified-retiarius-grid-v5.png",
+    assetPath: "./assets/unified-retiarius-grid-v6.png",
     facing: "right",
     renderable: true,
     experimental: true,
@@ -248,7 +276,7 @@ class SpriteLibrary {
   }
 
   resolveArenaBackground(arenaType) {
-    return this.arenaBackgrounds[arenaType] || this.arenaBackgrounds.normal;
+    return this.arenaBackgrounds[arenaType] || this.arenaBackgrounds.crowd;
   }
 }
 

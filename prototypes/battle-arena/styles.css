@@ -245,6 +245,23 @@ input[type="range"] {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.fighter-chance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 9px 0 14px;
+}
+
+.fighter-chance-grid label {
+  gap: 3px;
+  font-size: 9px;
+}
+
+.fighter-chance-grid select {
+  min-height: 30px;
+  padding: 4px 6px;
+}
+
 .fighter-setup {
   position: relative;
 }
@@ -1090,6 +1107,17 @@ a.button {
 
 .mobile-battle-feed li.outcome-block {
   border-color: #7a673d;
+}
+
+.mobile-battle-feed li.state-initial {
+  color: #685136;
+  border-color: #8b6b40;
+}
+
+.mobile-battle-feed li.state-trauma {
+  color: #8f2d22;
+  border-color: #a83224;
+  font-weight: 700;
 }
 
 .mobile-battle-feed li.empty {

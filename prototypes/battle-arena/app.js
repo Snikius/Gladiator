@@ -18,6 +18,7 @@ const {
 } = globalThis.GladiatorBattle;
 
 const { BattleVisualEngine, RENDERER_MODES } = globalThis.GladiatorVisualEngine || {};
+const { buildBattleStoryEntries } = globalThis.GladiatorBattleStory;
 
 const elements = {
   form: document.querySelector("#setup-form"),
@@ -70,7 +71,7 @@ const randomPlaybackDelay = () => Math.round(PLAYBACK_STEP_MS * (
   PLAYBACK_PAUSE_MIN_MULTIPLIER
   + Math.random() * (PLAYBACK_PAUSE_MAX_MULTIPLIER - PLAYBACK_PAUSE_MIN_MULTIPLIER)
 ));
-const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1.4;
+const SIMULATOR_DEFAULT_HEALTH_MULTIPLIER = 1;
 const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
@@ -133,27 +134,6 @@ const effectDefinitions = {
 };
 const effectName = (type, effectId) =>
   effectDefinitions[type].find((effect) => effect.id === effectId)?.name || effectId;
-
-const playerActionText = (snapshot) => {
-  const action = snapshot.lastAction;
-  if (!action) return null;
-  const actor = snapshot.fighters.find((fighter) => fighter.id === action.actorId)?.name || action.actorId;
-  const target = snapshot.fighters.find((fighter) => fighter.id === action.targetId)?.name || action.targetId;
-  if (action.outcome === "miss") return `${actor} промахивается — ${target} удерживает позицию`;
-  if (action.outcome === "dodge") return `${target} уклоняется от атаки ${actor}`;
-  if (action.outcome === "block") return `${target} блокирует удар ${actor}`;
-  const hitLabels = {
-    light: `${actor} слегка ранит ${target}`,
-    normal: `${actor} ранит ${target}`,
-    strong: `${actor} наносит ${target} сильный удар`,
-    critical: `${actor} наносит ${target} критический удар`,
-  };
-  return hitLabels[action.impact] || `${actor} атакует ${target}`;
-};
-
-const playerActionClass = (action) => action.outcome === "hit"
-  ? `impact-${action.impact || "normal"}`
-  : `outcome-${action.outcome || "action"}`;
 
 /* Боевые тесты сохраняют нейтральный дефолт движка. В интерфейсе сразу
  * показываем пару, для которой уже есть полные независимые sprite-слои. */
@@ -330,6 +310,8 @@ const setFormFromInput = (input) => {
       strength: fighter.base.strength,
       health: fighter.base.health,
       charisma: fighter.base.charisma,
+      criticalChance: fighter.criticalChance,
+      classTechniqueChance: fighter.classTechniqueChance,
     };
     Object.entries(values).forEach(([field, value]) => {
       form.querySelector(`[data-field="${field}"]`).value = value;
@@ -363,6 +345,8 @@ const readFighter = (index) => {
       health: Number(read("health")),
       charisma: Number(read("charisma")),
     },
+    criticalChance: Number(read("criticalChance")),
+    classTechniqueChance: Number(read("classTechniqueChance")),
     equipment: {
       weaponSet: { definitionId: form.querySelector('[data-equipment-slot="weapon"]').value },
       armorSet: { definitionId: form.querySelector('[data-equipment-slot="armor"]').value },
@@ -501,19 +485,11 @@ const renderMobileBattleUi = (snapshot, input) => {
     </div>
   `;
 
-  const recentActions = currentResult
-    ? currentResult.snapshots
-      .filter((candidate) => (
-        candidate.step <= snapshot.step
-          && candidate.label !== "Итог боя"
-          && candidate.lastAction?.actorId
-      ))
-      .slice(-3)
-    : [];
-  elements.mobileBattleFeed.innerHTML = recentActions.length
-    ? recentActions.map((actionSnapshot) => `
-        <li class="${escapeHtml(playerActionClass(actionSnapshot.lastAction))}">
-          <span>${escapeHtml(playerActionText(actionSnapshot))}</span>
+  const recentStory = buildBattleStoryEntries(currentResult, snapshot, 3);
+  elements.mobileBattleFeed.innerHTML = recentStory.length
+    ? recentStory.map((entry) => `
+        <li class="${escapeHtml(entry.className)}">
+          <span>${escapeHtml(entry.text)}</span>
         </li>
       `).join("")
     : "<li class=\"empty\">Бой ещё не начался.</li>";
@@ -556,6 +532,8 @@ const renderNumbers = (snapshot) => {
         <p class="equipment-line">
           КЛАСС ${escapeHtml(fighterClassName(fighter.fighterClass)).toUpperCase()} ·
           ХАРИЗМА ${base.charisma} · МНОЖИТЕЛЬ АРЕНЫ ${formatNumber(multiplier)} ·
+          КРИТ ${percent(fighter.criticalChance)} ·
+          ПРИЁМ ${percent(fighter.classTechniqueChance)} ·
           ОРУЖИЕ +${fighter.weaponPower} · ТОЧНОСТЬ ${fighter.accuracy} · БРОНЯ ${fighter.armor} ·
           ВЕС ${fighter.equipmentWeight} · ПОДВИЖНОСТЬ ${fighter.mobility}
         </p>
@@ -833,6 +811,8 @@ const renderPreview = () => {
       health: fighter.base.health,
       maxHealth: fighter.base.health,
       strength: fighter.base.strength,
+      criticalChance: fighter.criticalChance,
+      classTechniqueChance: fighter.classTechniqueChance,
       support: fighter.base.charisma * input.arena.supportMultipliers[index],
       initiative: 0,
       fatigue: 0,

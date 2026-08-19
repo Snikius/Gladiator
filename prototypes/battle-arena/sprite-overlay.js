@@ -11,8 +11,8 @@ const playButton = document.querySelector("#preview-play");
 const frameLabel = document.querySelector("#preview-frame-label");
 
 const ASSET_PATHS = Object.freeze({
-  swordsman: Object.freeze({ path: "./assets/unified-swordsman-grid-v9.png", cellWidth: 384, cellHeight: 384 }),
-  retiarius: Object.freeze({ path: "./assets/unified-retiarius-grid-v5.png", cellWidth: 384, cellHeight: 384 }),
+  swordsman: Object.freeze({ path: "./assets/unified-swordsman-grid-v14.png", cellWidth: 384, cellHeight: 384 }),
+  retiarius: Object.freeze({ path: "./assets/unified-retiarius-grid-v6.png", cellWidth: 384, cellHeight: 384 }),
 });
 const CLIPS = Object.freeze({
   "idle.normal": Object.freeze({ row: 0, fps: 6 }),

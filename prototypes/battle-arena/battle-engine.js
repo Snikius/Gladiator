@@ -18,6 +18,9 @@ const COMBAT_RULES = Object.freeze({
     chance: 0.03,
     damageMultiplier: 2,
   }),
+  classTechnique: Object.freeze({
+    chance: 0.1,
+  }),
   trauma: Object.freeze({
     baseChance: 0.12,
     damageRatioMultiplier: 0.9,
@@ -108,7 +111,7 @@ const normalizeInput = (input) => ({
   seed: String(input.seed || "gladiator-prototype"),
   maxSteps: clamp(Number(input.maxSteps) || 80, 1, 500),
   arena: {
-    type: input.arena?.type || "normal",
+    type: input.arena?.type || "crowd",
     supportMultipliers: [
       clamp(Number(input.arena?.supportMultipliers?.[0]) || 1, 0.1, 3),
       clamp(Number(input.arena?.supportMultipliers?.[1]) || 1, 0.1, 3),
@@ -128,6 +131,12 @@ const normalizeInput = (input) => ({
         health: clamp(Number(fighter.base?.health) || 100, 1, 300),
         charisma: clamp(Number(fighter.base?.charisma) || 50, 1, 100),
       },
+      criticalChance: Number.isFinite(Number(fighter.criticalChance))
+        ? clamp(Number(fighter.criticalChance), 0, 1)
+        : COMBAT_RULES.critical.chance,
+      classTechniqueChance: Number.isFinite(Number(fighter.classTechniqueChance))
+        ? clamp(Number(fighter.classTechniqueChance), 0, 1)
+        : COMBAT_RULES.classTechnique.chance,
       equipment: {
         weaponSet: normalizeEquipmentRef(fighter.equipment?.weaponSet, WEAPON_ITEMS, fighterClass, "weapon"),
         armorSet: normalizeEquipmentRef(fighter.equipment?.armorSet, ARMOR_ITEMS, fighterClass, "armor"),
@@ -140,7 +149,8 @@ const normalizeInput = (input) => ({
 });
 
 const ARENA_TYPES = [
-  { id: "normal", name: "Обычная арена" },
+  { id: "crowd", name: "Арена со зрителями" },
+  { id: "normal", name: "Закрытая арена" },
   { id: "sand", name: "Песчаная арена" },
 ];
 
@@ -333,19 +343,60 @@ const applyClassEquipment = (data, api, fighterClassId) => {
   return { ...data, fighters };
 };
 
+const checkClassTechniqueChance = (data, api) => {
+  const owner = api.state.fighters.find((fighter) => fighter.id === api.ownerId);
+  const chance = owner?.classTechniqueChance ?? COMBAT_RULES.classTechnique.chance;
+  const roll = round(api.random(), 6);
+  const activated = roll < chance;
+  api.emit("modifier.chance.checked", "Проверен шанс классового приёма", {
+    classTechniqueChance: chance,
+    classTechniqueRoll: roll,
+    activated,
+  });
+  return {
+    activated,
+    chance,
+    roll,
+    data: {
+      ...data,
+      classTechniqueChance: chance,
+      classTechniqueRoll: roll,
+    },
+  };
+};
+
 const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
   "weapon.murmillo-shield-advance": {
     beforeInitialize: (data, api) => applyClassEquipment(data, api, "murmillo"),
     afterAction(data, api, runtime) {
       if (runtime.shieldWallUsed || data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      const check = checkClassTechniqueChance(data, api);
+      if (!check.activated) return check.data;
       runtime.shieldWallUsed = true;
+      runtime.counterStrike = { chance: check.chance, roll: check.roll };
       api.activate("Стена скутума: первое попадание превращено в блок");
+      api.emit("modifier.runtime.changed", "Мурмиллон подготовил ответный удар", {
+        counterStrike: runtime.counterStrike,
+      });
       return {
-        ...data,
+        ...check.data,
         outcome: "block",
         damage: 0,
         traumaChance: 0,
         equipmentReaction: "murmillo-shield-wall",
+      };
+    },
+    beforeAction(data, api, runtime) {
+      if (!runtime.counterStrike || data.actorId !== api.ownerId) return data;
+      const activation = runtime.counterStrike;
+      runtime.counterStrike = null;
+      api.activate("Наступление за щитом: ответный удар усилен");
+      return {
+        ...data,
+        strengthMultiplier: (data.strengthMultiplier || 1) * 1.25,
+        classTechnique: "weapon.murmillo-shield-advance",
+        classTechniqueChance: activation.chance,
+        classTechniqueRoll: activation.roll,
       };
     },
   },
@@ -353,15 +404,18 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
     beforeInitialize: (data, api) => applyClassEquipment(data, api, "thraex"),
     afterAction(data, api, runtime) {
       if (data.actorId !== api.ownerId || data.outcome !== "hit") return data;
-      runtime.initiativeSurge = true;
+      const check = checkClassTechniqueChance(data, api);
+      if (!check.activated) return check.data;
+      runtime.initiativeSurge = { chance: check.chance, roll: check.roll };
       api.emit("modifier.runtime.changed", "Фракиец подготовил рывок инициативы", {
-        initiativeSurge: true,
+        initiativeSurge: runtime.initiativeSurge,
       });
-      return data;
+      return check.data;
     },
     beforeSelectActor(data, api, runtime) {
       if (!runtime.initiativeSurge) return data;
-      runtime.initiativeSurge = false;
+      const activation = runtime.initiativeSurge;
+      runtime.initiativeSurge = null;
       api.activate("Рывок Фракийца: вес инициативы следующего выбора увеличен в 1.5 раза");
       return {
         ...data,
@@ -372,6 +426,8 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
               weight: round(candidate.weight * 1.5),
               reason: "thraex-initiative-surge",
               classTechnique: "weapon.thraex-hooking-slash",
+              classTechniqueChance: activation.chance,
+              classTechniqueRoll: activation.roll,
             }
             : candidate
         )),
@@ -382,6 +438,8 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
     beforeInitialize: (data, api) => applyClassEquipment(data, api, "retiarius"),
     afterSelectActor(data, api, runtime) {
       if (runtime.netUsed || data.actorId === api.ownerId) return data;
+      const check = checkClassTechniqueChance(data, api);
+      if (!check.activated) return check.data;
       runtime.netUsed = true;
       api.activate("Сеть Ретиария: ход противника перехвачен");
       api.enqueue({
@@ -391,7 +449,7 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
         reason: "class-technique:retiarius-net",
       });
       return {
-        ...data,
+        ...check.data,
         originalActorId: data.actorId,
         actorId: api.ownerId,
         reason: "class-technique:retiarius-net",
@@ -403,13 +461,16 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
     beforeInitialize: (data, api) => applyClassEquipment(data, api, "secutor"),
     afterAction(data, api, runtime) {
       if (data.actorId !== api.ownerId || !["miss", "dodge"].includes(data.outcome)) return data;
-      runtime.pursuit = true;
-      api.emit("modifier.runtime.changed", "Секутор продолжает преследование", { pursuit: true });
-      return data;
+      const check = checkClassTechniqueChance(data, api);
+      if (!check.activated) return check.data;
+      runtime.pursuit = { chance: check.chance, roll: check.roll };
+      api.emit("modifier.runtime.changed", "Секутор продолжает преследование", { pursuit: runtime.pursuit });
+      return check.data;
     },
     beforeSelectActor(data, api, runtime) {
       if (!runtime.pursuit) return data;
-      runtime.pursuit = false;
+      const activation = runtime.pursuit;
+      runtime.pursuit = null;
       api.activate("Неотступное преследование усилило инициативу");
       return { ...data, candidates: data.candidates.map((candidate) => (
         candidate.fighterId === api.ownerId
@@ -417,6 +478,8 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
             ...candidate,
             weight: round(candidate.weight * 1.4),
             classTechnique: "weapon.secutor-relentless-pursuit",
+            classTechniqueChance: activation.chance,
+            classTechniqueRoll: activation.roll,
           }
           : candidate
       )) };
@@ -427,8 +490,14 @@ const CLASS_TECHNIQUE_IMPLEMENTATIONS = {
     beforeAction(data, api, runtime) {
       if (runtime.used || data.actorId !== api.ownerId) return data;
       runtime.used = true;
+      const check = checkClassTechniqueChance(data, api);
+      if (!check.activated) return check.data;
       api.activate("Дистанция копья усилила первый удар");
-      return { ...data, strengthMultiplier: 1.25, classTechnique: "weapon.hoplomachus-spear-distance" };
+      return {
+        ...check.data,
+        strengthMultiplier: 1.25,
+        classTechnique: "weapon.hoplomachus-spear-distance",
+      };
     },
   },
 };
@@ -775,14 +844,16 @@ const createDefaultBattleInput = () => ({
   seed: "arena-001",
   maxSteps: 80,
   arena: {
-    type: "normal",
+    type: "crowd",
     supportMultipliers: [1, 1],
   },
   fighters: [
     {
       id: "fighter-1",
       name: "Маркус",
-      base: { strength: 62, health: 125, charisma: 48 },
+      base: { strength: 62, health: 190, charisma: 48 },
+      criticalChance: COMBAT_RULES.critical.chance,
+      classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "murmillo",
       equipment: {
         weaponSet: { definitionId: "murmillo-arms.good" },
@@ -795,7 +866,9 @@ const createDefaultBattleInput = () => ({
     {
       id: "fighter-2",
       name: "Тит",
-      base: { strength: 54, health: 112, charisma: 68 },
+      base: { strength: 54, health: 160, charisma: 68 },
+      criticalChance: COMBAT_RULES.critical.chance,
+      classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "thraex",
       equipment: {
         weaponSet: { definitionId: "thraex-arms.good" },
@@ -937,6 +1010,8 @@ class BattleEngine {
         name: fighter.name,
         fighterClass: fighter.fighterClass,
         base: clone(fighter.base),
+        criticalChance: fighter.criticalChance,
+        classTechniqueChance: fighter.classTechniqueChance,
         equipment: {
           weaponSet: clone(fighter.equipment.weaponSet),
           armorSet: clone(fighter.equipment.armorSet),
@@ -1028,6 +1103,8 @@ class BattleEngine {
           totalWeight: selected.totalWeight,
           reason: selected.reason || "initiative-weighted-random",
           classTechnique: selected.classTechnique || null,
+          classTechniqueChance: selected.classTechniqueChance ?? data.classTechniqueChance ?? null,
+          classTechniqueRoll: selected.classTechniqueRoll ?? data.classTechniqueRoll ?? null,
         };
       },
     );
@@ -1045,6 +1122,8 @@ class BattleEngine {
         targetId: target.id,
         availableActions: ["attack"],
         classTechnique: selection.classTechnique || null,
+        classTechniqueChance: selection.classTechniqueChance,
+        classTechniqueRoll: selection.classTechniqueRoll,
       },
       (data) => ({ ...data, action: "attack" }),
     );
@@ -1068,6 +1147,9 @@ class BattleEngine {
         criticalRoll: action.criticalRoll,
         critical: action.critical,
         criticalMultiplier: action.criticalMultiplier,
+        classTechnique: action.classTechnique || null,
+        classTechniqueChance: action.classTechniqueChance ?? null,
+        classTechniqueRoll: action.classTechniqueRoll ?? null,
         damage: action.damage,
         impact: action.impact,
       });
@@ -1154,6 +1236,7 @@ class BattleEngine {
         actorFatigueBefore: actor.fatigue,
         targetFatigueBefore: target.fatigue,
         effectiveStrength: round(effectiveStrength),
+        criticalChance: actor.criticalChance,
         ...strike,
         damage,
         traumaChance: round(traumaChance, 4),
@@ -1194,6 +1277,7 @@ class BattleEngine {
       actorFatigueBefore: actor.fatigue,
       targetFatigueBefore: target.fatigue,
       effectiveStrength: round(effectiveStrength),
+      criticalChance: actor.criticalChance,
       ...strike,
       damage,
       traumaChance: round(traumaChance, 4),
@@ -1222,12 +1306,15 @@ class BattleEngine {
   }
 
   finalizeActionDamage(action) {
+    const criticalChance = Number.isFinite(Number(action.criticalChance))
+      ? clamp(Number(action.criticalChance), 0, 1)
+      : COMBAT_RULES.critical.chance;
     if (action.outcome !== "hit") {
       return {
         ...action,
         damage: 0,
         damageBeforeCritical: 0,
-        criticalChance: COMBAT_RULES.critical.chance,
+        criticalChance,
         criticalRoll: null,
         critical: false,
         criticalMultiplier: 1,
@@ -1237,7 +1324,7 @@ class BattleEngine {
     const damageBeforeCritical = Math.max(1, Math.round(action.damage));
     const rawCriticalRoll = this.random();
     const criticalRoll = round(rawCriticalRoll, 6);
-    const critical = rawCriticalRoll < COMBAT_RULES.critical.chance;
+    const critical = rawCriticalRoll < criticalChance;
     const criticalMultiplier = critical ? COMBAT_RULES.critical.damageMultiplier : 1;
     const strikePowerMultiplier = action.strikePowerMultiplier ?? 1;
     const impact = critical
@@ -1250,7 +1337,7 @@ class BattleEngine {
     return {
       ...action,
       damageBeforeCritical,
-      criticalChance: COMBAT_RULES.critical.chance,
+      criticalChance,
       criticalRoll,
       critical,
       criticalMultiplier,
@@ -1629,6 +1716,8 @@ class BattleEngine {
       support: round(fighter.support),
       initiative: round(fighter.initiative),
       fatigue: round(fighter.fatigue),
+      criticalChance: fighter.criticalChance,
+      classTechniqueChance: fighter.classTechniqueChance,
       weaponPower: round(fighter.equipment.weaponPower),
       accuracy: round(fighter.equipment.accuracy),
       armor: round(fighter.equipment.armor),

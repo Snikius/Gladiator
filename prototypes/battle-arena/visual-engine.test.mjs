@@ -57,7 +57,7 @@ const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
 });
 assert.equal(mobileFrame.presentation, "mobile", "Мобильная сцена должна иметь отдельную презентацию");
 assert.equal(mobileFrame.rendererMode, "assets", "Режим ассетов переключается только в визуальном слое");
-assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v9.png");
+assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v14.png");
 assert.equal(mobileFrame.components[0].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID);
 assert.equal(mobileFrame.components[0].animation.equipmentProfileId, "murmillo-armor", "Профиль поз берётся из комплекта брони");
 assert.equal(mobileFrame.components[0].animation.state, "idle.normal");
@@ -94,7 +94,7 @@ const standardMobileFrame = createVisualFrame(standardResult.snapshots[0], stand
 });
 assert.equal(standardMobileFrame.components[0].animation.mirrored, false, "Левый боец смотрит в центр без отражения исходного листа");
 assert.equal(standardMobileFrame.components[1].animation.bodyGridId, UNIFIED_RETIARIUS_GRID_ID, "Ретиарий использует собственный единый лист");
-assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v5.png", "Игра использует атлас ретиария с отдельным броском сети");
+assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v6.png", "Игра использует атлас ретиария с отдельным броском сети");
 assert.notEqual(standardMobileFrame.components[1].assetPath, standardMobileFrame.components[0].assetPath, "Ретиарий не подменяется ассетом мечника");
 assert.equal(standardMobileFrame.components[1].animation.weaponSkinId, "trident", "Трезубец запечён в кадры ретиария");
 assert.equal(standardMobileFrame.components[1].animation.assetHeight, 150, "Оба бойца имеют одинаковый визуальный масштаб");
@@ -124,10 +124,11 @@ assert.equal(
   "Ноги спрайта стоят на линии земли",
 );
 assert.equal(standardMobileFrame.components[0].animation.assetHeight, 150, "Ассет помещается в компактную игровую сцену");
-assert.equal(standardMobileFrame.arena.assetPath, ARENA_BACKGROUNDS.normal.assetPath, "Обычная арена получает каменный фон из библиотеки визуала");
-assert.equal(standardMobileFrame.arena.ambientLights.length, 2, "Каменная арена передаёт два независимых факела");
+assert.equal(standardMobileFrame.arena.assetPath, ARENA_BACKGROUNDS.crowd.assetPath, "Арена со зрителями является новым фоном по умолчанию");
+assert.equal(standardMobileFrame.arena.ambientLights.length, 2, "Арена со зрителями передаёт два независимых факела");
+assert.equal(standardMobileFrame.arena.crowdMotion.length, 16, "Фон толпы получает компактный процедурный слой зрителей");
 assert.equal(standardMobileFrame.arena.groundY, 280, "Линия ног помещается в компактный Canvas высотой 300 px");
-assert.equal(standardMobileFrame.arena.sourceGroundY, 500, "Фон обрезается с сохранением исходной линии земли");
+assert.equal(standardMobileFrame.arena.sourceGroundY, 470, "Новый фон обрезается с сохранением исходной линии земли");
 assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог раненой стойки зафиксирован на 45% здоровья");
 const injuredHealthSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 injuredHealthSnapshot.lastAction = null;
@@ -282,18 +283,44 @@ const sandFrame = createVisualFrame(null, sandInput, undefined, {
 });
 assert.equal(sandFrame.arena.assetPath, ARENA_BACKGROUNDS.sand.assetPath, "Песчаная арена получает самостоятельный фон");
 assert.equal(sandFrame.arena.ambientLights.length, 7, "Песчаная арена передаёт ряд небольших источников света");
+assert.equal(sandFrame.arena.crowdMotion.length, 0, "Песчаная арена не получает слой зрителей новой арены");
+const closedInput = JSON.parse(JSON.stringify(standardInput));
+closedInput.arena.type = "normal";
+const closedFrame = createVisualFrame(null, closedInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(closedFrame.arena.assetPath, ARENA_BACKGROUNDS.normal.assetPath, "Прежний каменный фон сохранён как закрытая арена");
+assert.equal(closedFrame.arena.crowdMotion.length, 0, "Закрытая арена не имитирует движение толпы");
 const loadedBackground = { complete: true, naturalWidth: 360, naturalHeight: 560 };
 const lightRenderer = { loadAsset: () => loadedBackground };
-const normalLights = BattleVisualEngine.prototype.arenaLightSprites.call(
+const crowdLights = BattleVisualEngine.prototype.arenaLightSprites.call(
   lightRenderer,
   360,
   300,
   standardMobileFrame,
   0,
 );
-assert.equal(normalLights.length, 2, "Оба видимых факела каменной арены получают пиксельные спрайты");
-assert.deepEqual(normalLights.map((light) => light.y), [63, 63], "Координаты огня проходят тот же вертикальный crop, что и фон");
-assert.notEqual(normalLights[0].pulse, normalLights[1].pulse, "Разные фазы не дают факелам мерцать синхронно");
+assert.equal(crowdLights.length, 2, "Оба видимых факела новой арены получают пиксельные спрайты");
+assert.deepEqual(crowdLights.map((light) => light.y), [164, 164], "Координаты огня проходят тот же вертикальный crop, что и новый фон");
+assert.notEqual(crowdLights[0].pulse, crowdLights[1].pulse, "Разные фазы не дают факелам мерцать синхронно");
+const crowdRenderer = { loadAsset: () => loadedBackground };
+const crowdAtRest = BattleVisualEngine.prototype.arenaCrowdSprites.call(
+  crowdRenderer,
+  360,
+  300,
+  standardMobileFrame,
+  0,
+);
+const crowdLater = BattleVisualEngine.prototype.arenaCrowdSprites.call(
+  crowdRenderer,
+  360,
+  300,
+  standardMobileFrame,
+  900,
+);
+assert.equal(crowdAtRest.length, 16, "Все описанные зрители находятся в видимом фрагменте Canvas");
+assert.notDeepEqual(crowdLater, crowdAtRest, "Зрители слегка покачиваются и иногда поднимают руки");
 const sandLights = BattleVisualEngine.prototype.arenaLightSprites.call(
   lightRenderer,
   360,
@@ -381,6 +408,24 @@ const swordsmanSpecialActor = swordsmanSpecialFrame.components.find(
 );
 assert.equal(swordsmanSpecialActor.animation.clip, "special", "Прыжок Ахилла использует отдельную строку особого удара");
 assert.equal(Math.abs(swordsmanSpecialActor.motion.x), 14, "Силовой особый удар получает отдельный короткий выпад");
+const murmilloTechniqueInput = createDefaultBattleInput();
+murmilloTechniqueInput.seed = "shield-0";
+murmilloTechniqueInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
+murmilloTechniqueInput.fighters[0].classTechniqueChance = 1;
+const murmilloTechniqueResult = new BattleEngine(murmilloTechniqueInput).simulate();
+const murmilloTechniqueSnapshot = murmilloTechniqueResult.snapshots.find((snapshot) => (
+  snapshot.lastAction?.classTechnique === "weapon.murmillo-shield-advance"
+));
+assert.ok(murmilloTechniqueSnapshot, "Движок создаёт отдельный снимок ответного приёма Мурмиллона");
+const murmilloTechniqueFrame = createVisualFrame(murmilloTechniqueSnapshot, murmilloTechniqueInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const murmilloTechniqueActor = murmilloTechniqueFrame.components.find((component) => (
+  component.fighterId === murmilloTechniqueSnapshot.lastAction.actorId
+));
+assert.equal(murmilloTechniqueActor.animation.clip, "special", "Ответный приём Мурмиллона использует строку special");
+assert.equal(murmilloTechniqueActor.animation.sheet.row, 10, "Классовый приём мечника проигрывает всю одиннадцатую строку атласа");
 const retiariusSpecialSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 retiariusSpecialSnapshot.lastAction = {
   actorId: retiariusSpecialSnapshot.fighters[1].id,
@@ -411,20 +456,73 @@ const criticalFrame = createVisualFrame(criticalSnapshot, standardInput, undefin
 });
 assert.equal(criticalFrame.action.critical, true, "Визуальный кадр сохраняет признак критического попадания");
 assert.equal(criticalFrame.action.impact, "critical", "Категория критического удара доступна эффектам Canvas");
-const bloodParticles = BattleVisualEngine.prototype.criticalBloodParticles.call(null, criticalFrame, 0.65);
-assert.ok(bloodParticles.length >= 6, "В середине критического удара рисуется веер капель крови");
-assert.ok(bloodParticles.every((particle) => particle.alpha > 0 && particle.size >= 2), "Частицы остаются пиксельными и видимыми");
-const nonCriticalSnapshot = JSON.parse(JSON.stringify(criticalSnapshot));
-nonCriticalSnapshot.lastAction.critical = false;
-nonCriticalSnapshot.lastAction.impact = "normal";
-const nonCriticalFrame = createVisualFrame(nonCriticalSnapshot, standardInput, undefined, {
-  presentation: PRESENTATIONS.mobile,
-  rendererMode: RENDERER_MODES.assets,
-});
+const bloodFrameFor = (impact, critical = false, outcome = "hit") => {
+  const snapshot = JSON.parse(JSON.stringify(criticalSnapshot));
+  snapshot.lastAction.critical = critical;
+  snapshot.lastAction.impact = impact;
+  snapshot.lastAction.outcome = outcome;
+  return createVisualFrame(snapshot, standardInput, undefined, {
+    presentation: PRESENTATIONS.mobile,
+    rendererMode: RENDERER_MODES.assets,
+  });
+};
+const bloodAt = (frame, progress) => BattleVisualEngine.prototype.bloodParticles.call(null, frame, progress);
+const lightBlood = bloodAt(bloodFrameFor("light"), 0.65);
+const normalBlood = bloodAt(bloodFrameFor("normal"), 0.65);
+const strongBlood = bloodAt(bloodFrameFor("strong"), 0.65);
+const criticalBlood = bloodAt(criticalFrame, 0.65);
+assert.ok(lightBlood.length > 0, "Даже лёгкое успешное попадание создаёт немного крови");
+assert.ok(
+  lightBlood.length < normalBlood.length
+    && normalBlood.length < strongBlood.length
+    && strongBlood.length < criticalBlood.length,
+  "Количество крови последовательно растёт от лёгкого удара к критическому",
+);
+assert.ok(criticalBlood.length >= 30, "Критический удар создаёт особенно плотный веер крови");
+assert.ok(criticalBlood.some((particle) => particle.size >= 11), "Крит содержит увеличенные крупные сгустки");
+assert.ok(
+  criticalBlood.every((particle) => /^#(?:2c|43|59|6d|7b)/i.test(particle.color)),
+  "Вся кровь использует тёмную бордовую палитру",
+);
+assert.ok(
+  criticalBlood.some((particle) => particle.x < particle.originX)
+    && criticalBlood.some((particle) => particle.x > particle.originX),
+  "При крите частицы разлетаются в обе стороны от точки попадания",
+);
+const criticalEarlyDrop = bloodAt(criticalFrame, 0.45).find((particle) => particle.sourceIndex === 0);
+const criticalLateDrop = bloodAt(criticalFrame, 0.95).find((particle) => particle.sourceIndex === 0);
+assert.ok(criticalLateDrop.y > criticalEarlyDrop.y, "Гравитация опускает каплю после верхней точки траектории");
+assert.deepEqual(bloodAt(bloodFrameFor(null, false, "miss"), 0.65), [], "Промах не создаёт кровь");
+const stainRenderer = {
+  canvas: { width: 360 },
+  bloodStains: [],
+  bloodStainKeys: new Set(),
+};
+const recordedStains = BattleVisualEngine.prototype.recordBloodStains.call(
+  stainRenderer,
+  criticalFrame,
+  "critical-hit:1",
+  1000,
+  0,
+);
+assert.equal(recordedStains.length, 7, "Крит оставляет на полу заметную группу пятен");
+assert.equal(recordedStains[0].width, 12, "Напольные пятна увеличены на 20 процентов");
+assert.equal(recordedStains[0].lifetime, 3120, "Напольные пятна исчезают на 20 процентов дольше");
 assert.deepEqual(
-  BattleVisualEngine.prototype.criticalBloodParticles.call(null, nonCriticalFrame, 0.65),
+  BattleVisualEngine.prototype.recordBloodStains.call(stainRenderer, criticalFrame, "critical-hit:1", 1000, 0),
   [],
-  "Обычный удар не создаёт кровь критического эффекта",
+  "Повторная отрисовка одного снимка не дублирует пятна",
+);
+const freshStains = BattleVisualEngine.prototype.bloodStainSprites.call(stainRenderer, initialFrame, 1400);
+const darkenedStains = BattleVisualEngine.prototype.bloodStainSprites.call(stainRenderer, initialFrame, 2600);
+const redChannel = (stain) => Number(stain.color.match(/\d+/)?.[0]);
+assert.equal(freshStains.length, 7, "Пятна сохраняются после перехода к стойке без lastAction");
+assert.ok(redChannel(darkenedStains[0]) < redChannel(freshStains[0]), "Кровь на полу постепенно темнеет");
+assert.ok(darkenedStains[0].alpha < freshStains[0].alpha, "Пятно постепенно становится прозрачнее");
+assert.deepEqual(
+  BattleVisualEngine.prototype.bloodStainSprites.call(stainRenderer, initialFrame, 5500),
+  [],
+  "Старые пятна полностью исчезают примерно через четыре секунды",
 );
 assert.equal(initialFrame.presentation, PRESENTATIONS.mobile, "Визуальный движок больше не создаёт отладочную Canvas-презентацию");
 assert.equal(

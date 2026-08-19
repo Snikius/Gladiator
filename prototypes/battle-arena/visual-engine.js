@@ -16,16 +16,59 @@ const RENDERER_MODES = Object.freeze({ lines: "lines", assets: "assets" });
 const POSITION_STAGES = Object.freeze({ entrance: "entrance", combat: "combat" });
 const INJURED_HEALTH_RATIO = 0.45;
 const PRESSURE_STEP_DISTANCE = 6;
-const CRITICAL_BLOOD_PATTERN = Object.freeze([
-  Object.freeze({ distance: 32, lift: 18, gravity: 10, size: 3, delay: 0, color: "#a91414" }),
-  Object.freeze({ distance: 25, lift: 27, gravity: 13, size: 2, delay: 0.04, color: "#731010" }),
-  Object.freeze({ distance: 39, lift: 9, gravity: 18, size: 2, delay: 0.08, color: "#c3261b" }),
-  Object.freeze({ distance: 19, lift: 34, gravity: 17, size: 2, delay: 0.12, color: "#8d1111" }),
-  Object.freeze({ distance: 46, lift: 22, gravity: 24, size: 2, delay: 0.16, color: "#5f0b0b" }),
-  Object.freeze({ distance: 29, lift: 4, gravity: 29, size: 3, delay: 0.2, color: "#b71c16" }),
-  Object.freeze({ distance: 15, lift: 20, gravity: 25, size: 2, delay: 0.24, color: "#7b0d0d" }),
-  Object.freeze({ distance: 36, lift: 31, gravity: 28, size: 2, delay: 0.28, color: "#99130f" }),
+const BLOOD_PATTERN = Object.freeze([
+  Object.freeze({ distance: 12, lift: 5, gravity: 4, size: 9, delay: 0, color: "#e13728" }),
+  Object.freeze({ distance: 20, lift: 13, gravity: 6, size: 8, delay: 0.01, color: "#c91f1a" }),
+  Object.freeze({ distance: 29, lift: 2, gravity: 8, size: 7, delay: 0.02, color: "#9d1513" }),
+  Object.freeze({ distance: 37, lift: 24, gravity: 10, size: 6, delay: 0.03, color: "#d62b20" }),
+  Object.freeze({ distance: 48, lift: 35, gravity: 14, size: 5, delay: 0.05, color: "#8d1111" }),
+  Object.freeze({ distance: 61, lift: 16, gravity: 18, size: 5, delay: 0.07, color: "#c3261b" }),
+  Object.freeze({ distance: 73, lift: 43, gravity: 22, size: 4, delay: 0.09, color: "#a91414" }),
+  Object.freeze({ distance: 84, lift: 27, gravity: 26, size: 4, delay: 0.11, color: "#731010" }),
+  Object.freeze({ distance: 55, lift: 52, gravity: 28, size: 4, delay: 0.13, color: "#b71916" }),
+  Object.freeze({ distance: 42, lift: 61, gravity: 31, size: 3, delay: 0.15, color: "#99130f" }),
+  Object.freeze({ distance: 94, lift: 36, gravity: 34, size: 3, delay: 0.17, color: "#d62b20" }),
+  Object.freeze({ distance: 68, lift: 7, gravity: 39, size: 5, delay: 0.19, color: "#7b0d0d" }),
+  Object.freeze({ distance: 52, lift: -8, gravity: 45, size: 4, delay: 0.21, color: "#5f0b0b" }),
+  Object.freeze({ distance: 33, lift: 39, gravity: 38, size: 4, delay: 0.23, color: "#e13728" }),
+  Object.freeze({ distance: 103, lift: 51, gravity: 46, size: 3, delay: 0.25, color: "#8d1111" }),
+  Object.freeze({ distance: 88, lift: 12, gravity: 52, size: 3, delay: 0.27, color: "#c3261b" }),
+  Object.freeze({ distance: 64, lift: 68, gravity: 50, size: 3, delay: 0.29, color: "#731010" }),
+  Object.freeze({ distance: 46, lift: 21, gravity: 55, size: 3, delay: 0.31, color: "#a91414" }),
+  Object.freeze({ distance: 112, lift: 33, gravity: 61, size: 3, delay: 0.33, color: "#5f0b0b" }),
+  Object.freeze({ distance: 78, lift: 58, gravity: 58, size: 2, delay: 0.35, color: "#d62b20" }),
+  Object.freeze({ distance: 58, lift: 4, gravity: 64, size: 3, delay: 0.37, color: "#8d1111" }),
+  Object.freeze({ distance: 97, lift: 73, gravity: 68, size: 2, delay: 0.39, color: "#b71916" }),
+  Object.freeze({ distance: 121, lift: 17, gravity: 72, size: 2, delay: 0.41, color: "#731010" }),
+  Object.freeze({ distance: 70, lift: 31, gravity: 74, size: 2, delay: 0.43, color: "#c3261b" }),
+  Object.freeze({ distance: 39, lift: 52, gravity: 69, size: 2, delay: 0.45, color: "#99130f" }),
+  Object.freeze({ distance: 108, lift: 62, gravity: 77, size: 2, delay: 0.47, color: "#5f0b0b" }),
+  Object.freeze({ distance: 86, lift: -3, gravity: 81, size: 2, delay: 0.49, color: "#a91414" }),
+  Object.freeze({ distance: 126, lift: 45, gravity: 84, size: 2, delay: 0.51, color: "#7b0d0d" }),
+  Object.freeze({ distance: 34, lift: 78, gravity: 86, size: 3, delay: 0.53 }),
+  Object.freeze({ distance: 139, lift: 25, gravity: 92, size: 2, delay: 0.55 }),
+  Object.freeze({ distance: 116, lift: 82, gravity: 96, size: 2, delay: 0.57 }),
+  Object.freeze({ distance: 74, lift: -12, gravity: 101, size: 3, delay: 0.59 }),
+  Object.freeze({ distance: 148, lift: 57, gravity: 106, size: 2, delay: 0.61 }),
+  Object.freeze({ distance: 51, lift: 93, gravity: 109, size: 2, delay: 0.63 }),
+  Object.freeze({ distance: 131, lift: 4, gravity: 114, size: 2, delay: 0.65 }),
+  Object.freeze({ distance: 96, lift: 71, gravity: 118, size: 2, delay: 0.67 }),
 ]);
+const BLOOD_COLORS = Object.freeze(["#2c050b", "#430711", "#590916", "#6d0c1a", "#7b101e"]);
+const BLOOD_IMPACT_PROFILES = Object.freeze({
+  light: Object.freeze({ count: 6, size: 0.48, distance: 0.38, lift: 0.5, gravity: 0.85, alphaFade: 0.76 }),
+  normal: Object.freeze({ count: 12, size: 0.66, distance: 0.58, lift: 0.68, gravity: 1, alphaFade: 0.68 }),
+  strong: Object.freeze({ count: 22, size: 0.9, distance: 0.86, lift: 0.88, gravity: 1.2, alphaFade: 0.6 }),
+  critical: Object.freeze({ count: 36, size: 1.28, distance: 1.22, lift: 1.05, gravity: 1.65, alphaFade: 0.46 }),
+});
+const BLOOD_STAIN_PROFILES = Object.freeze({
+  light: Object.freeze({ count: 1, scale: 0.75 }),
+  normal: Object.freeze({ count: 2, scale: 0.95 }),
+  strong: Object.freeze({ count: 4, scale: 1.15 }),
+  critical: Object.freeze({ count: 7, scale: 1.4 }),
+});
+const BLOOD_STAIN_SIZE_MULTIPLIER = 1.2;
+const BLOOD_STAIN_LIFETIME_MULTIPLIER = 1.2;
 
 const fighterFromInput = (fighter) => ({
   id: fighter.id,
@@ -148,7 +191,7 @@ const createVisualFrame = (
   } = {},
 ) => {
   const config = presentationConfig(presentation);
-  const arenaType = snapshot?.arena?.type || input.arena?.type || "normal";
+  const arenaType = snapshot?.arena?.type || input.arena?.type || "crowd";
   const arenaBackground = spriteLibrary.resolveArenaBackground(arenaType);
   const sourceFighters = snapshot?.fighters || input.fighters.map(fighterFromInput);
   const fighters = sourceFighters.map((fighter, index) => ({
@@ -258,6 +301,7 @@ const createVisualFrame = (
       assetPath: arenaBackground.assetPath,
       sourceGroundY: arenaBackground.groundY,
       ambientLights: freeze((arenaBackground.ambientLights || []).map((light) => freeze({ ...light }))),
+      crowdMotion: freeze((arenaBackground.crowdMotion || []).map((spectator) => freeze({ ...spectator }))),
       groundY: config.groundY,
       initiativePressure: pressure.initiative,
       healthPressure: pressure.health,
@@ -302,6 +346,8 @@ class BattleVisualEngine {
     this.playbackToken = 0;
     this.approachPending = true;
     this.territoryOffset = 0;
+    this.bloodStains = [];
+    this.bloodStainKeys = new Set();
   }
 
   setRendererMode(rendererMode) {
@@ -333,11 +379,18 @@ class BattleVisualEngine {
     const movementFrame = initialApproach?.movementFrame
       || this.createPressureMovementFrame(snapshot, input, actionFrame);
     const recoveryFrame = this.createRecoveryFrame(snapshot, input, territoryOffset);
+    const bloodStainKey = [
+      snapshot?.step ?? snapshot?.label ?? "frame",
+      actionFrame.action?.actorId,
+      actionFrame.action?.targetId,
+      actionFrame.action?.impact,
+    ].join(":");
     this.stop();
     const token = this.playbackToken;
     this.approachPending = false;
     this.territoryOffset = territoryOffset;
     if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      this.recordBloodStains(actionFrame, bloodStainKey, performance.now(), 0);
       this.setFrame(recoveryFrame || actionFrame);
       this.draw(1, 0);
       return actionFrame;
@@ -345,7 +398,11 @@ class BattleVisualEngine {
     const playRecovery = recoveryFrame
       ? () => this.playFrame(recoveryFrame, token)
       : null;
-    const playAction = () => this.playFrame(actionFrame, token, playRecovery);
+    const playAction = () => {
+      const actionDuration = Math.max(...actionFrame.components.map((component) => component.motion.duration), 0);
+      this.recordBloodStains(actionFrame, bloodStainKey, performance.now(), actionDuration * 0.38);
+      this.playFrame(actionFrame, token, playRecovery);
+    };
     if (initialApproach) {
       this.setFrame(initialApproach.startFrame);
       this.draw(0, 0);
@@ -367,6 +424,8 @@ class BattleVisualEngine {
     this.transitionFrom = new Map();
     this.approachPending = true;
     this.territoryOffset = 0;
+    this.bloodStains = [];
+    this.bloodStainKeys.clear();
   }
 
   createInitialApproach(snapshot, input) {
@@ -509,7 +568,9 @@ class BattleVisualEngine {
     context.fillRect(0, 0, canvas.width, canvas.height);
     const backgroundDrawn = this.drawArenaBackground(context, canvas.width, canvas.height, frame);
     this.drawArenaLights(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
+    this.drawArenaCrowd(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
     this.drawArenaGuides(context, canvas.width, canvas.height, frame, backgroundDrawn);
+    this.drawBloodStains(context, frame, performance.now());
     const fighters = frame.components.filter((component) => component.kind === "fighter");
     const weapons = frame.components.filter((component) => component.kind === "weapon");
     weapons.filter((component) => this.weaponLayer(component, progress, animationClock) === "behind")
@@ -517,46 +578,127 @@ class BattleVisualEngine {
     fighters.forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
     weapons.filter((component) => this.weaponLayer(component, progress, animationClock) !== "behind")
       .forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
-    this.drawCriticalBlood(context, frame, progress);
+    this.drawBlood(context, frame, progress);
   }
 
-  criticalBloodParticles(frame, progress) {
-    if (!frame.action?.critical || frame.action.outcome !== "hit") return [];
+  bloodParticles(frame, progress) {
+    if (frame.action?.outcome !== "hit") return [];
+    const impact = frame.action.critical ? "critical" : frame.action.impact || "normal";
+    const profile = BLOOD_IMPACT_PROFILES[impact] || BLOOD_IMPACT_PROFILES.normal;
     const target = frame.components.find((component) => (
       component.kind === "fighter" && component.fighterId === frame.action.targetId
     ));
     if (!target) return [];
-    const burstProgress = clamp((progress - 0.28) / 0.62, 0, 1);
+    const burstProgress = clamp((progress - 0.1) / 0.9, 0, 1);
     if (burstProgress <= 0) return [];
     const awayFromAttacker = -target.transform.direction;
     const assetHeight = target.animation?.assetHeight || 150;
     const originX = target.transform.x + awayFromAttacker * 4;
     const originY = target.transform.y - assetHeight * 0.52;
-    return CRITICAL_BLOOD_PATTERN.flatMap((particle) => {
+    return BLOOD_PATTERN.slice(0, profile.count).flatMap((particle, index) => {
       const flight = clamp(
         (burstProgress - particle.delay) / Math.max(0.01, 1 - particle.delay),
         0,
         1,
       );
       if (flight <= 0) return [];
+      /* Основной веер летит от атакующего, но часть капель отскакивает в
+       * противоположную сторону. На крите обратный разлёт шире. */
+      const reverse = index % (impact === "critical" ? 4 : 6) === 0;
+      const horizontalDirection = reverse
+        ? -(impact === "critical" ? 0.5 + (index % 3) * 0.16 : 0.32)
+        : 0.76 + (index % 4) * 0.1;
+      const gravity = particle.gravity * profile.gravity;
       return [freeze({
-        x: Math.round(originX + awayFromAttacker * particle.distance * flight),
-        y: Math.round(originY - particle.lift * flight + particle.gravity * flight ** 2),
-        size: particle.size,
-        color: particle.color,
-        alpha: clamp(1 - flight * 0.78, 0, 1),
+        sourceIndex: index,
+        impact,
+        originX,
+        x: Math.round(originX + awayFromAttacker * horizontalDirection * particle.distance * profile.distance * flight),
+        y: Math.round(originY - particle.lift * profile.lift * flight + gravity * flight ** 2),
+        size: Math.max(1, Math.round(particle.size * profile.size)),
+        color: BLOOD_COLORS[index % BLOOD_COLORS.length],
+        alpha: clamp(0.94 - flight * profile.alphaFade, 0.12, 1),
       })];
     });
   }
 
-  drawCriticalBlood(context, frame, progress) {
-    const particles = this.criticalBloodParticles(frame, progress);
+  drawBlood(context, frame, progress) {
+    const particles = this.bloodParticles(frame, progress);
     if (!particles.length) return;
     context.save();
     particles.forEach((particle) => {
       context.globalAlpha = particle.alpha;
       context.fillStyle = particle.color;
       context.fillRect(particle.x, particle.y, particle.size, particle.size);
+    });
+    context.restore();
+  }
+
+  recordBloodStains(frame, key, now = performance.now(), delayMs = 0) {
+    if (frame.action?.outcome !== "hit" || this.bloodStainKeys.has(key)) return [];
+    const target = frame.components.find((component) => (
+      component.kind === "fighter" && component.fighterId === frame.action.targetId
+    ));
+    if (!target) return [];
+    const impact = frame.action.critical ? "critical" : frame.action.impact || "normal";
+    const profile = BLOOD_STAIN_PROFILES[impact] || BLOOD_STAIN_PROFILES.normal;
+    const awayFromAttacker = -target.transform.direction;
+    const offsets = [7, -5, 15, -13, 23, -21, 31];
+    const created = offsets.slice(0, profile.count).map((offset, index) => freeze({
+      key: `${key}:${index}`,
+      impact,
+      createdAt: now + delayMs + index * 45,
+      lifetime: Math.round((2600 + index * 110) * BLOOD_STAIN_LIFETIME_MULTIPLIER),
+      x: clamp(Math.round(target.transform.x + awayFromAttacker * offset), 4, this.canvas.width - 4),
+      y: frame.arena.groundY + 3 + (index * 5) % 14,
+      width: Math.max(3, Math.round((7 - index % 3) * profile.scale * BLOOD_STAIN_SIZE_MULTIPLIER)),
+      height: Math.max(2, Math.round((3 + index % 2) * profile.scale * BLOOD_STAIN_SIZE_MULTIPLIER)),
+    }));
+    this.bloodStainKeys.add(key);
+    this.bloodStains = [...this.bloodStains, ...created].slice(-36);
+    return created;
+  }
+
+  bloodStainSprites(frame, now = performance.now()) {
+    const visible = [];
+    this.bloodStains = this.bloodStains.filter((stain) => {
+      const age = now - stain.createdAt;
+      if (age >= stain.lifetime) return false;
+      if (age < 0) return true;
+      const progress = clamp(age / stain.lifetime, 0, 1);
+      const fade = progress < 0.24 ? 1 : 1 - (progress - 0.24) / 0.76;
+      const red = Math.round(92 - 61 * progress);
+      const green = Math.round(10 - 6 * progress);
+      const blue = Math.round(23 - 14 * progress);
+      visible.push(freeze({
+        ...stain,
+        color: `rgb(${red}, ${green}, ${blue})`,
+        alpha: clamp(0.78 * fade, 0, 0.78),
+      }));
+      return true;
+    });
+    return visible;
+  }
+
+  drawBloodStains(context, frame, now = performance.now()) {
+    const stains = this.bloodStainSprites(frame, now);
+    if (!stains.length) return;
+    context.save();
+    stains.forEach((stain) => {
+      context.globalAlpha = stain.alpha;
+      context.fillStyle = stain.color;
+      context.fillRect(
+        Math.round(stain.x - stain.width / 2),
+        stain.y,
+        stain.width,
+        stain.height,
+      );
+      context.fillRect(
+        stain.x + (stain.x % 2 ? stain.width : -stain.width),
+        stain.y + stain.height,
+        Math.max(1, Math.round(stain.width / 3)),
+        1,
+      );
     });
     context.restore();
   }
@@ -656,6 +798,70 @@ class BattleVisualEngine {
       context.fillRect(light.x, light.y - unit * 4, unit, unit * 3);
       context.fillStyle = "#ffd56a";
       context.fillRect(light.x - unit, light.y - unit * 2, unit, unit * 2);
+    });
+    context.restore();
+  }
+
+  arenaCrowdSprites(width, height, frame, animationClock = 0) {
+    if (frame.rendererMode !== RENDERER_MODES.assets || !frame.arena.crowdMotion?.length) return [];
+    const image = this.loadAsset(frame.arena.assetPath);
+    if (!image?.complete || !image.naturalWidth) return [];
+    const sourceHeight = Math.min(image.naturalHeight, height);
+    const sourceY = Math.min(
+      image.naturalHeight - sourceHeight,
+      Math.max(0, (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY),
+    );
+    const scaleX = width / image.naturalWidth;
+    const scaleY = height / sourceHeight;
+    const seconds = animationClock / 1000;
+    return frame.arena.crowdMotion.flatMap((spectator) => {
+      const x = spectator.x * scaleX;
+      const y = (spectator.y - sourceY) * scaleY;
+      if (x < -8 || x > width + 8 || y < -8 || y > height + 8) return [];
+      const phase = (spectator.phase || 0) * Math.PI * 2;
+      const sway = Math.sin(seconds * 1.7 + phase);
+      const bob = Math.sin(seconds * 2.25 + phase * 1.35);
+      const cheerWave = Math.sin(seconds * 0.96 + phase * 1.9);
+      const cheer = cheerWave > 0.58;
+      const armLift = cheer ? 1 + (cheerWave > 0.86 ? 1 : 0) : 0;
+      return [freeze({
+        x: Math.round(x + sway * 1.7),
+        y: Math.round(y - Math.max(0, bob) - armLift),
+        scale: Math.max(1, Math.round((spectator.scale || 1) * scaleY)),
+        cheer,
+        armLift,
+        alpha: 0.3 + (sway + 1) * 0.065,
+      })];
+    });
+  }
+
+  drawArenaCrowd(context, width, height, frame, animationClock, backgroundDrawn = false) {
+    if (!backgroundDrawn) return;
+    const spectators = this.arenaCrowdSprites(width, height, frame, animationClock);
+    if (!spectators.length) return;
+    context.save();
+    spectators.forEach((spectator) => {
+      const unit = spectator.scale;
+      context.globalAlpha = spectator.alpha;
+      context.fillStyle = "#c1844e";
+      context.fillRect(spectator.x - unit, spectator.y - unit * 3, unit * 2, unit * 2);
+      context.fillStyle = "#4b2419";
+      context.fillRect(spectator.x - unit, spectator.y - unit, unit * 2, unit * 3);
+      if (spectator.cheer) {
+        context.fillStyle = "#9a5a35";
+        context.fillRect(
+          spectator.x - unit * 2,
+          spectator.y - unit * (3 + spectator.armLift),
+          unit,
+          unit * (3 + spectator.armLift),
+        );
+        context.fillRect(
+          spectator.x + unit,
+          spectator.y - unit * (4 + spectator.armLift),
+          unit,
+          unit * (4 + spectator.armLift),
+        );
+      }
     });
     context.restore();
   }

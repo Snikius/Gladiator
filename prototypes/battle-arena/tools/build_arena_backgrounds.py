@@ -11,6 +11,10 @@ ASSETS = ROOT / "assets"
 TARGET_SIZE = (360, 560)
 BACKGROUNDS = (
     (
+        ASSETS / "arena-crowd-background-source-v1.png",
+        ASSETS / "arena-crowd-background-v1.png",
+    ),
+    (
         ASSETS / "arena-normal-background-source-v1.png",
         ASSETS / "arena-normal-background-v1.png",
     ),

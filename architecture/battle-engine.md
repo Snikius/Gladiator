@@ -69,6 +69,8 @@ interface EquipmentInstanceRef {
 interface FighterInput {
   id: string;
   fighterClass: FighterClassId;
+  criticalChance: number;
+  classTechniqueChance: number;
   base: {
     strength: number;
     health: number;
@@ -627,7 +629,16 @@ interface BattleSnapshot {
 приёма либо `specialAttack` с id атакующего перка оружия. Это не номера кадров и
 не команды рендера: поля входят в replay как причина изменённого боевого
 действия, а визуальный адаптер уже самостоятельно сопоставляет их состоянию
-`special`. Защитная реакция Мурмиллона остаётся в `equipmentReaction`.
+`special`. Защитная часть приёма Мурмиллона остаётся в `equipmentReaction`, а
+следующий ответный удар получает `classTechnique =
+"weapon.murmillo-shield-advance"` и множитель силы `1.25`.
+
+Каждый боец также передаёт `classTechniqueChance` в диапазоне `0…1`.
+При каждом подходящем для конкретной техники событии движок выполняет отдельный
+`classTechniqueRoll`; при `roll >= chance` техника не срабатывает. Дефолт
+прототипа — `0.10`, а симулятор предлагает `0/3/5/10/30/50%`. Успешная проверка
+сохраняет шанс и бросок в действии; каждая проверка, включая неуспешную,
+фиксируется событием `modifier.chance.checked`.
 
 Для успешного попадания `ActionResultData` дополнительно содержит техническую
 трассировку силы и критической проверки:
@@ -637,10 +648,12 @@ interface HitActionResultData extends ActionResultData {
   strikePowerRoll: number;
   strikePowerMultiplier: number; // 0.85…1.15
   damageBeforeCritical: number;
-  criticalChance: 0.03;
+  criticalChance: number; // индивидуальное fighter.criticalChance, 0…1
   criticalRoll: number;
   critical: boolean;
   criticalMultiplier: 1 | 2;
+  classTechniqueChance?: number;
+  classTechniqueRoll?: number;
   damage: number;
   impact: "light" | "normal" | "strong" | "critical";
 }
@@ -648,7 +661,9 @@ interface HitActionResultData extends ActionResultData {
 
 Эти поля записываются в событие `action.damage.resolved`, технический replay и
 пошаговый снимок. Игровая лента использует только `impact`; источником точных
-чисел она не является. Формула и временный TODO для развития критического шанса
+чисел она не является. Шанс хранится во входе каждого бойца отдельно; дефолт
+равен `0.03`, а симулятор ограничивает выбор значениями `0/3/5/10/30/50%`.
+Формула и временный TODO для развития критического шанса
 зафиксированы в
 [`combat-spec/02-combat-mechanics.md`](../combat-spec/02-combat-mechanics.md).
 

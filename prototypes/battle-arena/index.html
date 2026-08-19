@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=26" />
+    <link rel="stylesheet" href="./styles.css?v=29" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
-    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v9.png" />
-    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v5.png" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
+    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v6.png" />
     <link rel="preload" as="image" href="./assets/unified-swordsman-character-reference-v1.png" />
     <link rel="preload" as="image" href="./assets/unified-retiarius-character-reference-v1.png" />
+    <link rel="preload" as="image" href="./assets/arena-crowd-background-v1.png" />
     <link rel="preload" as="image" href="./assets/arena-normal-background-v1.png" />
     <link rel="preload" as="image" href="./assets/arena-sand-background-v2.png" />
   </head>
@@ -78,8 +79,18 @@
               <div class="equipment-picker" data-equipment-picker="0"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="62" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="125" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="190" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="48" /></label>
+              </div>
+              <div class="fighter-chance-grid">
+                <label><span>Критический удар</span><select data-field="criticalChance">
+                  <option value="0">0%</option><option value="0.03" selected>3%</option><option value="0.05">5%</option>
+                  <option value="0.1">10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                </select></label>
+                <label><span>Классовый приём</span><select data-field="classTechniqueChance">
+                  <option value="0">0%</option><option value="0.03">3%</option><option value="0.05">5%</option>
+                  <option value="0.1" selected>10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                </select></label>
               </div>
               <div class="perk-list" data-perks="0"></div>
             </fieldset>
@@ -93,8 +104,18 @@
               <div class="equipment-picker" data-equipment-picker="1"></div>
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="100" value="54" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="112" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="300" value="160" /></label>
                 <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="100" value="68" /></label>
+              </div>
+              <div class="fighter-chance-grid">
+                <label><span>Критический удар</span><select data-field="criticalChance">
+                  <option value="0">0%</option><option value="0.03" selected>3%</option><option value="0.05">5%</option>
+                  <option value="0.1">10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                </select></label>
+                <label><span>Классовый приём</span><select data-field="classTechniqueChance">
+                  <option value="0">0%</option><option value="0.03">3%</option><option value="0.05">5%</option>
+                  <option value="0.1" selected>10%</option><option value="0.3">30%</option><option value="0.5">50%</option>
+                </select></label>
               </div>
               <div class="perk-list" data-perks="1"></div>
             </fieldset>
@@ -222,9 +243,10 @@
     </main>
 
     <script src="./reference-data.js?v=2"></script>
-    <script src="./battle-engine.js?v=22"></script>
-    <script src="./sprite-library.js?v=19"></script>
-    <script src="./visual-engine.js?v=17"></script>
-    <script src="./app.js?v=46"></script>
+    <script src="./battle-engine.js?v=26"></script>
+    <script src="./sprite-library.js?v=25"></script>
+    <script src="./visual-engine.js?v=23"></script>
+    <script src="./battle-story.js?v=1"></script>
+    <script src="./app.js?v=49"></script>
   </body>
 </html>
