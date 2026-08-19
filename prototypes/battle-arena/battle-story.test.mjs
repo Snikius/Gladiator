@@ -4,7 +4,23 @@ import "./battle-engine.js";
 import "./battle-story.js";
 
 const { BattleEngine, createDefaultBattleInput } = globalThis.GladiatorBattle;
-const { buildBattleStoryEntries } = globalThis.GladiatorBattleStory;
+const { buildBattleStoryEntries, fighterBloodLevels } = globalThis.GladiatorBattleStory;
+
+assert.deepEqual(
+  fighterBloodLevels({
+    fighters: [
+      { health: 210, maxHealth: 210 },
+      { health: 90, maxHealth: 180 },
+    ],
+  }),
+  [0, 0.5],
+  "Кровь на сторонах журнала пропорциональна потерянному здоровью",
+);
+assert.deepEqual(
+  fighterBloodLevels({ fighters: [{ health: -20, maxHealth: 180 }] }),
+  [1],
+  "У поверженного бойца интенсивность пятен ограничивается единицей",
+);
 
 const conditionedInput = createDefaultBattleInput();
 conditionedInput.fighters[0].buffs = ["bath-effect", "bath-effect", "wine"];

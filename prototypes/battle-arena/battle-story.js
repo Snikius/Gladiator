@@ -65,6 +65,12 @@ const receivedTraumas = (snapshot) => snapshot.fighters.flatMap((fighter) => (
     .map((trauma) => ({ fighter, trauma }))
 ));
 
+const fighterBloodLevels = (snapshot) => (snapshot?.fighters || []).map((fighter) => {
+  const maxHealth = Math.max(1, Number(fighter.maxHealth) || 1);
+  const health = Math.max(0, Number(fighter.health) || 0);
+  return Math.max(0, Math.min(1, 1 - health / maxHealth));
+});
+
 const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
   if (!result || !currentSnapshot) return [];
   const entries = initialConditionEntries(result.input);
@@ -92,6 +98,7 @@ globalThis.GladiatorBattleStory = Object.freeze({
   actionClass,
   actionText,
   buildBattleStoryEntries,
+  fighterBloodLevels,
   initialConditionEntries,
 });
 })();

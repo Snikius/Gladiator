@@ -18,7 +18,7 @@ const {
 } = globalThis.GladiatorBattle;
 
 const { BattleVisualEngine, RENDERER_MODES } = globalThis.GladiatorVisualEngine || {};
-const { buildBattleStoryEntries } = globalThis.GladiatorBattleStory;
+const { buildBattleStoryEntries, fighterBloodLevels } = globalThis.GladiatorBattleStory;
 
 const elements = {
   form: document.querySelector("#setup-form"),
@@ -31,6 +31,7 @@ const elements = {
   restoreDefaults: document.querySelector("#restore-defaults"),
   spriteVisualCanvas: document.querySelector("#mobile-arena-canvas"),
   mobileArenaHeader: document.querySelector("#mobile-arena-header"),
+  mobileBattleStory: document.querySelector(".mobile-battle-story"),
   mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
   arenaName: document.querySelector("#arena-name"),
   arenaSeed: document.querySelector("#arena-seed"),
@@ -433,6 +434,12 @@ const meterRow = (label, value, max, className, displayValue = null) => {
 
 const renderMobileBattleUi = (snapshot, input) => {
   if (!snapshot || !elements.mobileArenaHeader || !elements.mobileBattleFeed) return;
+  fighterBloodLevels(snapshot).forEach((level, index) => {
+    const bloodLayer = elements.mobileBattleStory
+      ?.querySelector(`.mobile-story-blood.side-${index + 1}`);
+    bloodLayer?.style.setProperty("--blood-opacity", (level * 0.46).toFixed(3));
+    bloodLayer?.style.setProperty("--blood-scale", (0.72 + level * 0.34).toFixed(3));
+  });
   const arena = arenaName(snapshot.arena?.type || input.arena.type);
   const fighters = snapshot.fighters.map((fighter, index) => {
     const health = Math.max(0, fighter.health);

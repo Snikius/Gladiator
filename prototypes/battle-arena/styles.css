@@ -996,6 +996,7 @@ a.button {
   border-radius: 50%;
   box-shadow: 0 2px 0 #2a1b10, inset 0 0 7px #000;
   font-size: 13px;
+  z-index: 3;
 }
 
 .mobile-battle-story::after {
@@ -1009,10 +1010,45 @@ a.button {
   font-size: 11px;
   letter-spacing: .3em;
   text-align: center;
+  z-index: 2;
+}
+
+.mobile-story-blood {
+  --blood-opacity: 0;
+  --blood-scale: .72;
+  position: absolute;
+  top: 22px;
+  bottom: 10px;
+  z-index: 0;
+  width: 45%;
+  pointer-events: none;
+  opacity: var(--blood-opacity);
+  background:
+    radial-gradient(ellipse at 18% 24%, rgba(73, 4, 13, .9) 0 5%, rgba(96, 7, 18, .72) 6% 10%, transparent 12%),
+    radial-gradient(ellipse at 42% 56%, rgba(84, 5, 15, .8) 0 7%, rgba(109, 9, 22, .55) 8% 13%, transparent 15%),
+    radial-gradient(circle at 12% 77%, rgba(65, 3, 11, .85) 0 4%, transparent 7%),
+    radial-gradient(ellipse at 66% 83%, rgba(103, 8, 21, .7) 0 5%, transparent 9%);
+  filter: saturate(1.2) contrast(1.08);
+  mix-blend-mode: multiply;
+  transition: opacity .35s ease, transform .35s ease;
+}
+
+.mobile-story-blood.side-1 {
+  left: -4%;
+  transform: rotate(-4deg) scale(var(--blood-scale));
+  transform-origin: left center;
+}
+
+.mobile-story-blood.side-2 {
+  right: -4%;
+  transform: scaleX(-1) rotate(-4deg) scale(var(--blood-scale));
+  transform-origin: right center;
 }
 
 .mobile-story-title {
   display: grid;
+  position: relative;
+  z-index: 2;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 8px;
@@ -1055,6 +1091,8 @@ a.button {
 
 .mobile-battle-feed {
   display: grid;
+  position: relative;
+  z-index: 2;
   gap: 5px;
   margin: 7px 0 0;
   padding: 0;
@@ -1079,6 +1117,13 @@ a.button {
   font-size: 5px;
 }
 
+.mobile-battle-feed li > span {
+  position: relative;
+  text-shadow:
+    0 1px rgba(205, 168, 116, .82),
+    0 0 3px rgba(205, 168, 116, .48);
+}
+
 .mobile-battle-feed li.impact-light {
   border-color: #735144;
 }
@@ -1092,8 +1137,13 @@ a.button {
 }
 
 .mobile-battle-feed li.impact-critical {
-  color: #c49a55;
-  border-color: #c49a55;
+  padding: 2px 4px 2px 10px;
+  color: #5a0713;
+  background: linear-gradient(90deg, rgba(91, 5, 18, .18), rgba(91, 5, 18, 0));
+  border-color: #4a0610;
+  font-size: 10px;
+  font-weight: 800;
+  text-shadow: 0 1px rgba(211, 159, 112, .32);
 }
 
 .mobile-battle-feed li.outcome-miss {
