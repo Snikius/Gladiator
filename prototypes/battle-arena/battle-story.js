@@ -82,6 +82,17 @@ const bloodStainProgress = (bloodLevel, stainIndex) => {
   return Math.max(0, Math.min(1, (bloodLevel - threshold) / (1 - threshold)));
 };
 
+/* Визуальная случайность должна быть стабильной между render-вызовами, иначе
+ * пятно дрожит. Id бойца и номер пятна задают постоянный предел роста 0.58…1. */
+const bloodStainGrowthLimit = (fighterId, stainIndex) => {
+  const key = `${fighterId}:${stainIndex}`;
+  const hash = [...key].reduce(
+    (value, character) => Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0,
+    2166136261,
+  );
+  return Number((0.58 + (hash % 43) / 100).toFixed(2));
+};
+
 const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
   if (!result || !currentSnapshot) return [];
   const entries = initialConditionEntries(result.input);
@@ -109,6 +120,7 @@ globalThis.GladiatorBattleStory = Object.freeze({
   BLOOD_STAIN_THRESHOLDS,
   actionClass,
   actionText,
+  bloodStainGrowthLimit,
   bloodStainProgress,
   buildBattleStoryEntries,
   fighterBloodLevels,

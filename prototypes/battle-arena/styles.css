@@ -1046,7 +1046,7 @@ a.button {
   filter: saturate(1.25) contrast(1.1);
   transform: scale(var(--stain-scale));
   transform-origin: center;
-  transition: opacity .35s ease, transform .35s ease;
+  transition: opacity .7s ease, transform .7s ease;
 }
 
 .mobile-story-stain:nth-child(1) {

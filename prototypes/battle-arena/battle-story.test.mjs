@@ -5,6 +5,7 @@ import "./battle-story.js";
 
 const { BattleEngine, createDefaultBattleInput } = globalThis.GladiatorBattle;
 const {
+  bloodStainGrowthLimit,
   bloodStainProgress,
   buildBattleStoryEntries,
   fighterBloodLevels,
@@ -36,6 +37,17 @@ assert.ok(
   bloodStainProgress(0.5, 0) > bloodStainProgress(0.2, 0),
   "Старое пятно продолжает увеличиваться после появления новых",
 );
+const growthLimits = ["fighter-1", "fighter-2"].flatMap((fighterId) => (
+  [0, 1, 2, 3].map((stainIndex) => bloodStainGrowthLimit(fighterId, stainIndex))
+));
+assert.equal(
+  bloodStainGrowthLimit("fighter-1", 0),
+  bloodStainGrowthLimit("fighter-1", 0),
+  "Случайно выглядящий предел не меняется между кадрами",
+);
+assert.ok(growthLimits.every((limit) => limit >= 0.58 && limit <= 1));
+assert.ok(new Set(growthLimits).size >= 4, "Пятна получают разные пределы роста");
+assert.ok(growthLimits.some((limit) => limit < 0.8), "Часть пятен останавливает рост заметно раньше остальных");
 
 const conditionedInput = createDefaultBattleInput();
 conditionedInput.fighters[0].buffs = ["bath-effect", "bath-effect", "wine"];
