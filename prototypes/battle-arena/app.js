@@ -18,7 +18,11 @@ const {
 } = globalThis.GladiatorBattle;
 
 const { BattleVisualEngine, RENDERER_MODES } = globalThis.GladiatorVisualEngine || {};
-const { buildBattleStoryEntries, fighterBloodLevels } = globalThis.GladiatorBattleStory;
+const {
+  bloodStainProgress,
+  buildBattleStoryEntries,
+  fighterBloodLevels,
+} = globalThis.GladiatorBattleStory;
 
 const elements = {
   form: document.querySelector("#setup-form"),
@@ -437,8 +441,13 @@ const renderMobileBattleUi = (snapshot, input) => {
   fighterBloodLevels(snapshot).forEach((level, index) => {
     const bloodLayer = elements.mobileBattleStory
       ?.querySelector(`.mobile-story-blood.side-${index + 1}`);
-    bloodLayer?.style.setProperty("--blood-opacity", (level * 0.46).toFixed(3));
-    bloodLayer?.style.setProperty("--blood-scale", (0.72 + level * 0.34).toFixed(3));
+    bloodLayer?.querySelectorAll(".mobile-story-stain").forEach((stain, stainIndex) => {
+      const progress = bloodStainProgress(level, stainIndex);
+      stain.style.setProperty("--stain-opacity", progress > 0
+        ? (0.14 + progress * 0.38).toFixed(3)
+        : "0");
+      stain.style.setProperty("--stain-scale", (0.62 + progress * 0.58).toFixed(3));
+    });
   });
   const arena = arenaName(snapshot.arena?.type || input.arena.type);
   const fighters = snapshot.fighters.map((fighter, index) => {

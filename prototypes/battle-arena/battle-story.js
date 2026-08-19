@@ -65,11 +65,22 @@ const receivedTraumas = (snapshot) => snapshot.fighters.flatMap((fighter) => (
     .map((trauma) => ({ fighter, trauma }))
 ));
 
+const BLOOD_STAIN_THRESHOLDS = Object.freeze([0, 0.22, 0.46, 0.7]);
+
 const fighterBloodLevels = (snapshot) => (snapshot?.fighters || []).map((fighter) => {
   const maxHealth = Math.max(1, Number(fighter.maxHealth) || 1);
   const health = Math.max(0, Number(fighter.health) || 0);
-  return Math.max(0, Math.min(1, 1 - health / maxHealth));
+  const healthRatio = Math.max(0, Math.min(1, health / maxHealth));
+  return healthRatio < 0.7
+    ? Math.max(0, Math.min(1, (0.7 - healthRatio) / 0.7))
+    : 0;
 });
+
+const bloodStainProgress = (bloodLevel, stainIndex) => {
+  const threshold = BLOOD_STAIN_THRESHOLDS[stainIndex];
+  if (!Number.isFinite(threshold) || bloodLevel <= threshold) return 0;
+  return Math.max(0, Math.min(1, (bloodLevel - threshold) / (1 - threshold)));
+};
 
 const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
   if (!result || !currentSnapshot) return [];
@@ -95,8 +106,10 @@ const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
 };
 
 globalThis.GladiatorBattleStory = Object.freeze({
+  BLOOD_STAIN_THRESHOLDS,
   actionClass,
   actionText,
+  bloodStainProgress,
   buildBattleStoryEntries,
   fighterBloodLevels,
   initialConditionEntries,

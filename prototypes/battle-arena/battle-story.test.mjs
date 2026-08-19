@@ -4,22 +4,37 @@ import "./battle-engine.js";
 import "./battle-story.js";
 
 const { BattleEngine, createDefaultBattleInput } = globalThis.GladiatorBattle;
-const { buildBattleStoryEntries, fighterBloodLevels } = globalThis.GladiatorBattleStory;
+const {
+  bloodStainProgress,
+  buildBattleStoryEntries,
+  fighterBloodLevels,
+} = globalThis.GladiatorBattleStory;
 
 assert.deepEqual(
   fighterBloodLevels({
     fighters: [
       { health: 210, maxHealth: 210 },
-      { health: 90, maxHealth: 180 },
+      { health: 126, maxHealth: 180 },
     ],
   }),
-  [0, 0.5],
-  "Кровь на сторонах журнала пропорциональна потерянному здоровью",
+  [0, 0],
+  "При 70% здоровья пятна ещё не появляются",
+);
+assert.ok(
+  fighterBloodLevels({ fighters: [{ health: 125, maxHealth: 180 }] })[0] > 0,
+  "Первое пятно начинает проявляться строго ниже 70% здоровья",
 );
 assert.deepEqual(
   fighterBloodLevels({ fighters: [{ health: -20, maxHealth: 180 }] }),
   [1],
   "У поверженного бойца интенсивность пятен ограничивается единицей",
+);
+assert.equal(bloodStainProgress(0.2, 0) > 0, true, "Первое пятно уже растёт на ранней стадии");
+assert.equal(bloodStainProgress(0.2, 1), 0, "Второе пятно ещё скрыто");
+assert.equal(bloodStainProgress(0.5, 1) > 0, true, "При ухудшении появляется второе пятно");
+assert.ok(
+  bloodStainProgress(0.5, 0) > bloodStainProgress(0.2, 0),
+  "Старое пятно продолжает увеличиваться после появления новых",
 );
 
 const conditionedInput = createDefaultBattleInput();

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=30" />
+    <link rel="stylesheet" href="./styles.css?v=31" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
     <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
@@ -175,8 +175,14 @@
             </header>
             <canvas id="mobile-arena-canvas" width="360" height="300" aria-label="Покадровая боевая сцена"></canvas>
             <section class="mobile-battle-story" aria-labelledby="mobile-battle-story-title">
-              <i class="mobile-story-blood side-1" aria-hidden="true"></i>
-              <i class="mobile-story-blood side-2" aria-hidden="true"></i>
+              <i class="mobile-story-blood side-1" aria-hidden="true">
+                <span class="mobile-story-stain"></span><span class="mobile-story-stain"></span>
+                <span class="mobile-story-stain"></span><span class="mobile-story-stain"></span>
+              </i>
+              <i class="mobile-story-blood side-2" aria-hidden="true">
+                <span class="mobile-story-stain"></span><span class="mobile-story-stain"></span>
+                <span class="mobile-story-stain"></span><span class="mobile-story-stain"></span>
+              </i>
               <div class="mobile-story-title"><span></span><h3 id="mobile-battle-story-title">ХОД БОЯ</h3><span></span></div>
               <ol id="mobile-battle-feed" class="mobile-battle-feed" aria-live="polite">
                 <li class="empty">Бой ещё не начался.</li>
@@ -252,7 +258,7 @@
     <script src="./battle-engine.js?v=30"></script>
     <script src="./sprite-library.js?v=26"></script>
     <script src="./visual-engine.js?v=24"></script>
-    <script src="./battle-story.js?v=2"></script>
-    <script src="./app.js?v=51"></script>
+    <script src="./battle-story.js?v=3"></script>
+    <script src="./app.js?v=52"></script>
   </body>
 </html>
