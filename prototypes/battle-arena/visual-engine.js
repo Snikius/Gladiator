@@ -85,6 +85,198 @@ const BLOOD_STAIN_PROFILES = Object.freeze({
 const BLOOD_STAIN_SIZE_MULTIPLIER = 1.2;
 const BLOOD_STAIN_LIFETIME_MULTIPLIER = 1.2;
 const INJURED_BLEED_CYCLE_MS = 1050;
+const ATTACK_TRAIL_PROFILES = Object.freeze({
+  miss: Object.freeze({ alpha: 0.8, width: 3.65, reach: 1.16, overshoot: 0.14, verticalOffset: -12, dash: [12, 4] }),
+  dodge: Object.freeze({ alpha: 0.6, width: 2.7, reach: 1.07, overshoot: 0.025, verticalOffset: 13, dash: [8, 5] }),
+  block: Object.freeze({ alpha: 0.69, width: 3.25, reach: 0.88, overshoot: 0, verticalOffset: 0, dash: [11, 3] }),
+  hit: Object.freeze({ alpha: 0.52, width: 2.6, reach: 0.96, overshoot: 0, verticalOffset: 0, dash: [12, 3] }),
+});
+
+const trailPoint = (startX, endX, startY, endY, arc, curveFactor, progress) => freeze({
+  x: Math.round(lerp(startX, endX, progress)),
+  y: Math.round(lerp(startY, endY, progress) - Math.sin(Math.PI * progress) * arc * curveFactor),
+});
+
+const sampleTrailPath = (path, progress) => {
+  const clamped = clamp(progress, 0, 1);
+  const nextIndex = path.findIndex((point) => point.at >= clamped);
+  if (nextIndex < 0) return path.at(-1);
+  if (nextIndex === 0) return path[0];
+  const previous = path[nextIndex - 1];
+  const next = path[nextIndex];
+  const segmentProgress = (clamped - previous.at) / Math.max(0.001, next.at - previous.at);
+  return freeze({
+    x: lerp(previous.x, next.x, segmentProgress),
+    y: lerp(previous.y, next.y, segmentProgress),
+  });
+};
+
+const SWORD_TRAIL_PATHS = Object.freeze({
+  attack: Object.freeze([
+    freeze({ at: 0.16, x: 0.12, y: -0.38 }),
+    freeze({ at: 0.3, x: 0.15, y: -0.78 }),
+    freeze({ at: 0.42, x: 0.25, y: -0.48 }),
+    freeze({ at: 0.58, x: 0.38, y: -0.42 }),
+    freeze({ at: 0.72, x: 0.35, y: -0.25 }),
+    freeze({ at: 0.84, x: 0.42, y: -0.31 }),
+  ]),
+  special: Object.freeze([
+    freeze({ at: 0.14, x: 0.11, y: -0.42 }),
+    freeze({ at: 0.32, x: 0.13, y: -0.72 }),
+    freeze({ at: 0.42, x: 0.14, y: -0.88 }),
+    freeze({ at: 0.52, x: 0.27, y: -0.5 }),
+    freeze({ at: 0.62, x: 0.38, y: -0.25 }),
+    freeze({ at: 0.78, x: 0.44, y: -0.23 }),
+    freeze({ at: 0.86, x: 0.39, y: -0.32 }),
+  ]),
+});
+
+const attackTrailStrokes = (frame, progress = 0) => {
+  const action = frame?.action;
+  const profile = ATTACK_TRAIL_PROFILES[action?.outcome];
+  if (!profile) return [];
+  const actor = frame.components.find((component) => (
+    component.kind === "fighter" && component.fighterId === action.actorId
+  ));
+  const target = frame.components.find((component) => (
+    component.kind === "fighter" && component.fighterId === action.targetId
+  ));
+  if (!actor || !target) return [];
+
+  const direction = actor.transform.direction;
+  const actorHeight = actor.animation?.assetHeight || 150;
+  const targetHeight = target.animation?.assetHeight || actorHeight;
+  const retiarius = actor.animation?.equipmentProfileId === "retiarius-armor"
+    || actor.animation?.weaponSkinId === "trident";
+  const rangedSpecial = action.classTechnique === "weapon.retiarius-net-cast";
+  const special = isSpecialAction(action);
+  const critical = Boolean(action.critical);
+  const motionStart = retiarius && !rangedSpecial ? 0.03 : rangedSpecial ? 0.28 : special ? 0.14 : 0.16;
+  const motionEnd = retiarius && !rangedSpecial ? 0.95 : rangedSpecial ? 0.78 : special ? 0.86 : 0.84;
+  const phase = clamp((progress - motionStart) / (motionEnd - motionStart), 0, 1);
+  if (phase <= 0 || phase >= 1) return [];
+  const reveal = easeOut(clamp(phase / 0.5, 0, 1));
+  const fade = phase < 0.46 ? easeOut(phase / 0.46) : 1 - (phase - 0.46) / 0.54;
+  const lunge = Math.sin(Math.PI * progress);
+  const actorX = actor.transform.x + (actor.motion?.x || 0) * lunge;
+  const actorY = actor.transform.y + (actor.motion?.y || 0) * lunge;
+  const startX = retiarius
+    ? actorX + direction * (rangedSpecial ? actorHeight * 0.05 : 23)
+    : actorX;
+  const naturalEndX = target.transform.x - direction * (retiarius ? 11 : 15);
+  const endX = startX + (naturalEndX - startX) * profile.reach;
+  const startY = rangedSpecial
+    ? actorY - actorHeight * 0.7
+    : retiarius
+      ? actorY - actorHeight * 0.52
+      : actorY - actorHeight * (special ? 0.9 : 0.78);
+  const endY = rangedSpecial
+    ? actorY - actorHeight * 0.7 + profile.verticalOffset * 0.1
+    : retiarius
+      ? target.transform.y - targetHeight * 0.49 + profile.verticalOffset
+      : target.transform.y - targetHeight * (special ? 0.34 : 0.43) + profile.verticalOffset;
+  const strokeCount = rangedSpecial || action.outcome === "miss" || critical ? 3 : 2;
+  const pointCount = 9;
+
+  return Object.freeze(Array.from({ length: strokeCount }, (_, strokeIndex) => {
+    const spread = strokeIndex - (strokeCount - 1) / 2;
+    const thrust = retiarius && !rangedSpecial;
+    const swordPath = SWORD_TRAIL_PATHS[special ? "special" : "attack"];
+    const trailLength = special ? 0.23 : 0.24;
+    const strikeOrigin = special ? 0.42 : 0.3;
+    const tailProgress = progress > strikeOrigin
+      ? Math.max(strikeOrigin, progress - trailLength)
+      : Math.max(motionStart, progress - (special ? 0.18 : 0.14));
+    const points = thrust
+      ? Array.from({ length: pointCount }, (_, pointIndex) => {
+        const pointProgress = pointIndex / (pointCount - 1);
+        const visibleProgress = Math.min(pointProgress, reveal);
+        const point = trailPoint(
+          startX,
+          endX,
+          startY + spread * 5,
+          endY + spread * 4,
+          0,
+          0,
+          visibleProgress,
+        );
+        return freeze({ ...point, visible: pointProgress <= reveal + 0.001 });
+      }).filter((point) => point.visible)
+      : Array.from({ length: pointCount }, (_, pointIndex) => {
+        const pointProgress = pointIndex / (pointCount - 1);
+        if (rangedSpecial) {
+          const currentPhase = lerp(Math.max(0, phase - 0.38), phase, pointProgress);
+          const flight = easeOut(currentPhase);
+          return freeze({
+            x: Math.round(startX + direction * actorHeight * (
+              0.4 * profile.reach * flight + profile.overshoot * flight ** 2
+            )),
+            y: Math.round(lerp(startY, endY, flight) + spread * 12 * flight),
+          });
+        }
+        const sampled = sampleTrailPath(swordPath, lerp(tailProgress, progress, pointProgress));
+        return freeze({
+          x: Math.round(actorX + direction * actorHeight * (
+            sampled.x * profile.reach + profile.overshoot * pointProgress ** 2
+          )),
+          y: Math.round(actorY + actorHeight * sampled.y + spread * 5),
+        });
+      });
+    const outcomeColor = action.outcome === "block"
+      ? "#bda36f"
+      : action.outcome === "hit"
+        ? critical ? "#9a625b" : "#91776a"
+        : "#b5aa90";
+    return freeze({
+      kind: rangedSpecial ? "net" : thrust ? "thrust" : special ? "special-slash" : "slash",
+      points: freeze(points),
+      color: outcomeColor,
+      alpha: clamp(profile.alpha * fade * (1 - Math.abs(spread) * 0.16), 0, 0.82),
+      width: profile.width + (critical ? 0.55 : 0) - Math.abs(spread) * 0.15,
+      dash: freeze(profile.dash.map((value) => value + (rangedSpecial ? 2 : 0))),
+      edgeColor: action.outcome === "hit" ? "#c09a82" : "#d4c59e",
+    });
+  }));
+};
+
+const drawAttackTrailStrokes = (context, strokes) => {
+  if (!strokes.length) return;
+  context.save();
+  context.lineCap = "butt";
+  context.lineJoin = "bevel";
+  strokes.forEach((stroke) => {
+    if (stroke.points.length < 2) return;
+    context.setLineDash(stroke.dash);
+    context.beginPath();
+    context.moveTo(stroke.points[0].x, stroke.points[0].y);
+    stroke.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+    context.globalAlpha = stroke.alpha * 0.58;
+    context.strokeStyle = "#120f0d";
+    context.lineWidth = stroke.width + 3;
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(stroke.points[0].x, stroke.points[0].y);
+    stroke.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+    context.globalAlpha = stroke.alpha;
+    context.strokeStyle = stroke.color;
+    context.lineWidth = stroke.width;
+    context.stroke();
+
+    const edgePoints = stroke.points.slice(-3);
+    if (edgePoints.length < 2) return;
+    context.setLineDash([]);
+    context.beginPath();
+    context.moveTo(edgePoints[0].x, edgePoints[0].y);
+    edgePoints.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+    context.globalAlpha = clamp(stroke.alpha * 1.2, 0, 0.82);
+    context.strokeStyle = stroke.edgeColor;
+    context.lineWidth = Math.max(1, stroke.width * 0.65);
+    context.stroke();
+  });
+  context.setLineDash([]);
+  context.restore();
+};
 
 const isInjuredFighter = (fighter) => fighter.health > 0 && (
   fighter.health / Math.max(1, fighter.maxHealth) < INJURED_HEALTH_RATIO
@@ -665,6 +857,7 @@ class BattleVisualEngine {
     fighters.forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
     weapons.filter((component) => this.weaponLayer(component, progress, animationClock) !== "behind")
       .forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
+    this.drawAttackTrails(context, frame, progress);
     this.drawInjuredBlood(context, frame, performance.now());
     this.drawBlood(context, frame, progress);
   }
@@ -761,6 +954,10 @@ class BattleVisualEngine {
       );
     });
     context.restore();
+  }
+
+  drawAttackTrails(context, frame, progress) {
+    drawAttackTrailStrokes(context, attackTrailStrokes(frame, progress));
   }
 
   bloodParticles(frame, progress) {
@@ -1199,7 +1396,9 @@ globalThis.GladiatorVisualEngine = {
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
+  attackTrailStrokes,
   createVisualFrame,
+  drawAttackTrailStrokes,
   resolveTerritoryOffset,
 };
 })();

@@ -5,6 +5,7 @@ const canvas = document.querySelector("#sprite-preview-canvas");
 const context = canvas.getContext("2d");
 const bodySelect = document.querySelector("#preview-body");
 const stateSelect = document.querySelector("#preview-state");
+const outcomeSelect = document.querySelector("#preview-outcome");
 const mirrored = document.querySelector("#preview-mirrored");
 const autoCycle = document.querySelector("#preview-auto-cycle");
 const playButton = document.querySelector("#preview-play");
@@ -15,10 +16,15 @@ const {
   UNIFIED_RETIARIUS_GRID_ID,
   UNIFIED_SWORDSMAN_GRID_ID,
   animationFrameForElapsed,
+  clipIntroDurationMs,
 } = globalThis.GladiatorSpriteLibrary || {};
+const {
+  attackTrailStrokes,
+  drawAttackTrailStrokes,
+} = globalThis.GladiatorVisualEngine || {};
 
-if (!BODY_ANIMATION_GRIDS || !animationFrameForElapsed) {
-  throw new Error("Сначала подключите sprite-library.js");
+if (!BODY_ANIMATION_GRIDS || !animationFrameForElapsed || !attackTrailStrokes || !drawAttackTrailStrokes) {
+  throw new Error("Сначала подключите sprite-library.js и visual-engine.js");
 }
 
 const swordsmanGrid = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID];
@@ -44,6 +50,8 @@ let playing = true;
 let startedAt = performance.now();
 let pausedAt = 0;
 let stateCycleTimer = null;
+const TRAIL_PREVIEW_STATES = new Set(["attack", "special"]);
+const TRAIL_PREVIEW_PAUSE_MS = 520;
 
 const resetAnimationClock = () => {
   startedAt = performance.now();
@@ -57,6 +65,7 @@ const scheduleStateCycle = () => {
   stateCycleTimer = window.setTimeout(() => {
     stateSelect.selectedIndex = (stateSelect.selectedIndex + 1) % stateSelect.options.length;
     resetAnimationClock();
+    syncTrailControls();
     scheduleStateCycle();
   }, 4000);
 };
@@ -91,8 +100,57 @@ const drawLayer = (image, asset, frame, row, renderScale = 1) => {
   );
 };
 
+const previewTrailAction = (retiarius) => {
+  const selectedOutcome = outcomeSelect.value;
+  const special = stateSelect.value === "special";
+  return Object.freeze({
+    actorId: "preview-actor",
+    targetId: "preview-target",
+    outcome: selectedOutcome === "critical" ? "hit" : selectedOutcome,
+    critical: selectedOutcome === "critical",
+    classTechnique: special && retiarius ? "weapon.retiarius-net-cast" : null,
+    specialAttack: special && !retiarius ? "preview-sword-special" : null,
+  });
+};
+
+const drawPreviewTrail = (retiarius, elapsedMs, durationMs) => {
+  if (!TRAIL_PREVIEW_STATES.has(stateSelect.value) || elapsedMs >= durationMs) return;
+  const direction = mirrored.checked ? -1 : 1;
+  const actorX = canvas.width / 2;
+  const targetX = direction > 0 ? canvas.width - 24 : 24;
+  const frame = {
+    action: previewTrailAction(retiarius),
+    components: [
+      {
+        kind: "fighter",
+        fighterId: "preview-actor",
+        transform: { x: actorX, y: canvas.height, direction },
+        animation: {
+          assetHeight: 256,
+          equipmentProfileId: retiarius ? "retiarius-armor" : "murmillo-armor",
+          weaponSkinId: retiarius ? "trident" : "sword",
+        },
+      },
+      {
+        kind: "fighter",
+        fighterId: "preview-target",
+        transform: { x: targetX, y: canvas.height, direction: -direction },
+        animation: { assetHeight: 256 },
+      },
+    ],
+  };
+  drawAttackTrailStrokes(context, attackTrailStrokes(frame, elapsedMs / durationMs));
+};
+
+const syncTrailControls = () => {
+  const enabled = TRAIL_PREVIEW_STATES.has(stateSelect.value);
+  outcomeSelect.disabled = !enabled;
+  outcomeSelect.closest("label")?.classList.toggle("is-disabled", !enabled);
+};
+
 const syncCharacterControls = () => {
   resetAnimationClock();
+  syncTrailControls();
   scheduleStateCycle();
 };
 
@@ -100,7 +158,12 @@ const renderPreview = (now) => {
   const retiarius = bodySelect.value === "retiarius";
   const asset = retiarius ? ASSET_PATHS.retiarius : ASSET_PATHS.swordsman;
   const clip = CLIPS[stateSelect.value];
-  const frame = animationFrameForElapsed(clip, currentElapsed(now));
+  const rawElapsed = currentElapsed(now);
+  const trailPreview = TRAIL_PREVIEW_STATES.has(stateSelect.value);
+  const clipDuration = clipIntroDurationMs(clip);
+  const previewCycleDuration = clipDuration + TRAIL_PREVIEW_PAUSE_MS;
+  const animationElapsed = trailPreview ? rawElapsed % previewCycleDuration : rawElapsed;
+  const frame = animationFrameForElapsed(clip, animationElapsed);
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "#050607";
@@ -118,19 +181,24 @@ const renderPreview = (now) => {
     asset.stateRenderScales?.[stateSelect.value] || 1,
   );
   context.restore();
+  drawPreviewTrail(retiarius, animationElapsed, clipDuration);
   const repeatLabel = clip.playback.repeat?.sequence?.length
     ? ` · цикл ${clip.playback.repeat.sequence.join("→")}`
     : " · разовая";
-  frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS${repeatLabel}`;
+  const trailLabel = trailPreview ? ` · развод ${outcomeSelect.selectedOptions[0].text}` : "";
+  frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS${repeatLabel}${trailLabel}`;
   frameLabel.textContent = frameLabel.value;
   requestAnimationFrame(renderPreview);
 };
 
-[stateSelect, mirrored].forEach((control) => {
+[stateSelect, outcomeSelect, mirrored].forEach((control) => {
   control.addEventListener("change", resetAnimationClock);
 });
 bodySelect.addEventListener("change", syncCharacterControls);
-stateSelect.addEventListener("change", scheduleStateCycle);
+stateSelect.addEventListener("change", () => {
+  syncTrailControls();
+  scheduleStateCycle();
+});
 autoCycle.addEventListener("change", scheduleStateCycle);
 playButton.addEventListener("click", () => {
   if (playing) {

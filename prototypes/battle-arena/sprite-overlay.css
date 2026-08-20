@@ -83,6 +83,7 @@ output { color: var(--sand-light); text-align: right; }
 .preview-controls select { min-height: 34px; padding: 6px 8px; color: var(--text); background: #17110e; border: 1px solid var(--line); font: 12px "Courier New", monospace; }
 .preview-controls .mirror-control,
 .preview-controls .auto-cycle-control { display: flex; align-items: center; gap: 8px; padding-top: 18px; }
+.preview-controls label.is-disabled { opacity: .52; }
 .mirror-control input,
 .auto-cycle-control input { width: 16px; height: 16px; margin: 0; accent-color: var(--sand); }
 .preview-controls button { align-self: end; min-height: 34px; border: 1px solid var(--line); }
@@ -155,6 +156,5 @@ html[data-layer-mode="weapon"] .body-layer { opacity: 0; }
   .opacity-control { grid-template-columns: 1fr 60px; width: 100%; }
   .opacity-control span { grid-column: 1 / -1; }
   .preview-controls { grid-template-columns: 1fr 1fr; }
-  .preview-controls label:nth-child(3) { grid-column: 1 / -1; }
   .state-grid { grid-template-columns: 1fr; }
 }

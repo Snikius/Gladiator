@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — проверка единого спрайта</title>
-    <link rel="stylesheet" href="./sprite-overlay.css?v=7" />
+    <link rel="stylesheet" href="./sprite-overlay.css?v=8" />
     <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
     <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v6.png" />
     <link rel="preload" as="image" href="./assets/unified-retiarius-character-reference-v1.png" />
@@ -41,7 +41,7 @@
         <div class="preview-copy">
           <p class="eyebrow">ПОКАДРОВАЯ ПРОВЕРКА</p>
           <h2 id="preview-title">Отдельный кадр анимации</h2>
-          <p>Ретиарий использует собственную полную матрицу с трезубцем и сетью. Остальные классы временно используют лист мечника. Состояния автоматически переключаются каждые четыре секунды. Подпись под кадром показывает повторяемую часть клипа.</p>
+          <p>Ретиарий использует собственную полную матрицу с трезубцем и сетью. Остальные классы временно используют лист мечника. Для атаки и особого приёма поверх кадра проигрывается тот же программный размах, что и в бою; результат можно переключить отдельно. Состояния автоматически меняются каждые четыре секунды.</p>
           <div class="preview-controls">
             <label><span>Персонаж</span><select id="preview-body">
               <option value="murmillo">Мурмиллон</option>
@@ -64,6 +64,13 @@
               <option value="victory">Победа</option>
               <option value="advance">Движение вперёд</option>
               <option value="retreat">Движение назад (обратно)</option>
+            </select></label>
+            <label class="outcome-control"><span>Результат размаха</span><select id="preview-outcome" disabled>
+              <option value="miss" selected>Промах</option>
+              <option value="dodge">Уворот</option>
+              <option value="block">Блок</option>
+              <option value="hit">Попадание</option>
+              <option value="critical">Критическое попадание</option>
             </select></label>
             <label class="mirror-control"><input id="preview-mirrored" type="checkbox" /> Зеркально</label>
             <label class="auto-cycle-control"><input id="preview-auto-cycle" type="checkbox" checked /> Состояния каждые 4 сек</label>
@@ -141,6 +148,7 @@
     </main>
 
     <script src="./sprite-library.js?v=27"></script>
-    <script src="./sprite-overlay.js?v=30"></script>
+    <script src="./visual-engine.js?v=36"></script>
+    <script src="./sprite-overlay.js?v=31"></script>
   </body>
 </html>

@@ -27,7 +27,9 @@ const {
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
+  attackTrailStrokes,
   createVisualFrame,
+  drawAttackTrailStrokes,
   resolveTerritoryOffset,
 } = globalThis.GladiatorVisualEngine;
 const { createSkeletalFrame } = globalThis.GladiatorPixiSkeletal;
@@ -55,6 +57,53 @@ const actionFrame = createVisualFrame(actionSnapshot, input);
 const actorSprite = actionFrame.components.find((component) => component.id === `${actionSnapshot.lastAction.actorId}:fighter`);
 assert.ok(actorSprite.motion.duration > 0, "Действие боя должно стать движением единого визуального компонента");
 assert.ok(Object.isFrozen(actionFrame), "Кадр реплея неизменяем");
+const trailFrame = (outcome, overrides = {}) => ({
+  ...actionFrame,
+  action: {
+    ...actionFrame.action,
+    outcome,
+    critical: false,
+    classTechnique: null,
+    specialAttack: null,
+    ...overrides,
+  },
+});
+const missTrails = attackTrailStrokes(trailFrame("miss"), 0.4);
+const blockTrails = attackTrailStrokes(trailFrame("block"), 0.4);
+const hitTrails = attackTrailStrokes(trailFrame("hit"), 0.4);
+const criticalTrails = attackTrailStrokes(trailFrame("hit", { critical: true }), 0.4);
+assert.equal(missTrails.length, 3, "Промах оставляет широкий развод из трёх воздушных следов");
+assert.ok(missTrails.every((trail) => trail.points.length >= 2), "Каждая линия промаха имеет видимую траекторию");
+assert.ok(missTrails[1].alpha > 0.5, "Центральная линия промаха остаётся заметной на мобильном масштабе");
+assert.ok(missTrails[0].alpha > hitTrails[0].alpha, "След промаха заметнее следа попадания, которое поддержано реакцией и кровью");
+const trailForwardExtent = (trail) => (
+  (trail.points.at(-1).x - actorSprite.transform.x) * actorSprite.transform.direction
+);
+assert.ok(
+  trailForwardExtent(missTrails[1]) > trailForwardExtent(hitTrails[1]) + 15,
+  "Промах уходит заметно дальше по направлению удара, а не обрывается у точки контакта",
+);
+assert.ok(missTrails[1].width > blockTrails[1].width, "Развод промаха шире защитного контакта");
+assert.notEqual(blockTrails[0].color, hitTrails[0].color, "Блок отделён холодным металлическим оттенком");
+assert.ok(criticalTrails[0].width > hitTrails[0].width, "Критический удар получает более широкий след");
+assert.deepEqual(attackTrailStrokes(trailFrame("miss"), 0), [], "До взмаха воздушного следа нет");
+assert.deepEqual(attackTrailStrokes(trailFrame("miss"), 1), [], "После взмаха воздушный след полностью затухает");
+let renderedTrailPasses = 0;
+drawAttackTrailStrokes({
+  save() {},
+  restore() {},
+  set lineCap(value) {},
+  set lineJoin(value) {},
+  set globalAlpha(value) {},
+  set strokeStyle(value) {},
+  set lineWidth(value) {},
+  setLineDash() {},
+  beginPath() {},
+  moveTo() {},
+  lineTo() {},
+  stroke() { renderedTrailPasses += 1; },
+}, missTrails);
+assert.equal(renderedTrailPasses, missTrails.length * 3, "Общий рендерер рисует подложку, основной развод и режущую кромку каждой линии");
 
 const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
   presentation: PRESENTATIONS.mobile,
@@ -118,6 +167,45 @@ assert.equal(standardMobileFrame.components[1].animation.weaponSkinId, "trident"
 assert.equal(standardMobileFrame.components[1].animation.assetHeight, 150, "Оба бойца имеют одинаковый визуальный масштаб");
 assert.equal(RETIARIUS_ATLAS.cellHeight, 384, "Физическая ячейка ретиария содержит буфер для длинного оружия");
 assert.equal(RETIARIUS_ATLAS.logicalHeight, 256, "Логический размер тела не включает оружейный буфер");
+const retiariusActionBase = {
+  actorId: standardMobileFrame.fighters[1].id,
+  targetId: standardMobileFrame.fighters[0].id,
+  outcome: "miss",
+  critical: false,
+  classTechnique: null,
+  specialAttack: null,
+};
+const retiariusTrails = attackTrailStrokes({ ...standardMobileFrame, action: retiariusActionBase }, 0.4);
+const retiariusNetTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...retiariusActionBase, classTechnique: "weapon.retiarius-net-cast" },
+}, 0.4);
+const swordsmanActionBase = {
+  actorId: standardMobileFrame.fighters[0].id,
+  targetId: standardMobileFrame.fighters[1].id,
+  outcome: "miss",
+  critical: false,
+  classTechnique: null,
+  specialAttack: null,
+};
+const swordsmanTrails = attackTrailStrokes({ ...standardMobileFrame, action: swordsmanActionBase }, 0.5);
+const swordsmanSpecialRaiseTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...swordsmanActionBase, specialAttack: "preview-sword-special" },
+}, 0.38);
+const swordsmanSpecialTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...swordsmanActionBase, specialAttack: "preview-sword-special" },
+}, 0.7);
+const trailVerticalTravel = (trail) => trail.points.at(-1).y - trail.points[0].y;
+assert.ok(retiariusTrails.every((trail) => trail.kind === "thrust"), "Трезубец оставляет прямой след выпада, а не мечевую дугу");
+assert.ok(Math.abs(trailVerticalTravel(retiariusTrails[1])) < 14, "Обычный выпад ретиария остаётся почти горизонтальным");
+assert.equal(retiariusNetTrails.length, 3, "Бросок сети читается как веер из трёх воздушных линий");
+assert.ok(retiariusNetTrails.every((trail) => trail.kind === "net"), "Особый приём ретиария использует профиль сети");
+assert.ok(Math.abs(trailVerticalTravel(retiariusNetTrails[1])) < 8, "Центральная линия броска сети следует горизонтальному движению руки");
+assert.ok(trailVerticalTravel(swordsmanTrails[1]) > 25, "Обычный мечевой след идёт от верхнего замаха вниз к цели");
+assert.ok(trailVerticalTravel(swordsmanSpecialRaiseTrails[1]) < -10, "След спецприёма сначала поднимается вместе с вертикальным клинком");
+assert.ok(trailVerticalTravel(swordsmanSpecialTrails[1]) > 45, "Особый удар мечника получает более высокий нисходящий размах");
 assert.equal(standardMobileFrame.components[1].animation.sheet.logicalHeight, 256, "Рендерер масштабирует ретиария по логическому телу");
 let bufferedDrawArgs = null;
 const bufferedContext = {

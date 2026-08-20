@@ -695,6 +695,16 @@ const renderMobileBattleUi = (snapshot, input) => {
     const fatigueRatio = Math.max(0, Math.min(1, fighter.fatigue / 150));
     const conditions = mobileConditions(fighter);
     const visibleConditions = conditions.slice(0, 3);
+    const conditionSlots = Array.from({ length: 3 }, (_, slotIndex) => {
+      const condition = visibleConditions[slotIndex];
+      if (condition) {
+        return `<i class="condition-${condition.source}" title="${escapeHtml(condition.label)}">${conditionGlyph(condition.id)}</i>`;
+      }
+      if (!conditions.length && slotIndex === 0) {
+        return "<i class=\"condition-clear\" title=\"Травм нет\">◇</i>";
+      }
+      return "<i class=\"condition-empty\" aria-hidden=\"true\"></i>";
+    }).join("");
     const conditionLabel = conditions.length
       ? conditions.map((condition) => condition.label).join(", ")
       : "Травм нет";
@@ -708,16 +718,14 @@ const renderMobileBattleUi = (snapshot, input) => {
             <i style="width:${healthRatio * 100}%"></i>
             <span>${formatNumber(health)} / ${formatNumber(fighter.maxHealth)}</span>
           </div>
+          <div class="mobile-fatigue" aria-label="Усталость ${escapeHtml(fighter.name)}: ${formatNumber(fighter.fatigue)} из 150">
+            <span>УСТ</span>
+            <div class="mobile-fatigue-track"><i style="width:${fatigueRatio * 100}%"></i></div>
+          </div>
           <div class="mobile-condition-strip">
-            <div class="mobile-fatigue" aria-label="Усталость ${escapeHtml(fighter.name)}: ${formatNumber(fighter.fatigue)} из 150">
-              <span>УСТ</span>
-              <div class="mobile-fatigue-track"><i style="width:${fatigueRatio * 100}%"></i></div>
-            </div>
             <div class="mobile-condition-icons" aria-label="${escapeHtml(conditionLabel)}">
-              ${visibleConditions.length
-                ? visibleConditions.map((condition) => `<i class="condition-${condition.source}" title="${escapeHtml(condition.label)}">${conditionGlyph(condition.id)}</i>`).join("")
-                : "<i class=\"condition-clear\" title=\"Травм нет\">◇</i>"}
-              ${conditions.length > visibleConditions.length ? `<b>+${conditions.length - visibleConditions.length}</b>` : ""}
+              ${conditionSlots}
+              <b class="condition-overflow">${conditions.length > visibleConditions.length ? `+${conditions.length - visibleConditions.length}` : ""}</b>
             </div>
           </div>
         </div>

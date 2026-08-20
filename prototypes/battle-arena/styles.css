@@ -927,22 +927,24 @@ a.button {
 .mobile-condition-strip {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
+  height: 14px;
   min-height: 14px;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .mobile-fighter-card.side-2 .mobile-condition-strip {
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .mobile-fatigue {
   display: flex;
-  flex: 1;
+  width: 100%;
   align-items: center;
   gap: 3px;
   min-width: 0;
+  height: 7px;
+  margin-top: 2px;
   color: #668995;
   font-size: 6px;
   font-weight: 700;
@@ -976,12 +978,19 @@ a.button {
 }
 
 .mobile-condition-icons {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 12px);
   align-items: center;
   gap: 2px;
-  min-width: 13px;
+  width: 54px;
+  min-width: 54px;
+  height: 12px;
   color: #af7d48;
   font-size: 9px;
+}
+
+.mobile-fighter-card.side-2 .mobile-condition-icons {
+  direction: rtl;
 }
 
 .mobile-condition-icons i {
@@ -1009,7 +1018,18 @@ a.button {
   opacity: .55;
 }
 
+.mobile-condition-icons .condition-empty {
+  background: transparent;
+  border-color: #3b3024;
+  box-shadow: none;
+  opacity: .28;
+}
+
 .mobile-condition-icons b {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
   color: #8e6841;
   font-size: 7px;
 }
