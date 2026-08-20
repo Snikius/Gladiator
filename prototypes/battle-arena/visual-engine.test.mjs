@@ -550,8 +550,18 @@ assert.ok(
 assert.ok(criticalBlood.length >= 30, "Критический удар создаёт особенно плотный веер крови");
 assert.ok(criticalBlood.some((particle) => particle.size >= 11), "Крит содержит увеличенные крупные сгустки");
 assert.ok(
-  criticalBlood.every((particle) => /^#(?:2c|43|59|6d|7b)/i.test(particle.color)),
+  criticalBlood.every((particle) => /^#(?:26|3a|4f|61|70)/i.test(particle.color)),
   "Вся кровь использует тёмную бордовую палитру",
+);
+assert.deepEqual(
+  [
+    bloodAt(bloodFrameFor("light"), 0.95).length,
+    bloodAt(bloodFrameFor("normal"), 0.95).length,
+    bloodAt(bloodFrameFor("strong"), 0.95).length,
+    bloodAt(criticalFrame, 0.95).length,
+  ],
+  [7, 14, 26, 43],
+  "У каждого уровня попадания стало немного больше брызг",
 );
 assert.ok(
   criticalBlood.some((particle) => particle.x < particle.originX)

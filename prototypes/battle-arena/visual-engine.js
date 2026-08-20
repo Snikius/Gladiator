@@ -53,13 +53,20 @@ const BLOOD_PATTERN = Object.freeze([
   Object.freeze({ distance: 51, lift: 93, gravity: 109, size: 2, delay: 0.63 }),
   Object.freeze({ distance: 131, lift: 4, gravity: 114, size: 2, delay: 0.65 }),
   Object.freeze({ distance: 96, lift: 71, gravity: 118, size: 2, delay: 0.67 }),
+  Object.freeze({ distance: 27, lift: 18, gravity: 24, size: 3, delay: 0.04 }),
+  Object.freeze({ distance: 44, lift: 47, gravity: 37, size: 2, delay: 0.08 }),
+  Object.freeze({ distance: 63, lift: 29, gravity: 49, size: 3, delay: 0.12 }),
+  Object.freeze({ distance: 81, lift: 64, gravity: 63, size: 2, delay: 0.16 }),
+  Object.freeze({ distance: 102, lift: 38, gravity: 79, size: 2, delay: 0.2 }),
+  Object.freeze({ distance: 119, lift: 77, gravity: 93, size: 2, delay: 0.24 }),
+  Object.freeze({ distance: 137, lift: 22, gravity: 111, size: 2, delay: 0.28 }),
 ]);
-const BLOOD_COLORS = Object.freeze(["#2c050b", "#430711", "#590916", "#6d0c1a", "#7b101e"]);
+const BLOOD_COLORS = Object.freeze(["#260409", "#3a060e", "#4f0813", "#610a17", "#70101b"]);
 const BLOOD_IMPACT_PROFILES = Object.freeze({
-  light: Object.freeze({ count: 6, size: 0.48, distance: 0.38, lift: 0.5, gravity: 0.85, alphaFade: 0.76 }),
-  normal: Object.freeze({ count: 12, size: 0.66, distance: 0.58, lift: 0.68, gravity: 1, alphaFade: 0.68 }),
-  strong: Object.freeze({ count: 22, size: 0.9, distance: 0.86, lift: 0.88, gravity: 1.2, alphaFade: 0.6 }),
-  critical: Object.freeze({ count: 36, size: 1.28, distance: 1.22, lift: 1.05, gravity: 1.65, alphaFade: 0.46 }),
+  light: Object.freeze({ count: 7, size: 0.48, distance: 0.38, lift: 0.5, gravity: 0.85, alphaFade: 0.76 }),
+  normal: Object.freeze({ count: 14, size: 0.66, distance: 0.58, lift: 0.68, gravity: 1, alphaFade: 0.68 }),
+  strong: Object.freeze({ count: 26, size: 0.9, distance: 0.86, lift: 0.88, gravity: 1.2, alphaFade: 0.6 }),
+  critical: Object.freeze({ count: 43, size: 1.28, distance: 1.22, lift: 1.05, gravity: 1.65, alphaFade: 0.46 }),
 });
 const BLOOD_STAIN_PROFILES = Object.freeze({
   light: Object.freeze({ count: 1, scale: 0.75 }),
