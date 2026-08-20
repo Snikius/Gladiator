@@ -7,6 +7,7 @@ const { BattleEngine, createDefaultBattleInput } = globalThis.GladiatorBattle;
 const {
   bloodStainGrowthLimit,
   bloodStainProgress,
+  bloodSplashVisible,
   buildBattleStoryEntries,
   fighterBloodLevels,
 } = globalThis.GladiatorBattleStory;
@@ -48,6 +49,10 @@ assert.equal(
 assert.ok(growthLimits.every((limit) => limit >= 0.58 && limit <= 1));
 assert.ok(new Set(growthLimits).size >= 4, "Пятна получают разные пределы роста");
 assert.ok(growthLimits.some((limit) => limit < 0.8), "Часть пятен останавливает рост заметно раньше остальных");
+assert.equal(bloodSplashVisible(0, 0), false, "Без ранения угловые брызги скрыты");
+assert.equal(bloodSplashVisible(0.1, 0), true, "Первая брызга появляется без дальнейшего роста");
+assert.equal(bloodSplashVisible(0.1, 1), false, "Следующая брызга ждёт собственного порога");
+assert.equal(bloodSplashVisible(0.7, 2), true, "При тяжёлом состоянии видны все три брызги");
 
 const conditionedInput = createDefaultBattleInput();
 conditionedInput.fighters[0].buffs = ["bath-effect", "bath-effect", "wine"];

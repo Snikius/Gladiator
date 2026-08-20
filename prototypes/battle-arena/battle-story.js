@@ -66,6 +66,7 @@ const receivedTraumas = (snapshot) => snapshot.fighters.flatMap((fighter) => (
 ));
 
 const BLOOD_STAIN_THRESHOLDS = Object.freeze([0, 0.22, 0.46, 0.7]);
+const BLOOD_SPLASH_THRESHOLDS = Object.freeze([0, 0.3, 0.6]);
 
 const fighterBloodLevels = (snapshot) => (snapshot?.fighters || []).map((fighter) => {
   const maxHealth = Math.max(1, Number(fighter.maxHealth) || 1);
@@ -80,6 +81,11 @@ const bloodStainProgress = (bloodLevel, stainIndex) => {
   const threshold = BLOOD_STAIN_THRESHOLDS[stainIndex];
   if (!Number.isFinite(threshold) || bloodLevel <= threshold) return 0;
   return Math.max(0, Math.min(1, (bloodLevel - threshold) / (1 - threshold)));
+};
+
+const bloodSplashVisible = (bloodLevel, splashIndex) => {
+  const threshold = BLOOD_SPLASH_THRESHOLDS[splashIndex];
+  return Number.isFinite(threshold) && bloodLevel > threshold;
 };
 
 /* Визуальная случайность должна быть стабильной между render-вызовами, иначе
@@ -117,11 +123,13 @@ const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
 };
 
 globalThis.GladiatorBattleStory = Object.freeze({
+  BLOOD_SPLASH_THRESHOLDS,
   BLOOD_STAIN_THRESHOLDS,
   actionClass,
   actionText,
   bloodStainGrowthLimit,
   bloodStainProgress,
+  bloodSplashVisible,
   buildBattleStoryEntries,
   fighterBloodLevels,
   initialConditionEntries,

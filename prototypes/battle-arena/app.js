@@ -21,6 +21,7 @@ const { BattleVisualEngine, RENDERER_MODES } = globalThis.GladiatorVisualEngine 
 const {
   bloodStainGrowthLimit,
   bloodStainProgress,
+  bloodSplashVisible,
   buildBattleStoryEntries,
   fighterBloodLevels,
 } = globalThis.GladiatorBattleStory;
@@ -450,6 +451,9 @@ const renderMobileBattleUi = (snapshot, input) => {
         ? (0.14 + visibleGrowth * 0.38).toFixed(3)
         : "0");
       stain.style.setProperty("--stain-scale", (0.62 + visibleGrowth * 0.58).toFixed(3));
+    });
+    bloodLayer?.querySelectorAll(".mobile-story-splash").forEach((splash, splashIndex) => {
+      splash.classList.toggle("is-visible", bloodSplashVisible(level, splashIndex));
     });
   });
   const arena = arenaName(snapshot.arena?.type || input.arena.type);
