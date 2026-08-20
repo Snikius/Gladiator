@@ -628,12 +628,12 @@ class BattleVisualEngine {
         const hash = [...component.fighterId].reduce((value, character) => value + character.charCodeAt(0), 0);
         const pulse = Math.sin(animationClock / 230 + hash * 0.37);
         const defeated = component.animation?.state === "defeated";
-        const baseWidth = defeated ? 72 : 48;
+        const baseWidth = defeated ? 80 : 54;
         const liftScale = 1 - Math.min(0.16, lift / 70);
         return freeze({
           fighterId: component.fighterId,
           x: Math.round(x),
-          y: frame.arena.groundY + 1,
+          y: frame.arena.groundY - 1,
           width: Math.round((baseWidth + (defeated ? 0 : pulse * 2)) * liftScale),
           height: defeated ? 7 : 6 + (pulse > 0.55 ? 1 : 0),
           alpha: (defeated ? 0.32 : 0.4 + pulse * 0.025) * liftScale,

@@ -141,7 +141,8 @@ const idleShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
   0,
 );
 assert.equal(idleShadows.length, 2, "Под каждым бойцом создаётся отдельная процедурная тень");
-assert.ok(idleShadows.every((shadow) => shadow.y === standardMobileFrame.arena.groundY + 1), "Тени примыкают к стопам на линии земли");
+assert.ok(idleShadows.every((shadow) => shadow.y === standardMobileFrame.arena.groundY - 1), "Тени заходят под стопы на линии земли");
+assert.ok(idleShadows.every((shadow) => shadow.width >= 52), "Тень немного шире стойки бойца");
 const animatedIdleShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
   { transitionFrom: new Map() },
   standardMobileFrame,
