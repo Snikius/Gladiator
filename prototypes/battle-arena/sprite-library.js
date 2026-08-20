@@ -19,30 +19,80 @@ const CORE_VISUAL_STATES = Object.freeze({
   "defense.dodge": Object.freeze({ kind: "one-shot", description: "Уход или backstep." }),
   "reaction.hit": Object.freeze({ kind: "one-shot", description: "Реакция на попадание." }),
   defeated: Object.freeze({ kind: "terminal", description: "Падение и лежачая поза." }),
-  victory: Object.freeze({ kind: "terminal", description: "Победитель циклически повторяет победный салют." }),
+  victory: Object.freeze({ kind: "terminal", description: "Победитель завершает салют и удерживает живую финальную позу." }),
   special: Object.freeze({ kind: "one-shot", description: "Классовый или перковый приём." }),
 });
 
 const SIX_FRAMES = Object.freeze([0, 1, 2, 3, 4, 5]);
+const defineAnimationClip = ({
+  row,
+  fps,
+  sequence = SIX_FRAMES,
+  repeatSequence = null,
+  keepAlive = false,
+  durationMs,
+}) => {
+  const frozenSequence = Object.freeze([...sequence]);
+  const repeat = repeatSequence
+    ? Object.freeze({ sequence: Object.freeze([...repeatSequence]), keepAlive })
+    : null;
+  return Object.freeze({
+    row,
+    fps,
+    durationMs,
+    /* frames оставлен как read-only alias для рендера старых интеграций;
+     * каноническая временная схема находится в playback. */
+    frames: frozenSequence,
+    playback: Object.freeze({ sequence: frozenSequence, repeat }),
+  });
+};
+
+const clipFrameSequence = (clip) => clip?.playback?.sequence || clip?.frames || [];
+const clipRepeat = (clip) => clip?.playback?.repeat
+  || (clip?.loop ? { sequence: clipFrameSequence(clip), keepAlive: false } : null);
+const clipIntroDurationMs = (clip) => clip?.durationMs
+  ?? (clipFrameSequence(clip).length && clip?.fps
+    ? clipFrameSequence(clip).length / clip.fps * 1000
+    : 0);
+
+const animationFrameForElapsed = (clip, elapsedMs = 0, introDurationOverride) => {
+  const sequence = clipFrameSequence(clip);
+  if (!sequence.length) return 0;
+  const elapsed = Math.max(0, elapsedMs);
+  const introDuration = introDurationOverride ?? clipIntroDurationMs(clip);
+  const repeat = clipRepeat(clip);
+  if (repeat?.sequence?.length && elapsed >= introDuration) {
+    const repeatElapsedFrame = Math.floor((elapsed - introDuration) / 1000 * clip.fps);
+    return repeat.sequence[repeatElapsedFrame % repeat.sequence.length];
+  }
+
+  if (!introDuration) return sequence.at(-1);
+  const sequenceIndex = Math.min(
+    sequence.length - 1,
+    Math.floor(elapsed / introDuration * sequence.length),
+  );
+  return sequence[sequenceIndex];
+};
+
 const ANIMATION_SPRITE_ROWS = Object.freeze({
-  "idle.normal": Object.freeze({ row: 0, frames: SIX_FRAMES, fps: 6, loop: true }),
-  "idle.tired": Object.freeze({ row: 1, frames: SIX_FRAMES, fps: 5, loop: true }),
-  "idle.injured": Object.freeze({ row: 2, frames: SIX_FRAMES, fps: 5, loop: true }),
-  attack: Object.freeze({ row: 3, frames: SIX_FRAMES, fps: 12, loop: false }),
-  "defense.block": Object.freeze({ row: 4, frames: SIX_FRAMES, fps: 20, loop: false, durationMs: 300 }),
-  "defense.dodge": Object.freeze({ row: 5, frames: SIX_FRAMES, fps: 10, loop: false }),
+  "idle.normal": defineAnimationClip({ row: 0, fps: 6, repeatSequence: SIX_FRAMES, keepAlive: true }),
+  "idle.tired": defineAnimationClip({ row: 1, fps: 5, repeatSequence: SIX_FRAMES, keepAlive: true }),
+  "idle.injured": defineAnimationClip({ row: 2, fps: 5, repeatSequence: SIX_FRAMES, keepAlive: true }),
+  attack: defineAnimationClip({ row: 3, fps: 12 }),
+  "defense.block": defineAnimationClip({ row: 4, fps: 20, durationMs: 300 }),
+  "defense.dodge": defineAnimationClip({ row: 5, fps: 10 }),
   /* Вторая половина строки 6 — падение. Реакция на обычный удар использует
    * только первые три позы и возвращается в стойку, не изображая смерть. */
-  "reaction.hit": Object.freeze({ row: 6, frames: Object.freeze([0, 1, 2, 1, 0]), fps: 10, loop: false }),
-  defeated: Object.freeze({ row: 6, frames: Object.freeze([3, 4, 5]), fps: 8, loop: false }),
+  "reaction.hit": defineAnimationClip({ row: 6, fps: 10, sequence: [0, 1, 2, 1, 0] }),
+  defeated: defineAnimationClip({ row: 6, fps: 8, sequence: [3, 4, 5] }),
 });
 const UNIFIED_ANIMATION_SPRITE_ROWS = Object.freeze({
   ...ANIMATION_SPRITE_ROWS,
-  advance: Object.freeze({ row: 7, frames: SIX_FRAMES, fps: 7, loop: true, durationMs: 900 }),
-  retreat: Object.freeze({ row: 7, frames: Object.freeze([5, 4, 3, 2, 1, 0]), fps: 7, loop: true, durationMs: 900 }),
-  greeting: Object.freeze({ row: 8, frames: SIX_FRAMES, fps: 4, loop: false, durationMs: 1400 }),
-  victory: Object.freeze({ row: 9, frames: SIX_FRAMES, fps: 7, loop: true, durationMs: 860 }),
-  special: Object.freeze({ row: 10, frames: SIX_FRAMES, fps: 10, loop: false, durationMs: 680 }),
+  advance: defineAnimationClip({ row: 7, fps: 7, repeatSequence: SIX_FRAMES, durationMs: 900 }),
+  retreat: defineAnimationClip({ row: 7, fps: 7, sequence: [5, 4, 3, 2, 1, 0], repeatSequence: [5, 4, 3, 2, 1, 0], durationMs: 900 }),
+  greeting: defineAnimationClip({ row: 8, fps: 4, durationMs: 1400 }),
+  victory: defineAnimationClip({ row: 9, fps: 7, repeatSequence: [4, 5], keepAlive: true, durationMs: 860 }),
+  special: defineAnimationClip({ row: 10, fps: 10, durationMs: 680 }),
 });
 
 /*
@@ -298,6 +348,11 @@ globalThis.GladiatorSpriteLibrary = {
   BODY_ANIMATION_GRIDS,
   EQUIPMENT_ANIMATION_PROFILES,
   EQUIPMENT_PROFILE_BY_CLASS,
+  animationFrameForElapsed,
+  clipFrameSequence,
+  clipIntroDurationMs,
+  clipRepeat,
+  defineAnimationClip,
   SpriteLibrary,
 };
 })();

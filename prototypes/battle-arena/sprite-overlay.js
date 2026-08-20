@@ -10,30 +10,35 @@ const autoCycle = document.querySelector("#preview-auto-cycle");
 const playButton = document.querySelector("#preview-play");
 const frameLabel = document.querySelector("#preview-frame-label");
 
+const {
+  BODY_ANIMATION_GRIDS,
+  UNIFIED_RETIARIUS_GRID_ID,
+  UNIFIED_SWORDSMAN_GRID_ID,
+  animationFrameForElapsed,
+} = globalThis.GladiatorSpriteLibrary || {};
+
+if (!BODY_ANIMATION_GRIDS || !animationFrameForElapsed) {
+  throw new Error("Сначала подключите sprite-library.js");
+}
+
+const swordsmanGrid = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID];
+const retiariusGrid = BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID];
+
 const ASSET_PATHS = Object.freeze({
   swordsman: Object.freeze({
-    path: "./assets/unified-swordsman-grid-v14.png",
-    cellWidth: 384,
-    cellHeight: 384,
-    stateRenderScales: Object.freeze({ victory: 1.08 }),
+    path: swordsmanGrid.assetPath,
+    cellWidth: swordsmanGrid.grid.cellWidth,
+    cellHeight: swordsmanGrid.grid.cellHeight,
+    stateRenderScales: swordsmanGrid.stateRenderScales,
   }),
-  retiarius: Object.freeze({ path: "./assets/unified-retiarius-grid-v6.png", cellWidth: 384, cellHeight: 384 }),
+  retiarius: Object.freeze({
+    path: retiariusGrid.assetPath,
+    cellWidth: retiariusGrid.grid.cellWidth,
+    cellHeight: retiariusGrid.grid.cellHeight,
+    stateRenderScales: retiariusGrid.stateRenderScales,
+  }),
 });
-const CLIPS = Object.freeze({
-  "idle.normal": Object.freeze({ row: 0, fps: 6 }),
-  "idle.tired": Object.freeze({ row: 1, fps: 5 }),
-  "idle.injured": Object.freeze({ row: 2, fps: 5 }),
-  attack: Object.freeze({ row: 3, fps: 12 }),
-  "defense.block": Object.freeze({ row: 4, fps: 20 }),
-  "defense.dodge": Object.freeze({ row: 5, fps: 10 }),
-  "reaction.hit": Object.freeze({ row: 6, fps: 10, frames: Object.freeze([0, 1, 2, 1, 0]) }),
-  defeated: Object.freeze({ row: 6, fps: 8, frames: Object.freeze([3, 4, 5]), loop: false }),
-  advance: Object.freeze({ row: 7, fps: 7 }),
-  retreat: Object.freeze({ row: 7, fps: 7, frames: Object.freeze([5, 4, 3, 2, 1, 0]) }),
-  greeting: Object.freeze({ row: 8, fps: 4, loop: false }),
-  victory: Object.freeze({ row: 9, fps: 7, loop: true }),
-  special: Object.freeze({ row: 10, fps: 10, loop: false }),
-});
+const CLIPS = swordsmanGrid.clips;
 const images = new Map();
 let playing = true;
 let startedAt = performance.now();
@@ -95,12 +100,7 @@ const renderPreview = (now) => {
   const retiarius = bodySelect.value === "retiarius";
   const asset = retiarius ? ASSET_PATHS.retiarius : ASSET_PATHS.swordsman;
   const clip = CLIPS[stateSelect.value];
-  const sequence = clip.frames || [0, 1, 2, 3, 4, 5];
-  const elapsedFrame = Math.floor(currentElapsed(now) / 1000 * clip.fps);
-  const sequenceIndex = clip.loop === false
-    ? Math.min(elapsedFrame, sequence.length - 1)
-    : elapsedFrame % sequence.length;
-  const frame = sequence[sequenceIndex];
+  const frame = animationFrameForElapsed(clip, currentElapsed(now));
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "#050607";
@@ -118,7 +118,10 @@ const renderPreview = (now) => {
     asset.stateRenderScales?.[stateSelect.value] || 1,
   );
   context.restore();
-  frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS`;
+  const repeatLabel = clip.playback.repeat?.sequence?.length
+    ? ` · цикл ${clip.playback.repeat.sequence.join("→")}`
+    : " · разовая";
+  frameLabel.value = `${retiarius ? "Ретиарий" : "Мечник"} · строка ${clip.row} · кадр ${frame} · ${clip.fps} FPS${repeatLabel}`;
   frameLabel.textContent = frameLabel.value;
   requestAnimationFrame(renderPreview);
 };

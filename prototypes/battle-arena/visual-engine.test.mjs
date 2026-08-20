@@ -14,6 +14,8 @@ const {
   UNIFIED_ATLAS,
   UNIFIED_RETIARIUS_GRID_ID,
   UNIFIED_SWORDSMAN_GRID_ID,
+  animationFrameForElapsed,
+  defineAnimationClip,
 } = globalThis.GladiatorSpriteLibrary;
 const {
   ARENA_CAMERA_FOLLOW_RATIO,
@@ -73,17 +75,30 @@ assert.equal(UNIFIED_ATLAS.rows, 11, "Единый лист содержит о�
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].grid.columns, 6);
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.frames.length, 6, "Атака занимает всю строку из шести кадров");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.row, 3, "Атака использует собственную строку атласа");
-assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.normal"].loop, true, "Стойка должна быть циклической анимацией");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.normal"].playback.repeat.sequence, [0, 1, 2, 3, 4, 5], "Стойка должна быть циклической анимацией");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.block"].fps, 20, "Блок должен быстро поднимать защиту");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.hit"].frames, [0, 1, 2, 1, 0], "Реакция на удар не захватывает кадры падения");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.advance.row, 7, "Движение использует отдельную восьмую строку");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.retreat.frames, [5, 4, 3, 2, 1, 0], "Движение назад переиспользует строку в обратном порядке");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.greeting.row, 8, "Приветствие занимает отдельную девятую строку");
-assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.greeting.loop, false, "Приветствие проигрывается один раз");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.greeting.playback.repeat, null, "Приветствие проигрывается один раз");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.row, 9, "Победа занимает отдельную десятую строку");
-assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.loop, true, "Победный салют циклически повторяется в итоговом состоянии");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.playback.repeat.sequence, [4, 5], "После полного победного салюта повторяются только два последних кадра");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.playback.repeat.keepAlive, true, "Финальный цикл остаётся активным до нового боя");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.row, 10, "Особый приём занимает отдельную одиннадцатую строку");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.frames.length, 6, "Особый приём использует все шесть кадров строки");
+const arbitraryClip = defineAnimationClip({
+  row: 12,
+  fps: 10,
+  sequence: [0, 2, 1, 3],
+  repeatSequence: [4, 3],
+  keepAlive: true,
+  durationMs: 400,
+});
+assert.deepEqual(arbitraryClip.playback.sequence, [0, 2, 1, 3], "Шаблон принимает произвольную вступительную последовательность");
+assert.equal(animationFrameForElapsed(arbitraryClip, 250), 1, "Произвольная последовательность проигрывается в заданном порядке");
+assert.equal(animationFrameForElapsed(arbitraryClip, 400), 4, "Повтор может использовать кадр, которого не было во вступлении");
+assert.equal(animationFrameForElapsed(arbitraryClip, 500), 3, "Повторяемый сегмент имеет независимый порядок кадров");
 const standardInput = createDefaultBattleInput();
 standardInput.fighters[1].fighterClass = "retiarius";
 standardInput.fighters[1].equipment = {
@@ -112,7 +127,7 @@ const bufferedContext = {
 };
 BattleVisualEngine.prototype.drawAsset.call({
   loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
-  animationFrameIndex: () => 0,
+  animationFrameColumn: () => 0,
 }, bufferedContext, standardMobileFrame.components[1], 0, 0);
 assert.equal(bufferedDrawArgs[3], 384, "Рендерер вырезает полную физическую ширину буферного кадра");
 assert.equal(bufferedDrawArgs[4], 384, "Рендерер вырезает полную физическую высоту буферного кадра");
@@ -330,7 +345,7 @@ if (finalSnapshot.outcome?.type === "victory") {
   });
   const winner = finalFrame.components.find((component) => component.fighterId === finalSnapshot.outcome.winnerId);
   assert.equal(winner.animation.clip, "victory", "Победитель поднимает меч только в итоговом снимке");
-  assert.equal(winner.animation.sheet.loop, true, "Победный салют остаётся циклическим в итоговом кадре");
+  assert.deepEqual(winner.animation.sheet.playback.repeat.sequence, [4, 5], "Победный салют удерживает только финальный двухкадровый цикл");
   assert.equal(winner.motion.duration, 860, "Победная строка проигрывается полностью");
   assert.equal(
     BattleVisualEngine.prototype.createRecoveryFrame.call({
@@ -357,6 +372,11 @@ const swordsmanWinner = swordsmanVictoryFrame.components.find(
   (component) => component.fighterId === swordsmanVictorySnapshot.outcome.winnerId,
 );
 assert.equal(swordsmanWinner.animation.clip, "victory", "Мечник использует победную строку");
+assert.deepEqual(
+  [0, 800, 860, 1003, 1146].map((elapsed) => animationFrameForElapsed(swordsmanWinner.animation.sheet, elapsed)),
+  [0, 5, 4, 5, 4],
+  "Победа один раз проходит кадры 0–5, затем чередует только 4 и 5",
+);
 assert.equal(
   swordsmanWinner.animation.renderScale,
   1.08,
@@ -365,7 +385,7 @@ assert.equal(
 let victoryDrawArgs = null;
 BattleVisualEngine.prototype.drawAsset.call({
   loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
-  animationFrameIndex: () => 0,
+  animationFrameColumn: () => 0,
 }, {
   set filter(value) {},
   scale() {},
@@ -446,9 +466,9 @@ const attackingFighter = blockFrame.components.find((component) => component.fig
 assert.equal(attackingFighter.animation.clip, "attack", "Атакующий в снимке боя использует строку атаки");
 assert.equal(blockingFighter.animation.clip, "defense.block", "Заблокировавший удар использует строку блока");
 assert.equal(blockingFighter.motion.duration, 300, "Блок в симуляторе завершается за 300 мс");
-const frameIndexFor = BattleVisualEngine.prototype.animationFrameIndex;
-assert.equal(frameIndexFor.call(null, blockingFighter, 0.6, 310), 5, "Блок уже удерживает защиту после 300 мс");
-assert.ok(frameIndexFor.call(null, attackingFighter, 0.6, 310) < 5, "Атака в тот же момент ещё продолжается");
+const frameFor = BattleVisualEngine.prototype.animationFrameColumn;
+assert.equal(frameFor.call(null, blockingFighter, 0.6, 310), 5, "Блок уже удерживает защиту после 300 мс");
+assert.ok(frameFor.call(null, attackingFighter, 0.6, 310) < 5, "Атака в тот же момент ещё продолжается");
 const recoveryContext = {
   spriteLibrary: new SpriteLibrary(),
   presentation: PRESENTATIONS.mobile,
@@ -464,7 +484,7 @@ const recoveredTarget = recoveryFrame.components.find(
 );
 assert.equal(recoveryFrame.action, null, "После одноразового действия визуальный кадр очищает действие");
 assert.equal(recoveredTarget.animation.clip, "idle.tired", "После блока боец возвращается в актуальную уставшую стойку");
-assert.equal(recoveredTarget.animation.sheet.loop, true, "Стойка продолжает проигрываться до следующего снимка боя");
+assert.equal(recoveredTarget.animation.sheet.playback.repeat.keepAlive, true, "Стойка продолжает проигрываться до следующего снимка боя");
 
 const defeatedSnapshot = JSON.parse(JSON.stringify(blockSnapshot));
 defeatedSnapshot.fighters[1].health = 0;
@@ -477,10 +497,10 @@ const defeatedTarget = defeatedRecoveryFrame.components.find(
   (component) => component.fighterId === defeatedSnapshot.lastAction.targetId,
 );
 assert.equal(defeatedTarget.animation.clip, "defeated", "Поверженный боец не возвращается из смерти в стойку");
-assert.equal(defeatedTarget.animation.sheet.loop, false, "Смерть остаётся на финальном кадре");
+assert.equal(defeatedTarget.animation.sheet.playback.repeat, null, "Смерть остаётся на финальном кадре");
 assert.equal(
-  frameIndexFor.call(null, defeatedTarget, 0, 0),
-  defeatedTarget.animation.sheet.frames.length - 1,
+  frameFor.call(null, defeatedTarget, 0, 0),
+  defeatedTarget.animation.sheet.frames.at(-1),
   "Нулевая длительность смерти показывает финальный, а не первый кадр",
 );
 const actionMobileFrame = createVisualFrame(actionSnapshot, standardInput, undefined, {

@@ -78,7 +78,7 @@ interface BattleVisualCue {
 | 6 | `reaction.hit` | 0–5 | одноразово, попадание и восстановление | 10 FPS |
 | 7 | `advance`, `retreat` | 0–5 / 5–0 | цикл шага вперёд / тот же цикл назад | 7 FPS / 900 мс |
 | 8 | `greeting` | 0–5 | одноразово, стойка → салют мечом → возврат | 4 FPS / 1400 мс |
-| 9 | `victory` | 0–5 | цикл победного салюта поднятым оружием; мечник получает рендер-коррекцию `×1,08` от линии стоп | 7 FPS / 860 мс |
+| 9 | `victory` | 0–5 → 4↔5 | полный победный салют, затем живой цикл только двух финальных кадров; мечник получает рендер-коррекцию `×1,08` от линии стоп | 7 FPS / 860 мс до цикла |
 | 10 | `special` | 0–5 | одноразовый классовый или перковый приём | 10 FPS / 680 мс |
 
 Для `defeated` в прототипе допускается использовать последние три кадра строки 6 (`3–5`) как переход в конечную позу. Позже это лучше вынести в отдельную строку, если для поражения понадобится полноценная анимация.
@@ -112,9 +112,15 @@ interface BattleVisualCue {
 ```ts
 interface AnimationClip {
   row: number;
-  frames: number[];
   fps: number;
-  loop: boolean;
+  durationMs?: number;
+  playback: {
+    sequence: number[];
+    repeat: null | {
+      sequence: number[];
+      keepAlive: boolean;
+    };
+  };
 }
 
 interface UnifiedFighterSpriteSheet {
@@ -123,6 +129,33 @@ interface UnifiedFighterSpriteSheet {
   grid: { columns: 6; rows: 11 };
   clips: Partial<Record<VisualStateId, AnimationClip>>;
 }
+```
+
+Клипы создаются через единый `defineAnimationClip`. `playback.sequence`
+задаёт первое проигрывание и может содержать любой порядок и повтор кадров.
+Отсутствующий `repeat` означает разовую анимацию. Для обычного loop в
+`repeat.sequence` передаётся та же последовательность, для цикла с выбранного
+кадра — только нужный хвост, а для независимого цикла — любая другая
+последовательность. `keepAlive: true` оставляет повтор активным после основной
+длительности; `false` позволяет конечной фазе движения продолжить цепочку
+визуальных действий. Поле `frames` в runtime остаётся read-only alias для
+совместимости старых рендереров, но источником временной логики является
+`playback`.
+
+Примеры шаблона:
+
+```js
+defineAnimationClip({ row: 3, fps: 12 });
+// Разовая последовательность 0→1→2→3→4→5.
+
+defineAnimationClip({ row: 0, fps: 6, repeatSequence: [0, 1, 2, 3, 4, 5], keepAlive: true });
+// Полный бесконечный loop.
+
+defineAnimationClip({ row: 9, fps: 7, repeatSequence: [4, 5], keepAlive: true, durationMs: 860 });
+// Сначала 0→1→2→3→4→5, затем 4↔5.
+
+defineAnimationClip({ row: 6, fps: 10, sequence: [0, 1, 2, 1, 0] });
+// Произвольная разовая последовательность.
 ```
 
 ## 5. Временный единый спрайт бойца и оружия

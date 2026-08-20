@@ -1,7 +1,12 @@
 (function () {
 "use strict";
 
-const { SpriteLibrary } = globalThis.GladiatorSpriteLibrary || {};
+const {
+  SpriteLibrary,
+  animationFrameForElapsed,
+  clipFrameSequence,
+  clipRepeat,
+} = globalThis.GladiatorSpriteLibrary || {};
 
 if (!SpriteLibrary) {
   throw new Error("Сначала подключите sprite-library.js");
@@ -580,11 +585,13 @@ class BattleVisualEngine {
     if (token !== this.playbackToken) return;
     this.setFrame(frame);
     const duration = Math.max(...frame.components.map((component) => component.motion.duration), 0);
-    const hasLoop = frame.components.some((component) => component.animation?.sheet?.loop);
-    const hasTerminalLoop = frame.components.some((component) => (
-      component.animation?.state === "victory" && component.animation?.sheet?.loop
+    const hasRepeat = frame.components.some((component) => (
+      clipRepeat(component.animation?.sheet)?.sequence?.length
     ));
-    if (!duration && hasLoop) {
+    const keepsRepeating = frame.components.some((component) => (
+      clipRepeat(component.animation?.sheet)?.keepAlive
+    ));
+    if (!duration && hasRepeat) {
       const startedAt = performance.now();
       const animateLoop = (now) => {
         if (token !== this.playbackToken) return;
@@ -606,9 +613,9 @@ class BattleVisualEngine {
       this.draw(progress, now - startedAt);
       if (progress < 1) {
         this.animationFrame = requestAnimationFrame(animate);
-      } else if (hasTerminalLoop) {
-        /* Итоговый салют остаётся живым до следующего setFrame/stop. Обычные
-         * циклы движения завершаются по duration и продолжают цепочку боя. */
+      } else if (keepsRepeating) {
+        /* keepAlive оставляет повторяемый сегмент активным до следующего
+         * setFrame/stop. Конкретное состояние движок здесь не проверяет. */
         this.animationFrame = requestAnimationFrame(animate);
       } else {
         this.animationFrame = null;
@@ -880,22 +887,20 @@ class BattleVisualEngine {
     context.restore();
   }
 
-  animationFrameIndex(component, progress, animationClock) {
+  animationFrameColumn(component, progress, animationClock) {
     const sheet = component.animation?.sheet;
-    if (!sheet?.frames?.length) return 0;
-    if (sheet.loop) {
-      return Math.floor(animationClock / 1000 * sheet.fps) % sheet.frames.length;
-    }
-    if (!component.motion?.duration) return sheet.frames.length - 1;
-    const componentProgress = component.motion?.duration
-      ? clamp(animationClock / component.motion.duration, 0, 1)
-      : progress;
-    return Math.min(sheet.frames.length - 1, Math.floor(componentProgress * sheet.frames.length));
+    const sequence = clipFrameSequence(sheet);
+    if (!sequence.length) return 0;
+    return animationFrameForElapsed(
+      sheet,
+      animationClock,
+      component.motion?.duration ?? sheet.durationMs,
+    );
   }
 
   weaponLayer(component, progress, animationClock) {
-    const frameIndex = this.animationFrameIndex(component, progress, animationClock);
-    return component.animation?.layerByFrame?.[frameIndex] || "front";
+    const frame = this.animationFrameColumn(component, progress, animationClock);
+    return component.animation?.layerByFrame?.[frame] || "front";
   }
 
   drawArenaBackground(context, width, height, frame, cameraOffset = frame.arena.cameraOffset || 0) {
@@ -1104,9 +1109,9 @@ class BattleVisualEngine {
     if (component.kind === "fighter") context.filter = "brightness(0.8) saturate(0.86) contrast(1.08)";
     if (component.animation?.blendMode) context.globalCompositeOperation = component.animation.blendMode;
     if (component.animation?.mirrored) context.scale(-1, 1);
-    if (sheet?.frames) {
-      const frameIndex = this.animationFrameIndex(component, progress, animationClock);
-      const frame = sheet.frames[frameIndex];
+    const sequence = clipFrameSequence(sheet);
+    if (sequence.length) {
+      const frame = this.animationFrameColumn(component, progress, animationClock);
       const sourceWidth = image.naturalWidth / sheet.columns;
       const sourceHeight = image.naturalHeight / sheet.rows;
       const logicalHeight = sheet.logicalHeight || sourceHeight;
