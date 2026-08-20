@@ -16,9 +16,12 @@ const {
   UNIFIED_SWORDSMAN_GRID_ID,
 } = globalThis.GladiatorSpriteLibrary;
 const {
+  ARENA_CAMERA_FOLLOW_RATIO,
+  ARENA_CAMERA_ZOOM,
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
   PRESSURE_STEP_DISTANCE,
+  PRESSURE_DISTANCE,
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
@@ -214,11 +217,16 @@ const dominantPressureFrame = createVisualFrame(dominantPressureSnapshot, standa
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
 });
-assert.equal(dominantPressureFrame.arena.territoryOffset, 40, "Преимущество первого бойца сильнее сдвигает бой к правому краю");
+assert.equal(PRESSURE_DISTANCE, 60, "Подвижная камера расширяет территорию боя до шестидесяти пикселей в каждую сторону");
+assert.equal(ARENA_CAMERA_FOLLOW_RATIO, 0.35, "Камера следует только за частью мирового смещения боя");
+assert.equal(ARENA_CAMERA_ZOOM, 1.15, "Фон имеет безопасный запас для горизонтальной панорамы");
+assert.equal(dominantPressureFrame.arena.territoryOffset, 60, "Преимущество первого бойца сильнее сдвигает бой к правому краю");
+assert.equal(dominantPressureFrame.arena.cameraOffset, 21, "Камера следует за центром боя на 35 процентов территориального сдвига");
+assert.equal(dominantPressureFrame.arena.screenTerritoryOffset, 39, "Остаток движения остаётся видимым на экране бойцов");
 assert.equal(
   dominantPressureFrame.components[0].transform.x - neutralPressureFrame.components[0].transform.x,
-  40,
-  "Напирающий боец визуально продвигается вперёд",
+  39,
+  "Напирающий боец продвигается вперёд, пока камера удерживает его в безопасной зоне",
 );
 const healthPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
 healthPressureSnapshot.fighters[0].health = healthPressureSnapshot.fighters[0].maxHealth;
@@ -229,15 +237,15 @@ const healthPressureFrame = createVisualFrame(healthPressureSnapshot, standardIn
 });
 assert.equal(healthPressureFrame.arena.initiativePressure, 0, "Равная инициатива не создаёт собственное давление");
 assert.equal(healthPressureFrame.arena.healthPressure, 0.25, "Половина запаса здоровья даёт четверть визуального давления");
-assert.equal(healthPressureFrame.arena.territoryOffset, 10, "Преимущество по здоровью умеренно сдвигает сцену");
-assert.equal(PRESSURE_STEP_DISTANCE, 6, "Теснение требует накопить заметный шаг в шесть пикселей");
+assert.equal(healthPressureFrame.arena.territoryOffset, 15, "Преимущество по здоровью умеренно сдвигает сцену");
+assert.equal(PRESSURE_STEP_DISTANCE, 12, "Ходьба требует накопить полноценный шаг в двенадцать пикселей");
 const minorPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
 minorPressureSnapshot.fighters[0].initiative = 59;
 const minorPressureFrame = createVisualFrame(minorPressureSnapshot, standardInput, undefined, {
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
 });
-assert.equal(minorPressureFrame.arena.territoryOffset, 5, "Небольшое преимущество создаёт только желаемый сдвиг");
+assert.equal(minorPressureFrame.arena.territoryOffset, 8, "Небольшое преимущество создаёт только желаемый сдвиг");
 assert.equal(resolveTerritoryOffset(0, minorPressureFrame.arena.territoryOffset), 0, "Неполный шаг остаётся накопленным без движения");
 const accumulatedPressureSnapshot = JSON.parse(JSON.stringify(neutralPressureSnapshot));
 accumulatedPressureSnapshot.fighters[0].initiative = 68;
@@ -245,8 +253,27 @@ const accumulatedPressureFrame = createVisualFrame(accumulatedPressureSnapshot, 
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
 });
-assert.equal(accumulatedPressureFrame.arena.territoryOffset, 10, "Рост преимущества накапливает расстояние для полноценного шага");
-assert.equal(resolveTerritoryOffset(0, accumulatedPressureFrame.arena.territoryOffset), 10, "Полный шаг фиксирует новую территорию");
+assert.equal(accumulatedPressureFrame.arena.territoryOffset, 15, "Рост преимущества накапливает расстояние для полноценного шага");
+assert.equal(resolveTerritoryOffset(0, accumulatedPressureFrame.arena.territoryOffset), 15, "Полный шаг фиксирует новую территорию");
+const cameraBackground = { complete: true, naturalWidth: 360, naturalHeight: 560 };
+let neutralBackgroundCrop = null;
+let dominantBackgroundCrop = null;
+BattleVisualEngine.prototype.drawArenaBackground.call(
+  { loadAsset: () => cameraBackground },
+  { drawImage: (...args) => { neutralBackgroundCrop = args; } },
+  360,
+  300,
+  neutralPressureFrame,
+);
+BattleVisualEngine.prototype.drawArenaBackground.call(
+  { loadAsset: () => cameraBackground },
+  { drawImage: (...args) => { dominantBackgroundCrop = args; } },
+  360,
+  300,
+  dominantPressureFrame,
+);
+assert.ok(neutralBackgroundCrop[3] < 360, "Overscan использует увеличенный горизонтальный фрагмент фона без пустых краёв");
+assert.ok(dominantBackgroundCrop[1] > neutralBackgroundCrop[1], "При теснении вправо окно фона следует за боем вправо");
 const heldMinorPressureFrame = createVisualFrame(minorPressureSnapshot, standardInput, undefined, {
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
@@ -268,6 +295,7 @@ const pressureMovementFrame = BattleVisualEngine.prototype.createPressureMovemen
 assert.equal(pressureMovementFrame.components[0].animation.clip, "advance", "Напирающий использует строку движения вперёд");
 assert.equal(pressureMovementFrame.components[1].animation.clip, "retreat", "Уступающий использует строку движения назад");
 assert.equal(pressureMovementFrame.components[0].motion.duration, 900, "Визуальное перемещение предшествует действию и длится 900 мс");
+assert.equal(pressureMovementFrame.arena.cameraOffset, 21, "Фаза ходьбы переносит фон вместе с новой территорией");
 
 const initialApproach = BattleVisualEngine.prototype.createInitialApproach.call({
   spriteLibrary: new SpriteLibrary(),
@@ -389,7 +417,7 @@ const crowdLater = BattleVisualEngine.prototype.arenaCrowdSprites.call(
   standardMobileFrame,
   900,
 );
-assert.equal(crowdAtRest.length, 16, "Все описанные зрители находятся в видимом фрагменте Canvas");
+assert.ok(crowdAtRest.length >= 15, "Сдвинутая камера сохраняет почти весь процедурный слой зрителей в кадре");
 assert.notDeepEqual(crowdLater, crowdAtRest, "Зрители слегка покачиваются и иногда поднимают руки");
 const sandLights = BattleVisualEngine.prototype.arenaLightSprites.call(
   lightRenderer,

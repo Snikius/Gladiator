@@ -15,7 +15,10 @@ const PRESENTATIONS = Object.freeze({ mobile: "mobile" });
 const RENDERER_MODES = Object.freeze({ lines: "lines", assets: "assets" });
 const POSITION_STAGES = Object.freeze({ entrance: "entrance", combat: "combat" });
 const INJURED_HEALTH_RATIO = 0.45;
-const PRESSURE_STEP_DISTANCE = 6;
+const PRESSURE_STEP_DISTANCE = 12;
+const PRESSURE_DISTANCE = 60;
+const ARENA_CAMERA_FOLLOW_RATIO = 0.35;
+const ARENA_CAMERA_ZOOM = 1.15;
 const BLOOD_PATTERN = Object.freeze([
   Object.freeze({ distance: 12, lift: 5, gravity: 4, size: 9, delay: 0, color: "#e13728" }),
   Object.freeze({ distance: 20, lift: 13, gravity: 6, size: 8, delay: 0.01, color: "#c91f1a" }),
@@ -180,7 +183,7 @@ const presentationConfig = (sceneHeight = 300) => {
     groundY: 280 + Math.round(extraHeight * 0.55),
     scale: 3.2,
     assetHeight: 150,
-    pressureDistance: 40,
+    pressureDistance: PRESSURE_DISTANCE,
   });
 };
 
@@ -189,6 +192,31 @@ const resolveTerritoryOffset = (displayedOffset, desiredOffset) => (
     ? desiredOffset
     : displayedOffset
 );
+
+const arenaViewport = (width, height, frame, image, cameraOffset = frame.arena.cameraOffset || 0) => {
+  const zoom = frame.arena.cameraZoom || 1;
+  const sourceWidth = Math.min(image.naturalWidth, width / zoom);
+  const sourceHeight = Math.min(image.naturalHeight, height);
+  const centeredSourceX = (image.naturalWidth - sourceWidth) / 2;
+  const sourceX = clamp(
+    centeredSourceX + cameraOffset / zoom,
+    0,
+    image.naturalWidth - sourceWidth,
+  );
+  const sourceY = clamp(
+    (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY,
+    0,
+    image.naturalHeight - sourceHeight,
+  );
+  return freeze({
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    scaleX: width / sourceWidth,
+    scaleY: height / sourceHeight,
+  });
+};
 
 /*
  * Чистый адаптер: вход — снимок симуляции, выход — визуальная сцена.
@@ -223,8 +251,10 @@ const createVisualFrame = (
     : Number.isFinite(territoryOffsetOverride)
       ? clamp(Math.round(territoryOffsetOverride), -config.pressureDistance, config.pressureDistance)
       : desiredTerritoryOffset;
+  const cameraOffset = isEntrance ? 0 : Math.round(territoryOffset * ARENA_CAMERA_FOLLOW_RATIO);
+  const screenTerritoryOffset = territoryOffset - cameraOffset;
   const anchorPositions = isEntrance ? config.entrancePositions : config.combatPositions;
-  const positions = anchorPositions.map((position) => position + territoryOffset);
+  const positions = anchorPositions.map((position) => position + screenTerritoryOffset);
   const showOutcome = snapshot?.label === "Итог боя";
   const action = showOutcome ? null : snapshot?.lastAction;
   const components = fighters.flatMap((fighter, side) => {
@@ -311,7 +341,7 @@ const createVisualFrame = (
     ];
   });
   return freeze({
-    version: 11,
+    version: 12,
     presentation,
     rendererMode,
     arena: freeze({
@@ -327,6 +357,9 @@ const createVisualFrame = (
       pressure: pressure.total,
       territoryOffset,
       desiredTerritoryOffset,
+      screenTerritoryOffset,
+      cameraOffset,
+      cameraZoom: ARENA_CAMERA_ZOOM,
       positionStage,
     }),
     fighters: freeze(fighters.map((fighter) => freeze({
@@ -363,6 +396,7 @@ class BattleVisualEngine {
     this.animationFrame = null;
     this.assets = new Map();
     this.transitionFrom = new Map();
+    this.transitionFromArenaCameraOffset = 0;
     this.playbackToken = 0;
     this.approachPending = true;
     this.territoryOffset = 0;
@@ -444,6 +478,7 @@ class BattleVisualEngine {
     this.stop();
     this.frame = null;
     this.transitionFrom = new Map();
+    this.transitionFromArenaCameraOffset = 0;
     this.approachPending = true;
     this.territoryOffset = 0;
     this.bloodStains = [];
@@ -535,6 +570,9 @@ class BattleVisualEngine {
     this.transitionFrom = new Map(
       (this.frame?.components || []).map((component) => [component.id, component.transform]),
     );
+    this.transitionFromArenaCameraOffset = this.frame?.arena?.cameraOffset
+      ?? frame.arena?.cameraOffset
+      ?? 0;
     this.frame = frame;
   }
 
@@ -596,12 +634,23 @@ class BattleVisualEngine {
     context.imageSmoothingEnabled = false;
     context.fillStyle = frame.arena.background;
     context.fillRect(0, 0, canvas.width, canvas.height);
-    const backgroundDrawn = this.drawArenaBackground(context, canvas.width, canvas.height, frame);
-    this.drawArenaLights(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
-    this.drawArenaCrowd(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
+    const cameraOffset = lerp(
+      this.transitionFromArenaCameraOffset ?? frame.arena.cameraOffset,
+      frame.arena.cameraOffset,
+      easeOut(progress),
+    );
+    const backgroundDrawn = this.drawArenaBackground(
+      context,
+      canvas.width,
+      canvas.height,
+      frame,
+      cameraOffset,
+    );
+    this.drawArenaLights(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn, cameraOffset);
+    this.drawArenaCrowd(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn, cameraOffset);
     this.drawArenaGuides(context, canvas.width, canvas.height, frame, backgroundDrawn);
     this.drawFighterShadows(context, frame, progress, animationClock);
-    this.drawBloodStains(context, frame, performance.now());
+    this.drawBloodStains(context, frame, performance.now(), cameraOffset);
     const fighters = frame.components.filter((component) => component.kind === "fighter");
     const weapons = frame.components.filter((component) => component.kind === "weapon");
     weapons.filter((component) => this.weaponLayer(component, progress, animationClock) === "behind")
@@ -775,7 +824,8 @@ class BattleVisualEngine {
       impact,
       createdAt: now + delayMs + index * 45,
       lifetime: Math.round((2600 + index * 110) * BLOOD_STAIN_LIFETIME_MULTIPLIER),
-      x: clamp(Math.round(target.transform.x + awayFromAttacker * offset), 4, this.canvas.width - 4),
+      worldX: clamp(Math.round(target.transform.x + awayFromAttacker * offset), 4, this.canvas.width - 4)
+        + (frame.arena.cameraOffset || 0),
       y: frame.arena.groundY + 3 + (index * 5) % 14,
       width: Math.max(3, Math.round((7 - index % 3) * profile.scale * BLOOD_STAIN_SIZE_MULTIPLIER)),
       height: Math.max(2, Math.round((3 + index % 2) * profile.scale * BLOOD_STAIN_SIZE_MULTIPLIER)),
@@ -785,7 +835,7 @@ class BattleVisualEngine {
     return created;
   }
 
-  bloodStainSprites(frame, now = performance.now()) {
+  bloodStainSprites(frame, now = performance.now(), cameraOffset = frame.arena.cameraOffset || 0) {
     const visible = [];
     this.bloodStains = this.bloodStains.filter((stain) => {
       const age = now - stain.createdAt;
@@ -798,6 +848,7 @@ class BattleVisualEngine {
       const blue = Math.round(23 - 14 * progress);
       visible.push(freeze({
         ...stain,
+        x: stain.worldX - cameraOffset,
         color: `rgb(${red}, ${green}, ${blue})`,
         alpha: clamp(0.78 * fade, 0, 0.78),
       }));
@@ -806,8 +857,8 @@ class BattleVisualEngine {
     return visible;
   }
 
-  drawBloodStains(context, frame, now = performance.now()) {
-    const stains = this.bloodStainSprites(frame, now);
+  drawBloodStains(context, frame, now = performance.now(), cameraOffset = frame.arena.cameraOffset || 0) {
+    const stains = this.bloodStainSprites(frame, now, cameraOffset);
     if (!stains.length) return;
     context.save();
     stains.forEach((stain) => {
@@ -847,21 +898,17 @@ class BattleVisualEngine {
     return component.animation?.layerByFrame?.[frameIndex] || "front";
   }
 
-  drawArenaBackground(context, width, height, frame) {
+  drawArenaBackground(context, width, height, frame, cameraOffset = frame.arena.cameraOffset || 0) {
     if (frame.rendererMode !== RENDERER_MODES.assets) return false;
     const image = this.loadAsset(frame.arena.assetPath);
     if (!image?.complete || !image.naturalWidth) return false;
-    const sourceHeight = Math.min(image.naturalHeight, height);
-    const sourceY = Math.min(
-      image.naturalHeight - sourceHeight,
-      Math.max(0, (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY),
-    );
+    const viewport = arenaViewport(width, height, frame, image, cameraOffset);
     context.drawImage(
       image,
-      0,
-      sourceY,
-      image.naturalWidth,
-      sourceHeight,
+      viewport.sourceX,
+      viewport.sourceY,
+      viewport.sourceWidth,
+      viewport.sourceHeight,
       0,
       0,
       width,
@@ -870,21 +917,15 @@ class BattleVisualEngine {
     return true;
   }
 
-  arenaLightSprites(width, height, frame, animationClock = 0) {
+  arenaLightSprites(width, height, frame, animationClock = 0, cameraOffset = frame.arena.cameraOffset || 0) {
     if (frame.rendererMode !== RENDERER_MODES.assets || !frame.arena.ambientLights?.length) return [];
     const image = this.loadAsset(frame.arena.assetPath);
     if (!image?.complete || !image.naturalWidth) return [];
-    const sourceHeight = Math.min(image.naturalHeight, height);
-    const sourceY = Math.min(
-      image.naturalHeight - sourceHeight,
-      Math.max(0, (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY),
-    );
-    const scaleX = width / image.naturalWidth;
-    const scaleY = height / sourceHeight;
+    const viewport = arenaViewport(width, height, frame, image, cameraOffset);
     const seconds = animationClock / 1000;
     return frame.arena.ambientLights.flatMap((light) => {
-      const x = light.x * scaleX;
-      const y = (light.y - sourceY) * scaleY;
+      const x = (light.x - viewport.sourceX) * viewport.scaleX;
+      const y = (light.y - viewport.sourceY) * viewport.scaleY;
       if (x < -16 || x > width + 16 || y < -16 || y > height + 16) return [];
       const phase = (light.phase || 0) * Math.PI * 2;
       const wave = Math.sin(seconds * 7.1 + phase) * 0.62
@@ -894,15 +935,15 @@ class BattleVisualEngine {
       return [freeze({
         x: Math.round(x) + drift,
         y: Math.round(y),
-        scale: (light.scale || 1) * scaleY,
+        scale: (light.scale || 1) * viewport.scaleY,
         pulse,
       })];
     });
   }
 
-  drawArenaLights(context, width, height, frame, animationClock, backgroundDrawn = false) {
+  drawArenaLights(context, width, height, frame, animationClock, backgroundDrawn = false, cameraOffset = frame.arena.cameraOffset || 0) {
     if (!backgroundDrawn) return;
-    const lights = this.arenaLightSprites(width, height, frame, animationClock);
+    const lights = this.arenaLightSprites(width, height, frame, animationClock, cameraOffset);
     if (!lights.length) return;
     context.save();
     context.globalCompositeOperation = "screen";
@@ -928,21 +969,15 @@ class BattleVisualEngine {
     context.restore();
   }
 
-  arenaCrowdSprites(width, height, frame, animationClock = 0) {
+  arenaCrowdSprites(width, height, frame, animationClock = 0, cameraOffset = frame.arena.cameraOffset || 0) {
     if (frame.rendererMode !== RENDERER_MODES.assets || !frame.arena.crowdMotion?.length) return [];
     const image = this.loadAsset(frame.arena.assetPath);
     if (!image?.complete || !image.naturalWidth) return [];
-    const sourceHeight = Math.min(image.naturalHeight, height);
-    const sourceY = Math.min(
-      image.naturalHeight - sourceHeight,
-      Math.max(0, (frame.arena.sourceGroundY || image.naturalHeight) - frame.arena.groundY),
-    );
-    const scaleX = width / image.naturalWidth;
-    const scaleY = height / sourceHeight;
+    const viewport = arenaViewport(width, height, frame, image, cameraOffset);
     const seconds = animationClock / 1000;
     return frame.arena.crowdMotion.flatMap((spectator) => {
-      const x = spectator.x * scaleX;
-      const y = (spectator.y - sourceY) * scaleY;
+      const x = (spectator.x - viewport.sourceX) * viewport.scaleX;
+      const y = (spectator.y - viewport.sourceY) * viewport.scaleY;
       if (x < -8 || x > width + 8 || y < -8 || y > height + 8) return [];
       const phase = (spectator.phase || 0) * Math.PI * 2;
       const sway = Math.sin(seconds * 1.7 + phase);
@@ -953,7 +988,7 @@ class BattleVisualEngine {
       return [freeze({
         x: Math.round(x + sway * 1.7),
         y: Math.round(y - Math.max(0, bob) - armLift),
-        scale: Math.max(1, Math.round((spectator.scale || 1) * scaleY)),
+        scale: Math.max(1, Math.round((spectator.scale || 1) * viewport.scaleY)),
         cheer,
         armLift,
         alpha: 0.3 + (sway + 1) * 0.065,
@@ -961,9 +996,9 @@ class BattleVisualEngine {
     });
   }
 
-  drawArenaCrowd(context, width, height, frame, animationClock, backgroundDrawn = false) {
+  drawArenaCrowd(context, width, height, frame, animationClock, backgroundDrawn = false, cameraOffset = frame.arena.cameraOffset || 0) {
     if (!backgroundDrawn) return;
-    const spectators = this.arenaCrowdSprites(width, height, frame, animationClock);
+    const spectators = this.arenaCrowdSprites(width, height, frame, animationClock, cameraOffset);
     if (!spectators.length) return;
     context.save();
     spectators.forEach((spectator) => {
@@ -1150,9 +1185,12 @@ class BattleVisualEngine {
 }
 
 globalThis.GladiatorVisualEngine = {
+  ARENA_CAMERA_FOLLOW_RATIO,
+  ARENA_CAMERA_ZOOM,
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
   PRESSURE_STEP_DISTANCE,
+  PRESSURE_DISTANCE,
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
