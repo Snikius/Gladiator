@@ -225,6 +225,34 @@ const battleStoryStamp = (className) => {
   return `<span class="mobile-story-stamp" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false">${stampPaths}</svg></span>`;
 };
 
+const MOBILE_STORY_SCROLL_MS = 620;
+let mobileStoryScrollToken = 0;
+
+const mobileStoryKey = (entry) => [
+  entry.kind || "story",
+  entry.step ?? "",
+  entry.className,
+  entry.text,
+].join("|");
+
+const createMobileStoryEntryNode = (entry) => {
+  const item = document.createElement("li");
+  item.className = entry.className;
+  item.dataset.storyKey = mobileStoryKey(entry);
+
+  if (entry.className !== "empty") {
+    item.insertAdjacentHTML("beforeend", battleStoryStamp(entry.className));
+    const copy = document.createElement("span");
+    copy.className = "mobile-story-copy";
+    copy.textContent = entry.text;
+    item.append(copy);
+  } else {
+    item.textContent = entry.text;
+  }
+
+  return item;
+};
+
 const formatNumber = (value, digits = 2) => Number(value).toLocaleString("ru-RU", {
   maximumFractionDigits: digits,
 });
@@ -573,6 +601,75 @@ const fitMobileBattleFeed = () => {
   elements.mobileBattleFeed.dataset.visibleEntries = String(elements.mobileBattleFeed.children.length);
 };
 
+const updateMobileBattleFeed = (entries) => {
+  if (!elements.mobileBattleFeed || !elements.mobileBattleStory) return;
+
+  const oldItems = [...elements.mobileBattleFeed.children];
+  const oldPositions = new Map();
+  const reusableItems = new Map();
+  oldItems.forEach((item) => {
+    const key = item.dataset.storyKey;
+    if (!key) return;
+    oldPositions.set(key, item.getBoundingClientRect().top);
+    reusableItems.set(key, item);
+    item.getAnimations?.().forEach((animation) => animation.cancel());
+  });
+
+  const fragment = document.createDocumentFragment();
+  entries.forEach((entry) => {
+    const key = mobileStoryKey(entry);
+    fragment.append(reusableItems.get(key) || createMobileStoryEntryNode(entry));
+  });
+  elements.mobileBattleFeed.replaceChildren(fragment);
+  fitMobileBattleFeed();
+
+  const visibleItems = [...elements.mobileBattleFeed.children];
+  const previousSignature = oldItems.map((item) => item.dataset.storyKey || "").join("\n");
+  const nextSignature = visibleItems.map((item) => item.dataset.storyKey || "").join("\n");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (previousSignature === nextSignature || reduceMotion || typeof visibleItems[0]?.animate !== "function") return;
+
+  const token = ++mobileStoryScrollToken;
+  elements.mobileBattleStory.classList.add("is-scrolling");
+  window.requestAnimationFrame(() => {
+    if (token !== mobileStoryScrollToken) return;
+    const animations = visibleItems.map((item) => {
+      const oldTop = oldPositions.get(item.dataset.storyKey);
+      const newTop = item.getBoundingClientRect().top;
+      const isNew = oldTop === undefined;
+      const offset = isNew ? 20 : oldTop - newTop;
+      if (!isNew && Math.abs(offset) < 0.5) return null;
+
+      return item.animate([
+        {
+          transform: `translateY(${offset}px) rotate(${isNew ? "0.18deg" : "-0.08deg"})`,
+          opacity: isNew ? 0.08 : 1,
+          filter: isNew ? "sepia(.45) blur(.25px)" : "none",
+        },
+        {
+          transform: "translateY(0) rotate(0)",
+          opacity: 1,
+          filter: "none",
+        },
+      ], {
+        duration: MOBILE_STORY_SCROLL_MS,
+        easing: "cubic-bezier(.22, .75, .25, 1)",
+        fill: "both",
+      });
+    }).filter(Boolean);
+
+    if (!animations.length) {
+      elements.mobileBattleStory.classList.remove("is-scrolling");
+      return;
+    }
+    Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (token !== mobileStoryScrollToken) return;
+      animations.forEach((animation) => animation.cancel());
+      elements.mobileBattleStory.classList.remove("is-scrolling");
+    });
+  });
+};
+
 const renderMobileBattleUi = (snapshot, input) => {
   if (!snapshot || !elements.mobileArenaHeader || !elements.mobileBattleFeed) return;
   fighterBloodLevels(snapshot).forEach((level, index) => {
@@ -640,15 +737,9 @@ const renderMobileBattleUi = (snapshot, input) => {
   `;
 
   const recentStory = buildBattleStoryEntries(currentResult, snapshot, 60);
-  elements.mobileBattleFeed.innerHTML = recentStory.length
-    ? recentStory.map((entry) => `
-        <li class="${escapeHtml(entry.className)}">
-          ${battleStoryStamp(entry.className)}
-          <span class="mobile-story-copy">${escapeHtml(entry.text)}</span>
-        </li>
-      `).join("")
-    : "<li class=\"empty\">Бой ещё не начался.</li>";
-  fitMobileBattleFeed();
+  updateMobileBattleFeed(recentStory.length
+    ? recentStory
+    : [{ kind: "empty", step: -1, className: "empty", text: "Бой ещё не начался." }]);
 };
 
 const renderNumbers = (snapshot) => {
