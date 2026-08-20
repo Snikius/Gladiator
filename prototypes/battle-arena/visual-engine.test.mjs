@@ -128,6 +128,13 @@ assert.equal(standardMobileFrame.arena.assetPath, ARENA_BACKGROUNDS.crowd.assetP
 assert.equal(standardMobileFrame.arena.ambientLights.length, 2, "Арена со зрителями передаёт два независимых факела");
 assert.equal(standardMobileFrame.arena.crowdMotion.length, 16, "Фон толпы получает компактный процедурный слой зрителей");
 assert.equal(standardMobileFrame.arena.groundY, 280, "Линия ног помещается в компактный Canvas высотой 300 px");
+const tallMobileFrame = createVisualFrame(standardResult.snapshots[0], standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+  sceneHeight: 324,
+});
+assert.equal(tallMobileFrame.arena.groundY, 293, "Высокий мобильный экран добавляет арену без растягивания бойцов");
+assert.equal(tallMobileFrame.components[0].animation.assetHeight, 150, "Адаптивная высота сцены не меняет рост бойца");
 assert.equal(standardMobileFrame.arena.sourceGroundY, 470, "Новый фон обрезается с сохранением исходной линии земли");
 assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог раненой стойки зафиксирован на 45% здоровья");
 const injuredHealthSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));

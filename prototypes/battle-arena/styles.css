@@ -1368,8 +1368,9 @@ body.mobile-fullscreen-mode {
 
 .mobile-fullscreen-mode .mobile-device {
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   aspect-ratio: auto;
   padding: 0;
   border: 0;

@@ -93,6 +93,32 @@ const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
 const spriteRendererButtons = [...document.querySelectorAll("[data-renderer-mode]")];
+const MOBILE_ARENA_BASE_HEIGHT = 300;
+const MOBILE_ARENA_MAX_EXTRA_HEIGHT = 24;
+
+const mobileArenaHeightForViewport = (width, height) => {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0) return MOBILE_ARENA_BASE_HEIGHT;
+  const normalizedHeight = height * 360 / width;
+  const extraHeight = Math.max(0, Math.min(
+    MOBILE_ARENA_MAX_EXTRA_HEIGHT,
+    Math.round((normalizedHeight - 640) * 0.16),
+  ));
+  return MOBILE_ARENA_BASE_HEIGHT + extraHeight;
+};
+
+const syncMobileArenaHeight = () => {
+  const option = elements.mobileViewportPreset?.selectedOptions[0];
+  const viewportWidth = isMobileFullscreenMode ? window.innerWidth : Number(option?.dataset.width);
+  const viewportHeight = isMobileFullscreenMode ? window.innerHeight : Number(option?.dataset.height);
+  const nextHeight = mobileArenaHeightForViewport(viewportWidth, viewportHeight);
+  if (!elements.spriteVisualCanvas || elements.spriteVisualCanvas.height === nextHeight) return false;
+  elements.spriteVisualCanvas.height = nextHeight;
+  if (lastVisualSnapshot) {
+    spriteVisualEngine?.present(lastVisualSnapshot, lastVisualInput);
+    renderMobileBattleUi(lastVisualSnapshot, lastVisualInput);
+  }
+  return true;
+};
 
 const formatViewportRatio = (width, height) => {
   const ratioToNine = (height / width) * 9;
@@ -116,6 +142,7 @@ const applyMobileViewportPreset = () => {
   if (elements.mobileViewportReadout) {
     elements.mobileViewportReadout.textContent = `Viewport ${width}×${height} CSS px · ${formatViewportRatio(width, height)}`;
   }
+  syncMobileArenaHeight();
 };
 
 const requestNativeFullscreen = () => {
@@ -137,6 +164,7 @@ const setMobileFullscreenMode = (enabled, { updateUrl = false, nativeFullscreen 
   isMobileFullscreenMode = enabled;
   document.body.classList.toggle("mobile-fullscreen-mode", enabled);
   if (updateUrl) window.history.pushState({ mobileFullscreen: enabled }, "", mobileModeUrl(enabled));
+  syncMobileArenaHeight();
   if (nativeFullscreen && enabled) requestNativeFullscreen();
   if (!enabled && document.fullscreenElement && document.exitFullscreen) {
     document.exitFullscreen().catch(() => {});
@@ -504,6 +532,26 @@ const meterRow = (label, value, max, className, displayValue = null) => {
   `;
 };
 
+const fitMobileBattleFeed = () => {
+  if (!elements.mobileBattleStory || !elements.mobileBattleFeed) return;
+  const storyStyle = window.getComputedStyle(elements.mobileBattleStory);
+  const bottomPadding = Number.parseFloat(storyStyle.paddingBottom) || 0;
+  const availableHeight = Math.max(
+    0,
+    elements.mobileBattleStory.clientHeight
+      - elements.mobileBattleFeed.offsetTop
+      - bottomPadding
+      - 5,
+  );
+  while (
+    elements.mobileBattleFeed.children.length > 1
+    && elements.mobileBattleFeed.scrollHeight > availableHeight
+  ) {
+    elements.mobileBattleFeed.firstElementChild.remove();
+  }
+  elements.mobileBattleFeed.dataset.visibleEntries = String(elements.mobileBattleFeed.children.length);
+};
+
 const renderMobileBattleUi = (snapshot, input) => {
   if (!snapshot || !elements.mobileArenaHeader || !elements.mobileBattleFeed) return;
   fighterBloodLevels(snapshot).forEach((level, index) => {
@@ -570,7 +618,7 @@ const renderMobileBattleUi = (snapshot, input) => {
     </div>
   `;
 
-  const recentStory = buildBattleStoryEntries(currentResult, snapshot, 3);
+  const recentStory = buildBattleStoryEntries(currentResult, snapshot, 60);
   elements.mobileBattleFeed.innerHTML = recentStory.length
     ? recentStory.map((entry) => `
         <li class="${escapeHtml(entry.className)}">
@@ -578,6 +626,7 @@ const renderMobileBattleUi = (snapshot, input) => {
         </li>
       `).join("")
     : "<li class=\"empty\">Бой ещё не начался.</li>";
+  fitMobileBattleFeed();
 };
 
 const renderNumbers = (snapshot) => {
@@ -1018,5 +1067,15 @@ elements.mobileNativeFullscreen?.addEventListener("click", requestNativeFullscre
 elements.mobileStartButton?.addEventListener("click", () => elements.form.requestSubmit());
 window.addEventListener("popstate", () => {
   setMobileFullscreenMode(new URLSearchParams(window.location.search).get("mobile") === "1");
+});
+let mobileLayoutResizeFrame = null;
+window.addEventListener("resize", () => {
+  if (mobileLayoutResizeFrame !== null) cancelAnimationFrame(mobileLayoutResizeFrame);
+  mobileLayoutResizeFrame = requestAnimationFrame(() => {
+    mobileLayoutResizeFrame = null;
+    if (!syncMobileArenaHeight() && lastVisualSnapshot) {
+      renderMobileBattleUi(lastVisualSnapshot, lastVisualInput);
+    }
+  });
 });
 })();

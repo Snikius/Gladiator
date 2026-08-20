@@ -165,14 +165,17 @@ const sheetMotion = (motion, sheetClip, direction) => {
 
 /* Логическое тело выводится высотой 150 px. Физический кадр может быть больше
  * 256×256 за счёт прозрачного буфера оружия; он не меняет масштаб тела. */
-const presentationConfig = () => ({
-  combatPositions: [120, 240],
-  entrancePositions: [78, 282],
-  groundY: 280,
-  scale: 3.2,
-  assetHeight: 150,
-  pressureDistance: 40,
-});
+const presentationConfig = (sceneHeight = 300) => {
+  const extraHeight = clamp(Math.round(sceneHeight) - 300, 0, 40);
+  return ({
+    combatPositions: [120, 240],
+    entrancePositions: [78, 282],
+    groundY: 280 + Math.round(extraHeight * 0.55),
+    scale: 3.2,
+    assetHeight: 150,
+    pressureDistance: 40,
+  });
+};
 
 const resolveTerritoryOffset = (displayedOffset, desiredOffset) => (
   Math.abs(desiredOffset - displayedOffset) >= PRESSURE_STEP_DISTANCE
@@ -194,9 +197,10 @@ const createVisualFrame = (
     rendererMode = RENDERER_MODES.lines,
     positionStage = POSITION_STAGES.combat,
     territoryOffsetOverride = null,
+    sceneHeight = 300,
   } = {},
 ) => {
-  const config = presentationConfig(presentation);
+  const config = presentationConfig(sceneHeight);
   const arenaType = snapshot?.arena?.type || input.arena?.type || "crowd";
   const arenaBackground = spriteLibrary.resolveArenaBackground(arenaType);
   const sourceFighters = snapshot?.fighters || input.fighters.map(fighterFromInput);
@@ -370,6 +374,7 @@ class BattleVisualEngine {
     const desiredActionFrame = createVisualFrame(snapshot, input, this.spriteLibrary, {
       presentation: this.presentation,
       rendererMode: this.rendererMode,
+      sceneHeight: this.canvas?.height || 300,
     });
     const initialApproach = this.approachPending
       ? this.createInitialApproach(snapshot, input)
@@ -384,6 +389,7 @@ class BattleVisualEngine {
         presentation: this.presentation,
         rendererMode: this.rendererMode,
         territoryOffsetOverride: territoryOffset,
+        sceneHeight: this.canvas?.height || 300,
       });
     const movementFrame = initialApproach?.movementFrame
       || this.createPressureMovementFrame(snapshot, input, actionFrame);
@@ -449,6 +455,7 @@ class BattleVisualEngine {
         presentation: this.presentation,
         rendererMode: this.rendererMode,
         positionStage: POSITION_STAGES.entrance,
+        sceneHeight: this.canvas?.height || 300,
       },
     );
     const greetingFrame = createVisualFrame(
@@ -462,6 +469,7 @@ class BattleVisualEngine {
         presentation: this.presentation,
         rendererMode: this.rendererMode,
         positionStage: POSITION_STAGES.entrance,
+        sceneHeight: this.canvas?.height || 300,
       },
     );
     const movementFrame = createVisualFrame(
@@ -475,6 +483,7 @@ class BattleVisualEngine {
         presentation: this.presentation,
         rendererMode: this.rendererMode,
         positionStage: POSITION_STAGES.combat,
+        sceneHeight: this.canvas?.height || 300,
       },
     );
     return freeze({ startFrame, greetingFrame, movementFrame });
@@ -490,6 +499,7 @@ class BattleVisualEngine {
         presentation: this.presentation,
         rendererMode: this.rendererMode,
         territoryOffsetOverride,
+        sceneHeight: this.canvas?.height || 300,
       },
     );
   }
@@ -506,7 +516,11 @@ class BattleVisualEngine {
       { ...snapshot, lastAction: null, visualMovement },
       input,
       this.spriteLibrary,
-      { presentation: this.presentation, rendererMode: this.rendererMode },
+      {
+        presentation: this.presentation,
+        rendererMode: this.rendererMode,
+        sceneHeight: this.canvas?.height || 300,
+      },
     );
   }
 
