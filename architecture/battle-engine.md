@@ -530,6 +530,8 @@ interface BattleResult {
   fighters: [FighterBattleResult, FighterBattleResult];
   finalArenaState: ArenaBattleState;
   statistics: BattleStatistics;
+  spectacle: SpectacleResult;
+  reward: BattleReward;
   events: BattleEvent[];
   snapshots: BattleSnapshot[];
 }
@@ -593,6 +595,7 @@ interface BattleReplayState {
   phase: string;
   status: "running" | "finished";
   outcome: BattleOutcome | null;
+  spectacle: SpectacleState;
   arena: ArenaBattleState;
   fighters: readonly FighterBattleState[];
   pendingEffects: readonly BattleEffect[];
@@ -619,10 +622,18 @@ interface BattleSnapshot {
   outcome: BattleOutcome | null;
   arena: ArenaBattleState;
   fighters: readonly FighterBattleState[];
+  spectacle: SpectacleState;
   lastAction?: ActionResultData;
   eventSequence: number;
 }
 ```
+
+### 6.1. Зрелищность и награда
+
+`BattleResult`, `BattleSnapshot` и `BattleReplayState` содержат готовую оценку,
+но её формула, уровни, версия и связь с наградой вынесены в отдельную
+[спецификацию зрелищности](battle-spectacle.md). Боевой движок рассчитывает
+значение, а визуальный слой только отображает его.
 
 `ActionResultData` сохраняет доменные признаки сработавшего особого действия:
 `attackType = "achilles-leap"`, `classTechnique` с id классового оружейного

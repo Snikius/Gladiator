@@ -817,6 +817,7 @@ a.button {
 }
 
 .mobile-versus {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
   align-items: center;
@@ -836,6 +837,132 @@ a.button {
   font-family: Georgia, serif;
   font-size: 18px;
   text-align: center;
+}
+
+.mobile-versus-center {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-width: 0;
+}
+
+.mobile-spectacle-meter {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 38px;
+  padding: 1px 4px 1px 3px;
+  color: #d2a85f;
+  background: rgba(12, 11, 10, .82);
+  border-radius: 8px;
+  font-family: Georgia, serif;
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 1px #26170b;
+  transform: translateX(-50%);
+}
+
+.spectacle-mask-icon {
+  width: 22px;
+  height: 17px;
+  overflow: visible;
+  stroke: #493019;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spectacle-mask-icon .mask-tragedy-shell {
+  fill: #74552d;
+}
+
+.spectacle-mask-icon .mask-comedy-shell {
+  fill: #d3a34e;
+}
+
+.spectacle-mask-icon .mask-shadow {
+  fill: #523a24;
+  stroke: none;
+  opacity: .72;
+}
+
+.spectacle-mask-icon .mask-feature {
+  fill: #f2d99a;
+  stroke: none;
+}
+
+.spectacle-mask-icon .mask-highlight {
+  fill: #e4bd6b;
+  stroke: none;
+  opacity: .72;
+}
+
+.spectacle-mask-icon .mask-glint {
+  fill: none;
+  stroke: #f5dda2;
+  stroke-width: 1.1;
+  opacity: .68;
+}
+
+.mobile-spectacle-verdict {
+  position: absolute;
+  top: 15px;
+  right: 24px;
+  left: 24px;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 6px;
+  width: min(292px, calc(100% - 48px));
+  margin-inline: auto;
+  padding: 8px 14px;
+  color: #e0b96f;
+  background:
+    linear-gradient(90deg, transparent, rgba(60, 39, 20, .3), transparent),
+    rgba(9, 8, 7, .88);
+  border: 3px double rgba(177, 132, 70, .72);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .72), inset 0 0 11px rgba(197, 154, 85, .08);
+  text-align: center;
+  text-shadow: 0 1px #170d07, 0 0 8px rgba(197, 154, 85, .3);
+  pointer-events: none;
+  animation: spectacle-verdict-reveal 420ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.mobile-spectacle-verdict[hidden] {
+  display: none;
+}
+
+.mobile-spectacle-verdict .spectacle-mask-icon {
+  grid-row: 1 / span 2;
+  width: 42px;
+  height: 32px;
+}
+
+.mobile-spectacle-verdict strong {
+  font-family: Georgia, serif;
+  font-size: 14px;
+  letter-spacing: .045em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.mobile-spectacle-verdict small {
+  color: #8f7650;
+  font-size: 7px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@keyframes spectacle-verdict-reveal {
+  from { opacity: 0; transform: translateY(-4px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .mobile-fighter-card {
@@ -1034,9 +1161,16 @@ a.button {
   font-size: 7px;
 }
 
+.mobile-arena-stage {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 0;
+  background: #050607;
+}
+
 #mobile-arena-canvas {
   display: block;
-  flex: 0 0 auto;
   width: 100%;
   height: auto;
   background: #050607;

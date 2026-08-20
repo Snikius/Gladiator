@@ -14,7 +14,9 @@ const {
   MAX_BASE_HEALTH,
   MAX_BATTLE_STEPS,
   PERK_DEFINITIONS,
+  SPECTACLE_TIERS,
   BUFF_DEFINITIONS,
+  calculateSpectacle,
   calculateTraumaChance,
   createBattleLogExport,
   createDefaultBattleInput,
@@ -30,6 +32,56 @@ assert.equal(PERK_DEFINITIONS.length, 10, "В прототипе должно б
 assert.equal(BUFF_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
 assert.equal(INJURY_DEFINITIONS.length, 5, "Нужно пять стартовых травм");
 assert.equal(typeof BattleModifierManager, "function", "BattleModifierManager должен быть публичной частью прототипа");
+assert.deepEqual(
+  SPECTACLE_TIERS.map((tier) => [tier.id, tier.minScore, tier.label]),
+  [
+    ["boring", 0, "Скучный бой"],
+    ["ordinary", 25, "Обычный бой"],
+    ["exciting", 50, "Захватывающий бой"],
+    ["grand", 75, "Грандиозный бой"],
+  ],
+  "Зрелищность использует четыре согласованных словесных уровня",
+);
+
+const boringSpectacle = calculateSpectacle([
+  { health: 100, maxHealth: 100 },
+  { health: 100, maxHealth: 100 },
+], 4);
+const grandSpectacle = calculateSpectacle([
+  { health: 5, maxHealth: 100 },
+  { health: 0, maxHealth: 100 },
+], 36);
+assert.deepEqual([boringSpectacle.score, boringSpectacle.tier], [0, "boring"]);
+assert.equal(grandSpectacle.tier, "grand", "Долгий бой двух истощённых бойцов должен быть грандиозным");
+assert.ok(grandSpectacle.score >= 75, "Драматичный бой без травм достигает грандиозного уровня только у нижней границы");
+assert.ok(
+  calculateSpectacle([{ health: 5, maxHealth: 100 }, { health: 0, maxHealth: 100 }], 24).score < grandSpectacle.score,
+  "Обычный набор зрелищности растянут до 36 действий",
+);
+const spectacleWithBattleTrauma = calculateSpectacle([
+  { health: 100, maxHealth: 100, traumas: [{ source: "battle", type: "arm" }] },
+  { health: 100, maxHealth: 100, traumas: [] },
+], 4);
+const spectacleWithStartingInjury = calculateSpectacle([
+  { health: 100, maxHealth: 100, traumas: [{ source: "starting-injury", type: "arm" }] },
+  { health: 100, maxHealth: 100, traumas: [] },
+], 4);
+assert.equal(spectacleWithBattleTrauma.score, 8, "Новая боевая травма добавляет 8 очков зрелищности");
+assert.deepEqual(
+  [spectacleWithBattleTrauma.factors.traumaCount, spectacleWithBattleTrauma.factors.traumaBonus],
+  [1, 0.08],
+  "Техническая разбивка сохраняет число травм и их бонус",
+);
+assert.equal(spectacleWithStartingInjury.score, 0, "Стартовая травма не считается событием текущего боя");
+assert.equal(calculateSpectacle([
+  { health: 100, maxHealth: 100, traumas: [{ source: "battle" }, { source: "battle" }] },
+  { health: 100, maxHealth: 100, traumas: [{ source: "battle" }] },
+], 4).score, 20, "Бонус трёх и более боевых травм ограничен 20 очками");
+assert.equal(
+  calculateSpectacle([{ health: 100, maxHealth: 100 }, { health: 100, maxHealth: 100 }], 24, 68).score,
+  68,
+  "Уже достигнутая зрелищность не снижается между снимками",
+);
 
 const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
@@ -43,8 +95,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   first.input.fighters.map((fighter) => fighter.base.charisma),
-  [58, 68],
-  "Мечник по умолчанию получает дополнительные 10 пунктов харизмы",
+  [63, 68],
+  "Мечник по умолчанию получает ещё 5 пунктов харизмы",
 );
 assert.equal(MAX_BASE_HEALTH, 500, "Предельное базовое здоровье равно 500");
 const cappedHealthInput = createDefaultBattleInput();
@@ -375,6 +427,13 @@ assert.ok(first.steps > 0, "Бой должен содержать хотя бы
 assert.ok(first.events.some((event) => event.type === "phase.start"), "В логе должны быть начала фаз");
 assert.ok(first.events.some((event) => event.type === "phase.finish"), "В логе должны быть результаты фаз");
 assert.equal(first.snapshots.length, first.steps + 2, "Нужны начальный, пошаговые и итоговый снимки");
+assert.ok(first.snapshots.every((snapshot) => snapshot.spectacle), "Каждый снимок содержит текущую зрелищность");
+assert.ok(
+  first.snapshots.every((snapshot, index, snapshots) => index === 0 || snapshot.spectacle.score >= snapshots[index - 1].spectacle.score),
+  "Зрелищность монотонно растёт по ходу replay",
+);
+assert.deepEqual(first.spectacle, first.snapshots.at(-1).spectacle, "Результат сохраняет финальную зрелищность");
+assert.equal(first.reward.amount, Math.floor(first.spectacle.score / 2), "Награда равна половине зрелищности");
 assert.ok(
   first.events.every((event) => event.state?.eventSequence === event.sequence),
   "Каждое событие должно содержать состояние системы после этого события",
@@ -430,7 +489,7 @@ const redheadInput = createDefaultBattleInput();
 redheadInput.fighters[0].perks = ["redhead"];
 redheadInput.fighters[1].perks = [];
 const redheadResult = new BattleEngine(redheadInput).simulate();
-assert.equal(redheadResult.snapshots[0].fighters[0].support, 48, "Рыжий должен понизить харизму на 10");
+assert.equal(redheadResult.snapshots[0].fighters[0].support, 53, "Рыжий должен понизить харизму на 10 от нового значения 63");
 
 const skilledInput = createDefaultBattleInput();
 skilledInput.fighters[0].perks = ["skilled-warrior"];
@@ -507,7 +566,7 @@ assert.equal(
   "Временные эффекты должны суммировать здоровье поверх текущего базового значения",
 );
 assert.equal(initialFighter.strength, 63.15, "Травма руки должна примениться после экипировки и временных бонусов");
-assert.equal(initialFighter.support, 62, "Харизма и травма головы должны менять поддержку");
+assert.equal(initialFighter.support, 67, "Харизма и травма головы должны менять поддержку от нового базового значения");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");
 assert.equal(initialFighter.traumas.length, 2, "Рука и нога должны стать стартовыми травмами");
 assert.equal(initialFighter.buffs.length, 3, "Повторяющиеся временные эффекты разрешены");

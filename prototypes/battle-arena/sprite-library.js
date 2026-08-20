@@ -11,6 +11,7 @@ const DEFAULT_SKIN_ID = "arena-red";
 const CORE_VISUAL_STATES = Object.freeze({
   "idle.normal": Object.freeze({ kind: "loop", description: "Обычная стойка: лёгкое дыхание и перенос веса." }),
   "idle.tired": Object.freeze({ kind: "loop", description: "Уставшая стойка: опущенная защита и тяжёлое дыхание." }),
+  "idle.injured.light": Object.freeze({ kind: "loop", description: "Слабая раненая стойка: сокращённый цикл без глубоких кадров." }),
   "idle.injured": Object.freeze({ kind: "loop", description: "Раненая стойка: бережёт повреждённую сторону." }),
   greeting: Object.freeze({ kind: "one-shot", description: "Приветствие соперника перед стартовым сближением." }),
   advance: Object.freeze({ kind: "one-shot", description: "Сближение перед атакой." }),
@@ -78,6 +79,7 @@ const animationFrameForElapsed = (clip, elapsedMs = 0, introDurationOverride) =>
 const ANIMATION_SPRITE_ROWS = Object.freeze({
   "idle.normal": defineAnimationClip({ row: 0, fps: 6, repeatSequence: SIX_FRAMES, keepAlive: true }),
   "idle.tired": defineAnimationClip({ row: 1, fps: 5, repeatSequence: SIX_FRAMES, keepAlive: true }),
+  "idle.injured.light": defineAnimationClip({ row: 2, fps: 1.5, sequence: [0, 1], repeatSequence: [0, 1], keepAlive: true }),
   "idle.injured": defineAnimationClip({ row: 2, fps: 5, repeatSequence: SIX_FRAMES, keepAlive: true }),
   attack: defineAnimationClip({ row: 3, fps: 12 }),
   "defense.block": defineAnimationClip({ row: 4, fps: 20, durationMs: 300 }),

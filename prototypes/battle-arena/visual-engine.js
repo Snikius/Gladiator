@@ -20,6 +20,7 @@ const PRESENTATIONS = Object.freeze({ mobile: "mobile" });
 const RENDERER_MODES = Object.freeze({ lines: "lines", assets: "assets" });
 const POSITION_STAGES = Object.freeze({ entrance: "entrance", combat: "combat" });
 const INJURED_HEALTH_RATIO = 0.45;
+const MILD_INJURED_HEALTH_RATIO = 0.7;
 const PRESSURE_STEP_DISTANCE = 12;
 const PRESSURE_DISTANCE = 60;
 const ARENA_CAMERA_FOLLOW_RATIO = 0.35;
@@ -278,11 +279,19 @@ const drawAttackTrailStrokes = (context, strokes) => {
   context.restore();
 };
 
-const isInjuredFighter = (fighter) => fighter.health > 0 && (
-  fighter.health / Math.max(1, fighter.maxHealth) < INJURED_HEALTH_RATIO
-  || fighter.traumas?.length
-  || fighter.injuries?.length
-);
+const injuryVisualStateForFighter = (fighter) => {
+  if (fighter.health <= 0) return null;
+  const healthRatio = fighter.health / Math.max(1, fighter.maxHealth);
+  if (healthRatio < INJURED_HEALTH_RATIO) return "idle.injured";
+  if (
+    healthRatio < MILD_INJURED_HEALTH_RATIO
+    || fighter.traumas?.length
+    || fighter.injuries?.length
+  ) return "idle.injured.light";
+  return null;
+};
+
+const isInjuredFighter = (fighter) => Boolean(injuryVisualStateForFighter(fighter));
 
 const fighterFromInput = (fighter) => ({
   id: fighter.id,
@@ -326,7 +335,8 @@ const visualStateForFighter = (fighter, action, outcome, showOutcome) => {
       block: "defense.block",
     }[action.outcome] || "idle.normal");
   }
-  if (isInjuredFighter(fighter)) return "idle.injured";
+  const injuryState = injuryVisualStateForFighter(fighter);
+  if (injuryState) return injuryState;
   if (fighter.fatigue >= 70) return "idle.tired";
   return "idle.normal";
 };
@@ -1396,6 +1406,7 @@ globalThis.GladiatorVisualEngine = {
   ARENA_CAMERA_ZOOM,
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
+  MILD_INJURED_HEALTH_RATIO,
   PRESSURE_STEP_DISTANCE,
   PRESSURE_DISTANCE,
   POSITION_STAGES,

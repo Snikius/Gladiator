@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=41" />
+    <link rel="stylesheet" href="./styles.css?v=46" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
     <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
@@ -85,7 +85,7 @@
               <div class="form-grid stats-input-grid">
                 <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="62" /></label>
                 <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="210" /></label>
-                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="58" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="63" /></label>
               </div>
               <div class="fighter-chance-grid">
                 <label><span>Критический удар</span><select data-field="criticalChance">
@@ -197,7 +197,10 @@
               <div class="mobile-arena-title"><b>АРЕНА</b><span>Подготовка боя</span></div>
               <div class="mobile-versus-placeholder">БОЙЦЫ ЗАГРУЖАЮТСЯ</div>
             </header>
-            <canvas id="mobile-arena-canvas" width="360" height="300" aria-label="Покадровая боевая сцена"></canvas>
+            <div class="mobile-arena-stage">
+              <canvas id="mobile-arena-canvas" width="360" height="300" aria-label="Покадровая боевая сцена"></canvas>
+              <div id="mobile-spectacle-verdict" class="mobile-spectacle-verdict" role="status" aria-live="polite" hidden></div>
+            </div>
             <section class="mobile-battle-story" aria-labelledby="mobile-battle-story-title">
               <i class="mobile-story-blood side-1" aria-hidden="true">
                 <span class="mobile-story-stain"></span><span class="mobile-story-stain"></span>
@@ -283,10 +286,10 @@
     </main>
 
     <script src="./reference-data.js?v=2"></script>
-    <script src="./battle-engine.js?v=31"></script>
-    <script src="./sprite-library.js?v=28"></script>
-    <script src="./visual-engine.js?v=37"></script>
+    <script src="./battle-engine.js?v=34"></script>
+    <script src="./sprite-library.js?v=30"></script>
+    <script src="./visual-engine.js?v=38"></script>
     <script src="./battle-story.js?v=5"></script>
-    <script src="./app.js?v=60"></script>
+    <script src="./app.js?v=65"></script>
   </body>
 </html>

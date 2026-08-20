@@ -12,6 +12,7 @@ const {
   ALL_MODIFIER_DEFINITIONS,
   INJURY_DEFINITIONS,
   PERK_DEFINITIONS,
+  SPECTACLE_TIERS,
   BUFF_DEFINITIONS,
   createBattleLogExport,
   createDefaultBattleInput,
@@ -48,6 +49,7 @@ const elements = {
   mobileNativeFullscreen: document.querySelector("#mobile-native-fullscreen"),
   mobileStartButton: document.querySelector("#mobile-start-battle"),
   mobileArenaHeader: document.querySelector("#mobile-arena-header"),
+  mobileSpectacleVerdict: document.querySelector("#mobile-spectacle-verdict"),
   mobileBattleStory: document.querySelector(".mobile-battle-story"),
   mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
   arenaName: document.querySelector("#arena-name"),
@@ -203,6 +205,27 @@ const escapeHtml = (value) => String(value)
   .replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
+
+const SPECTACLE_ICON = `
+  <svg class="spectacle-mask-icon" viewBox="0 0 56 42" aria-hidden="true">
+    <g class="mask-tragedy" transform="rotate(8 37 18)">
+      <path class="mask-tragedy-shell" d="M22 3c8-3 18-2 28 2l-1 15c-1 9-6 15-14 19-7-4-11-10-12-18L22 3Z" />
+      <path class="mask-shadow" d="M38 4c5 0 9 1 12 2l-1 14c-1 8-5 14-13 18 3-8 4-21 2-34Z" />
+      <path class="mask-feature" d="m27 13 7-3 4 4-9 2Zm13-2 6 4-8 1Z" />
+      <path class="mask-feature" d="M29 29c3-6 9-7 14-2l-2 2c-4-2-7-1-10 2Z" />
+      <path class="mask-glint" d="M26 7c6-2 12-2 18 0" />
+    </g>
+    <g class="mask-comedy" transform="rotate(-7 20 24)">
+      <path class="mask-comedy-shell" d="M4 9c9-3 19-3 29 0l-1 15c-1 9-6 15-14 18C10 38 6 32 5 24L4 9Z" />
+      <path class="mask-highlight" d="M5 10c7-2 13-2 19-1-1 12-5 21-14 27-3-4-5-8-5-13L5 10Z" />
+      <path class="mask-feature" d="m9 18 7-4 5 4-10 2Zm13-3 6 4-9 1Z" />
+      <path class="mask-feature" d="M10 27c6 4 12 4 18-1-2 8-13 11-18 1Z" />
+      <path class="mask-glint" d="M8 12c6-2 12-2 18-1" />
+    </g>
+  </svg>`;
+
+const spectacleTier = (tierId) => SPECTACLE_TIERS.find((tier) => tier.id === tierId)
+  || SPECTACLE_TIERS[0];
 
 const battleStoryStamp = (className) => {
   const stampPaths = className === "state-trauma"
@@ -689,6 +712,9 @@ const renderMobileBattleUi = (snapshot, input) => {
     });
   });
   const arena = arenaName(snapshot.arena?.type || input.arena.type);
+  const spectacle = snapshot.spectacle || { score: 0, tier: "boring" };
+  const spectacleLevel = spectacleTier(spectacle.tier);
+  const isFinalSpectacle = snapshot.label === "Итог боя";
   const fighters = snapshot.fighters.map((fighter, index) => {
     const health = Math.max(0, fighter.health);
     const healthRatio = Math.max(0, Math.min(1, health / fighter.maxHealth));
@@ -739,10 +765,23 @@ const renderMobileBattleUi = (snapshot, input) => {
     </div>
     <div class="mobile-versus">
       ${fighters[0]}
-      <strong class="mobile-vs">VS</strong>
+      <div class="mobile-versus-center">
+        <strong class="mobile-vs">VS</strong>
+      </div>
       ${fighters[1]}
+      <span class="mobile-spectacle-meter" aria-label="Зрелищность: ${spectacle.score}, ${escapeHtml(spectacleLevel.label)}" title="${escapeHtml(spectacleLevel.label)}">
+        ${SPECTACLE_ICON}<b>${spectacle.score}</b>
+      </span>
     </div>
   `;
+  if (elements.mobileSpectacleVerdict) {
+    elements.mobileSpectacleVerdict.hidden = !isFinalSpectacle;
+    elements.mobileSpectacleVerdict.innerHTML = isFinalSpectacle ? `
+      ${SPECTACLE_ICON}
+      <strong>${escapeHtml(spectacleLevel.label)}</strong>
+      <small>Зрелищность ${spectacle.score}${currentResult?.reward ? ` · награда ${currentResult.reward.amount}` : ""}</small>
+    ` : "";
+  }
 
   const recentStory = buildBattleStoryEntries(currentResult, snapshot, 60);
   updateMobileBattleFeed(recentStory.length
@@ -764,6 +803,7 @@ const renderNumbers = (snapshot) => {
     <div><span>АРЕНА</span><strong>${escapeHtml(arenaName(snapshot.arena?.type || input.arena.type))}</strong></div>
     <div><span>SEED</span><strong>${escapeHtml(currentResult?.seed || input.seed)}</strong></div>
     <div><span>ШАГ</span><strong>${formatNumber(snapshot.step)} / ${formatNumber(input.maxSteps)}</strong></div>
+    <div><span>ЗРЕЛИЩНОСТЬ</span><strong>${formatNumber(snapshot.spectacle?.score || 0)} · ${escapeHtml(spectacleTier(snapshot.spectacle?.tier).label)}</strong></div>
     <div class="snapshot-action"><span>ДЕЙСТВИЕ</span><strong>${escapeHtml(actionState)}</strong></div>
   `;
   elements.fighterNumbers.innerHTML = snapshot.fighters.map((fighter, index) => {
@@ -828,6 +868,7 @@ const renderEventState = (event) => {
     label: state.status === "finished" ? "Итог боя" : `Событие #${event.sequence}`,
     status: state.status,
     outcome: state.outcome,
+    spectacle: state.spectacle,
     lastAction: state.lastAction,
     arena: state.arena,
     fighters: state.fighters,
@@ -851,8 +892,8 @@ const renderResult = (result) => {
   const outcomeLabels = { victory: "ПОБЕДА", defeat: "ПОРАЖЕНИЕ", draw: "НИЧЬЯ" };
   elements.resultTitle.textContent = isDraw ? "НИЧЬЯ" : `${winner.name} ПОБЕЖДАЕТ`;
   elements.resultDescription.textContent = isDraw
-    ? `За ${result.steps} шагов победитель не определён. Причина: ${result.outcome.reason}.`
-    : `Бой завершён за ${result.steps} шагов. Причина: ${result.outcome.reason}.`;
+    ? `За ${result.steps} шагов победитель не определён. ${spectacleTier(result.spectacle.tier).label}: ${result.spectacle.score}, награда ${result.reward.amount}.`
+    : `Бой завершён за ${result.steps} шагов. ${spectacleTier(result.spectacle.tier).label}: ${result.spectacle.score}, награда ${result.reward.amount}.`;
   elements.fighterOutcomes.innerHTML = result.fighters.map((fighter) => `
     <article class="outcome-card">
       <h3>${escapeHtml(fighter.name)} — ${outcomeLabels[fighter.battleOutcome]}</h3>
@@ -1057,6 +1098,7 @@ const renderPreview = () => {
     label: "Предварительный просмотр",
     arena: input.arena,
     lastAction: null,
+    spectacle: { formulaVersion: "spectacle-v1", score: 0, tier: "boring" },
     fighters: normalizedInput.fighters.map((fighter, index) => {
       const weapon = equipmentItem(fighter.equipment.weaponSet.definitionId);
       const armor = equipmentItem(fighter.equipment.armorSet.definitionId);

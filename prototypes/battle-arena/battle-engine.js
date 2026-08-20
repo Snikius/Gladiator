@@ -31,7 +31,76 @@ const COMBAT_RULES = Object.freeze({
     maxChance: 0.45,
     armChance: 0.5,
   }),
+  spectacle: Object.freeze({
+    durationStartsAt: 4,
+    durationFullAt: 36,
+    durationWeight: 0.18,
+    lastBreathWeight: 0.34,
+    dramaWeight: 0.28,
+    traumaBonusPerInjury: 0.08,
+    maxTraumaBonus: 0.20,
+    rewardDivisor: 2,
+  }),
 });
+
+const SPECTACLE_TIERS = Object.freeze([
+  Object.freeze({ id: "boring", minScore: 0, label: "Скучный бой" }),
+  Object.freeze({ id: "ordinary", minScore: 25, label: "Обычный бой" }),
+  Object.freeze({ id: "exciting", minScore: 50, label: "Захватывающий бой" }),
+  Object.freeze({ id: "grand", minScore: 75, label: "Грандиозный бой" }),
+]);
+
+const spectacleTierForScore = (score) => [...SPECTACLE_TIERS]
+  .reverse()
+  .find((tier) => score >= tier.minScore) || SPECTACLE_TIERS[0];
+
+const calculateSpectacle = (fighters, completedSteps, previousScore = 0) => {
+  const rules = COMBAT_RULES.spectacle;
+  const healthRatios = fighters.slice(0, 2).map((fighter) => clamp(
+    Number(fighter.health) / Math.max(1, Number(fighter.maxHealth)),
+    0,
+    1,
+  ));
+  while (healthRatios.length < 2) healthRatios.push(1);
+  const duration = clamp(
+    (completedSteps - rules.durationStartsAt)
+      / Math.max(1, rules.durationFullAt - rules.durationStartsAt),
+    0,
+    1,
+  );
+  const exhaustion = 1 - (healthRatios[0] + healthRatios[1]) / 2;
+  const balance = 1 - Math.abs(healthRatios[0] - healthRatios[1]);
+  const lastBreath = exhaustion * (0.65 + 0.35 * balance);
+  const traumaCount = fighters.slice(0, 2).reduce((total, fighter) => (
+    total + (fighter.traumas || []).filter((trauma) => trauma.source === "battle").length
+  ), 0);
+  const traumaBonus = Math.min(rules.maxTraumaBonus, traumaCount * rules.traumaBonusPerInjury);
+  const rawScore = Math.round(100 * clamp(
+    rules.durationWeight * duration
+      + rules.lastBreathWeight * lastBreath
+      + rules.dramaWeight * duration * lastBreath
+      + traumaBonus,
+    0,
+    1,
+  ));
+  const score = clamp(Math.max(Math.round(previousScore) || 0, rawScore), 0, 100);
+  const tier = spectacleTierForScore(score);
+  return {
+    formulaVersion: "spectacle-v1",
+    score,
+    tier: tier.id,
+    factors: {
+      completedSteps,
+      duration: round(duration, 4),
+      exhaustion: round(exhaustion, 4),
+      balance: round(balance, 4),
+      lastBreath: round(lastBreath, 4),
+      traumaCount,
+      traumaBonus: round(traumaBonus, 4),
+      techniqueBonus: 0,
+    },
+  };
+};
 
 const calculateTraumaChance = (damage, maxHealth) => {
   const rules = COMBAT_RULES.trauma;
@@ -854,7 +923,7 @@ const createDefaultBattleInput = () => ({
     {
       id: "fighter-1",
       name: "Маркус",
-      base: { strength: 62, health: 210, charisma: 58 },
+      base: { strength: 62, health: 210, charisma: 63 },
       criticalChance: COMBAT_RULES.critical.chance,
       classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "murmillo",
@@ -1624,11 +1693,21 @@ class BattleEngine {
       };
     });
 
+    const spectacle = this.createSpectacleState();
+    const reward = {
+      formulaVersion: "spectacle-half-v1",
+      amount: Math.floor(spectacle.score / COMBAT_RULES.spectacle.rewardDivisor),
+    };
     const finishData = this.runPhase(
       "battle-finish",
       "beforeBattleFinish",
       "afterBattleFinish",
-      { outcome: clone(this.state.outcome), fighterResults: clone(fighterResults) },
+      {
+        outcome: clone(this.state.outcome),
+        fighterResults: clone(fighterResults),
+        spectacle: clone(spectacle),
+        reward: clone(reward),
+      },
       (data) => data,
     );
     this.state.outcome = finishData.outcome;
@@ -1648,9 +1727,19 @@ class BattleEngine {
       statistics: Object.fromEntries(
         this.state.fighters.map((fighter) => [fighter.id, clone(fighter.stats)]),
       ),
+      spectacle: clone(this.snapshots.at(-1).spectacle),
+      reward: clone(finishData.reward),
       events: clone(this.events),
       snapshots: clone(this.snapshots),
     };
+  }
+
+  createSpectacleState() {
+    return calculateSpectacle(
+      this.state.fighters,
+      this.state.step,
+      this.snapshots.at(-1)?.spectacle?.score || 0,
+    );
   }
 
   captureSnapshot(label) {
@@ -1662,6 +1751,7 @@ class BattleEngine {
       outcome: clone(this.state.outcome),
       lastAction: clone(this.lastAction),
       arena: clone(this.state.arena),
+      spectacle: this.createSpectacleState(),
       fighters: this.state.fighters.map((fighter) => ({
         ...this.fighterNumbers(fighter),
         name: fighter.name,
@@ -1684,6 +1774,7 @@ class BattleEngine {
       status: this.state.status,
       outcome: clone(this.state.outcome),
       arena: clone(this.state.arena),
+      spectacle: this.createSpectacleState(),
       fighters: clone(this.state.fighters),
       pendingEffects: clone(this.state.pendingEffects),
       lastAction: clone(this.lastAction),
@@ -1802,6 +1893,8 @@ globalThis.GladiatorBattle = {
   MAX_BATTLE_STEPS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
+  SPECTACLE_TIERS,
+  calculateSpectacle,
   calculateTraumaChance,
   createBattleLogExport,
   createDefaultBattleInput,

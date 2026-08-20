@@ -23,6 +23,7 @@ const {
   ARENA_CAMERA_ZOOM,
   BattleVisualEngine,
   INJURED_HEALTH_RATIO,
+  MILD_INJURED_HEALTH_RATIO,
   PRESSURE_STEP_DISTANCE,
   PRESSURE_DISTANCE,
   POSITION_STAGES,
@@ -126,6 +127,10 @@ assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].grid.columns, 6);
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.frames.length, 6, "Атака занимает всю строку из шести кадров");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.row, 3, "Атака использует собственную строку атласа");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.normal"].playback.repeat.sequence, [0, 1, 2, 3, 4, 5], "Стойка должна быть циклической анимацией");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.injured.light"].row, 2, "Слабая и полная раненые стойки используют один ряд ассета");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.injured.light"].playback.repeat.sequence, [0, 1], "Слабая раненая стойка не доходит до глубоких кадров");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.injured.light"].fps, 1.5, "Слабая раненая стойка меняет позу медленно и не выглядит частым поклоном");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.injured"].playback.repeat.sequence, [0, 1, 2, 3, 4, 5], "Полная раненая стойка использует весь ряд");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.block"].fps, 20, "Блок должен быстро поднимать защиту");
 const fullDodgeClip = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.dodge"];
 const shortMissClip = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.miss"];
@@ -270,7 +275,8 @@ const actionShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
 const actorShadow = actionShadows.find((shadow) => shadow.fighterId === actionSnapshot.lastAction.actorId);
 assert.notEqual(actorShadow.x, actorSprite.transform.x, "Тень следует за корнем бойца во время выпада");
 assert.equal(standardMobileFrame.arena.sourceGroundY, 470, "Новый фон обрезается с сохранением исходной линии земли");
-assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог раненой стойки зафиксирован на 45% здоровья");
+assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог полной раненой стойки зафиксирован на 45% здоровья");
+assert.equal(MILD_INJURED_HEALTH_RATIO, 0.7, "Слабая раненая стойка начинается ниже 70% здоровья");
 const injuredHealthSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 injuredHealthSnapshot.lastAction = null;
 injuredHealthSnapshot.fighters[0].health = injuredHealthSnapshot.fighters[0].maxHealth * 0.44;
@@ -292,10 +298,36 @@ const thresholdHealthFrame = createVisualFrame(thresholdHealthSnapshot, standard
   presentation: PRESENTATIONS.mobile,
   rendererMode: RENDERER_MODES.assets,
 });
-assert.equal(thresholdHealthFrame.components[0].animation.clip, "idle.normal", "Ровно 45% ещё относится к обычной стойке");
-assert.equal(thresholdHealthFrame.fighters[0].injured, false, "Ровно при 45% постоянное кровотечение ещё не включается");
+assert.equal(thresholdHealthFrame.components[0].animation.clip, "idle.injured.light", "Ровно 45% уже относится к слабой, но не к полной раненой стойке");
+assert.equal(thresholdHealthFrame.fighters[0].injured, true, "Слабая раненая стойка сохраняет признак ранения");
+const mildHealthSnapshot = JSON.parse(JSON.stringify(thresholdHealthSnapshot));
+mildHealthSnapshot.fighters[0].health = mildHealthSnapshot.fighters[0].maxHealth * 0.6;
+const mildHealthFrame = createVisualFrame(mildHealthSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(mildHealthFrame.components[0].animation.clip, "idle.injured.light", "При 60% здоровья используется слабая раненая стойка");
+const traumaSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
+traumaSnapshot.lastAction = null;
+traumaSnapshot.fighters[0].health = traumaSnapshot.fighters[0].maxHealth;
+traumaSnapshot.fighters[0].traumas = [{ id: "test-trauma" }];
+const traumaFrame = createVisualFrame(traumaSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(traumaFrame.components[0].animation.clip, "idle.injured.light", "Травма гарантирует слабую раненую стойку даже при полном здоровье");
+const healthyThresholdSnapshot = JSON.parse(JSON.stringify(thresholdHealthSnapshot));
+healthyThresholdSnapshot.fighters[0].health = healthyThresholdSnapshot.fighters[0].maxHealth * 0.7;
+healthyThresholdSnapshot.fighters[0].traumas = [];
+healthyThresholdSnapshot.fighters[0].injuries = [];
+const healthyThresholdFrame = createVisualFrame(healthyThresholdSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(healthyThresholdFrame.components[0].animation.clip, "idle.normal", "Ровно 70% без травм ещё относится к обычной стойке");
+assert.equal(healthyThresholdFrame.fighters[0].injured, false, "Ровно при 70% постоянное кровотечение ещё не включается");
 assert.deepEqual(
-  BattleVisualEngine.prototype.injuredBloodDrops.call(null, thresholdHealthFrame, 0),
+  BattleVisualEngine.prototype.injuredBloodDrops.call(null, healthyThresholdFrame, 0),
   [],
   "Под нераненым бойцом дополнительные капли не рисуются",
 );
