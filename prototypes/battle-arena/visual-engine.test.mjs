@@ -135,6 +135,27 @@ const tallMobileFrame = createVisualFrame(standardResult.snapshots[0], standardI
 });
 assert.equal(tallMobileFrame.arena.groundY, 293, "Высокий мобильный экран добавляет арену без растягивания бойцов");
 assert.equal(tallMobileFrame.components[0].animation.assetHeight, 150, "Адаптивная высота сцены не меняет рост бойца");
+const idleShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
+  { transitionFrom: new Map() },
+  standardMobileFrame,
+  0,
+);
+assert.equal(idleShadows.length, 2, "Под каждым бойцом создаётся отдельная процедурная тень");
+assert.ok(idleShadows.every((shadow) => shadow.y === standardMobileFrame.arena.groundY + 1), "Тени примыкают к стопам на линии земли");
+const animatedIdleShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
+  { transitionFrom: new Map() },
+  standardMobileFrame,
+  0,
+  500,
+);
+assert.notEqual(animatedIdleShadows[0].width, idleShadows[0].width, "Тень слегка меняется вместе с циклом стойки");
+const actionShadows = BattleVisualEngine.prototype.fighterShadowSprites.call(
+  { transitionFrom: new Map() },
+  actionFrame,
+  0.5,
+);
+const actorShadow = actionShadows.find((shadow) => shadow.fighterId === actionSnapshot.lastAction.actorId);
+assert.notEqual(actorShadow.x, actorSprite.transform.x, "Тень следует за корнем бойца во время выпада");
 assert.equal(standardMobileFrame.arena.sourceGroundY, 470, "Новый фон обрезается с сохранением исходной линии земли");
 assert.equal(INJURED_HEALTH_RATIO, 0.45, "Порог раненой стойки зафиксирован на 45% здоровья");
 const injuredHealthSnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));

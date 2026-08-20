@@ -593,6 +593,7 @@ class BattleVisualEngine {
     this.drawArenaLights(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
     this.drawArenaCrowd(context, canvas.width, canvas.height, frame, animationClock, backgroundDrawn);
     this.drawArenaGuides(context, canvas.width, canvas.height, frame, backgroundDrawn);
+    this.drawFighterShadows(context, frame, progress, animationClock);
     this.drawBloodStains(context, frame, performance.now());
     const fighters = frame.components.filter((component) => component.kind === "fighter");
     const weapons = frame.components.filter((component) => component.kind === "weapon");
@@ -603,6 +604,51 @@ class BattleVisualEngine {
       .forEach((component) => this.drawComponent(context, component, progress, animationClock, frame));
     this.drawInjuredBlood(context, frame, performance.now());
     this.drawBlood(context, frame, progress);
+  }
+
+  fighterShadowSprites(frame, progress = 0, animationClock = 0) {
+    const easing = easeOut(progress);
+    return frame.components
+      .filter((component) => component.kind === "fighter")
+      .map((component) => {
+        const previous = this.transitionFrom?.get?.(component.id);
+        const motionEasing = component.motion.returnToOrigin
+          ? Math.sin(Math.PI * progress)
+          : easing;
+        const baseX = lerp(previous?.x ?? component.transform.x, component.transform.x, easing);
+        const x = baseX + component.motion.x * motionEasing;
+        const lift = Math.max(0, -component.motion.y * motionEasing);
+        const hash = [...component.fighterId].reduce((value, character) => value + character.charCodeAt(0), 0);
+        const pulse = Math.sin(animationClock / 230 + hash * 0.37);
+        const defeated = component.animation?.state === "defeated";
+        const baseWidth = defeated ? 72 : 48;
+        const liftScale = 1 - Math.min(0.16, lift / 70);
+        return freeze({
+          fighterId: component.fighterId,
+          x: Math.round(x),
+          y: frame.arena.groundY + 1,
+          width: Math.round((baseWidth + (defeated ? 0 : pulse * 2)) * liftScale),
+          height: defeated ? 7 : 6 + (pulse > 0.55 ? 1 : 0),
+          alpha: (defeated ? 0.32 : 0.4 + pulse * 0.025) * liftScale,
+        });
+      });
+  }
+
+  drawFighterShadows(context, frame, progress = 0, animationClock = 0) {
+    const shadows = this.fighterShadowSprites(frame, progress, animationClock);
+    if (!shadows.length) return;
+    context.save();
+    context.fillStyle = "#080503";
+    shadows.forEach((shadow) => {
+      const left = Math.round(shadow.x - shadow.width / 2);
+      context.globalAlpha = shadow.alpha * 0.55;
+      context.fillRect(left + 7, shadow.y - 2, shadow.width - 14, 1);
+      context.globalAlpha = shadow.alpha;
+      context.fillRect(left, shadow.y - 1, shadow.width, shadow.height - 2);
+      context.globalAlpha = shadow.alpha * 0.45;
+      context.fillRect(left + 6, shadow.y + shadow.height - 3, shadow.width - 12, 1);
+    });
+    context.restore();
   }
 
   injuredBloodDrops(frame, now = performance.now()) {
