@@ -319,7 +319,12 @@ const visualStateForFighter = (fighter, action, outcome, showOutcome) => {
   if (showOutcome && outcome?.type === "victory" && outcome.winnerId === fighter.id) return "victory";
   if (action?.actorId === fighter.id) return isSpecialAction(action) ? "special" : "attack";
   if (action?.targetId === fighter.id) {
-    return ({ hit: "reaction.hit", dodge: "defense.dodge", block: "defense.block" }[action.outcome] || "idle.normal");
+    return ({
+      hit: "reaction.hit",
+      dodge: "defense.dodge",
+      miss: "defense.miss",
+      block: "defense.block",
+    }[action.outcome] || "idle.normal");
   }
   if (isInjuredFighter(fighter)) return "idle.injured";
   if (fighter.fatigue >= 70) return "idle.tired";

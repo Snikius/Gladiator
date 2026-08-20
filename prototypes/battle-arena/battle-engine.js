@@ -854,7 +854,7 @@ const createDefaultBattleInput = () => ({
     {
       id: "fighter-1",
       name: "Маркус",
-      base: { strength: 62, health: 210, charisma: 48 },
+      base: { strength: 62, health: 210, charisma: 58 },
       criticalChance: COMBAT_RULES.critical.chance,
       classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "murmillo",

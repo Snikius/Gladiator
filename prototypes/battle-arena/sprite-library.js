@@ -17,6 +17,7 @@ const CORE_VISUAL_STATES = Object.freeze({
   attack: Object.freeze({ kind: "one-shot", description: "Полная линия атаки, минимум пять кадров." }),
   "defense.block": Object.freeze({ kind: "one-shot", description: "Принятие удара щитом или оружием." }),
   "defense.dodge": Object.freeze({ kind: "one-shot", description: "Уход или backstep." }),
+  "defense.miss": Object.freeze({ kind: "one-shot", description: "Короткий неглубокий уход от прошедшего мимо оружия." }),
   "reaction.hit": Object.freeze({ kind: "one-shot", description: "Реакция на попадание." }),
   defeated: Object.freeze({ kind: "terminal", description: "Падение и лежачая поза." }),
   victory: Object.freeze({ kind: "terminal", description: "Победитель завершает салют и удерживает живую финальную позу." }),
@@ -81,6 +82,9 @@ const ANIMATION_SPRITE_ROWS = Object.freeze({
   attack: defineAnimationClip({ row: 3, fps: 12 }),
   "defense.block": defineAnimationClip({ row: 4, fps: 20, durationMs: 300 }),
   "defense.dodge": defineAnimationClip({ row: 5, fps: 10 }),
+  /* Промах использует только неглубокую часть уклонения и сразу возвращает
+   * бойца в исходную позу. Отдельный клип не требует нового ряда ассета. */
+  "defense.miss": defineAnimationClip({ row: 5, fps: 18, sequence: [0, 1, 2, 1, 0], durationMs: 280 }),
   /* Вторая половина строки 6 — падение. Реакция на обычный удар использует
    * только первые три позы и возвращается в стойку, не изображая смерть. */
   "reaction.hit": defineAnimationClip({ row: 6, fps: 10, sequence: [0, 1, 2, 1, 0] }),

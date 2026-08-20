@@ -15,6 +15,7 @@ const {
   UNIFIED_RETIARIUS_GRID_ID,
   UNIFIED_SWORDSMAN_GRID_ID,
   animationFrameForElapsed,
+  clipIntroDurationMs,
   defineAnimationClip,
 } = globalThis.GladiatorSpriteLibrary;
 const {
@@ -126,6 +127,11 @@ assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.frames
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.row, 3, "Атака использует собственную строку атласа");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["idle.normal"].playback.repeat.sequence, [0, 1, 2, 3, 4, 5], "Стойка должна быть циклической анимацией");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.block"].fps, 20, "Блок должен быстро поднимать защиту");
+const fullDodgeClip = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.dodge"];
+const shortMissClip = BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["defense.miss"];
+assert.equal(shortMissClip.row, fullDodgeClip.row, "Промах переиспользует строку уклонения без нового ассета");
+assert.deepEqual(shortMissClip.frames, [0, 1, 2, 1, 0], "Короткий уход не доходит до глубоких кадров уклонения");
+assert.ok(clipIntroDurationMs(shortMissClip) < clipIntroDurationMs(fullDodgeClip), "Реакция на промах короче полного уклонения");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.hit"].frames, [0, 1, 2, 1, 0], "Реакция на удар не захватывает кадры падения");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.advance.row, 7, "Движение использует отдельную восьмую строку");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.retreat.frames, [5, 4, 3, 2, 1, 0], "Движение назад переиспользует строку в обратном порядке");
@@ -557,6 +563,19 @@ assert.equal(blockingFighter.motion.duration, 300, "Блок в симулято
 const frameFor = BattleVisualEngine.prototype.animationFrameColumn;
 assert.equal(frameFor.call(null, blockingFighter, 0.6, 310), 5, "Блок уже удерживает защиту после 300 мс");
 assert.ok(frameFor.call(null, attackingFighter, 0.6, 310) < 5, "Атака в тот же момент ещё продолжается");
+const missSnapshot = JSON.parse(JSON.stringify(blockSnapshot));
+missSnapshot.lastAction.outcome = "miss";
+const missFrame = createVisualFrame(missSnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const missedFighter = missFrame.components.find(
+  (component) => component.fighterId === missSnapshot.lastAction.targetId,
+);
+assert.equal(missedFighter.animation.clip, "defense.miss", "Цель промаха получает отдельный короткий уход");
+assert.equal(missedFighter.motion.duration, 280, "Короткий уход завершается за 280 мс");
+assert.equal(frameFor.call(null, missedFighter, 0.5, 140), 2, "В середине реакции используется только неглубокий кадр уклонения");
+assert.equal(frameFor.call(null, missedFighter, 1, 280), 0, "Реакция на промах возвращает бойца в исходную позу");
 const recoveryContext = {
   spriteLibrary: new SpriteLibrary(),
   presentation: PRESENTATIONS.mobile,

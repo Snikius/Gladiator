@@ -41,6 +41,11 @@ assert.deepEqual(
   [210, 180],
   "Стартовое здоровье бойцов по умолчанию зафиксировано отдельно для каждого",
 );
+assert.deepEqual(
+  first.input.fighters.map((fighter) => fighter.base.charisma),
+  [58, 68],
+  "Мечник по умолчанию получает дополнительные 10 пунктов харизмы",
+);
 assert.equal(MAX_BASE_HEALTH, 500, "Предельное базовое здоровье равно 500");
 const cappedHealthInput = createDefaultBattleInput();
 cappedHealthInput.fighters[0].base.health = 500;
@@ -425,7 +430,7 @@ const redheadInput = createDefaultBattleInput();
 redheadInput.fighters[0].perks = ["redhead"];
 redheadInput.fighters[1].perks = [];
 const redheadResult = new BattleEngine(redheadInput).simulate();
-assert.equal(redheadResult.snapshots[0].fighters[0].support, 38, "Рыжий должен понизить харизму на 10");
+assert.equal(redheadResult.snapshots[0].fighters[0].support, 48, "Рыжий должен понизить харизму на 10");
 
 const skilledInput = createDefaultBattleInput();
 skilledInput.fighters[0].perks = ["skilled-warrior"];
@@ -502,7 +507,7 @@ assert.equal(
   "Временные эффекты должны суммировать здоровье поверх текущего базового значения",
 );
 assert.equal(initialFighter.strength, 63.15, "Травма руки должна примениться после экипировки и временных бонусов");
-assert.equal(initialFighter.support, 52, "Харизма и травма головы должны менять поддержку");
+assert.equal(initialFighter.support, 62, "Харизма и травма головы должны менять поддержку");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");
 assert.equal(initialFighter.traumas.length, 2, "Рука и нога должны стать стартовыми травмами");
 assert.equal(initialFighter.buffs.length, 3, "Повторяющиеся временные эффекты разрешены");
