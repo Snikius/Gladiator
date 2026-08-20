@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=34" />
+    <link rel="stylesheet" href="./styles.css?v=36" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
     <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
@@ -17,6 +17,11 @@
     <link rel="preload" as="image" href="./assets/arena-sand-background-v2.png" />
   </head>
   <body>
+    <script>
+      if (new URLSearchParams(window.location.search).get("mobile") === "1") {
+        document.body.classList.add("mobile-fullscreen-mode");
+      }
+    </script>
     <header class="topbar">
       <div>
         <p class="eyebrow">GLADIATOR / DEBUG BUILD</p>
@@ -162,13 +167,32 @@
               <h2 id="mobile-preview-title">Боевая арена</h2>
               <p>Игровой экран: участники, бой и краткая история последних ходов.</p>
             </div>
-            <div class="view-mode-switch" role="group" aria-label="Режим отображения">
-              <button type="button" data-renderer-mode="lines">Линии</button>
-              <button type="button" data-renderer-mode="assets" class="selected">Спрайты</button>
+            <div class="mobile-preview-tools">
+              <label class="mobile-viewport-picker" for="mobile-viewport-preset">
+                <span>Экран</span>
+                <select id="mobile-viewport-preset">
+                  <option value="android-compact" data-width="360" data-height="800" selected>Android · 360×800</option>
+                  <option value="iphone-compact" data-width="375" data-height="667">Компактный · 375×667</option>
+                  <option value="iphone-standard" data-width="390" data-height="844">iPhone · 390×844</option>
+                  <option value="iphone-classic" data-width="414" data-height="896">iPhone · 414×896</option>
+                  <option value="iphone-pro-max" data-width="430" data-height="932">Pro Max · 430×932</option>
+                </select>
+                <small id="mobile-viewport-readout">Viewport 360×800 CSS px · 20:9</small>
+              </label>
+              <div class="view-mode-switch" role="group" aria-label="Режим отображения">
+                <button type="button" data-renderer-mode="lines">Линии</button>
+                <button type="button" data-renderer-mode="assets" class="selected">Спрайты</button>
+              </div>
+              <a id="mobile-fullscreen-link" class="button secondary mobile-fullscreen-link" href="./index.html?mobile=1">⛶ Полный экран</a>
             </div>
           </div>
-          <div class="mobile-device">
+          <div class="mobile-device" data-viewport-preset="android-compact">
             <div class="mobile-device-speaker"></div>
+            <nav class="mobile-fullscreen-controls" aria-label="Управление мобильным боем">
+              <a id="mobile-exit-fullscreen" href="./index.html">‹ Настройки</a>
+              <button id="mobile-native-fullscreen" type="button" title="Скрыть панели браузера" aria-label="Развернуть на весь экран">⛶</button>
+              <button id="mobile-start-battle" type="button">▶ Начать бой</button>
+            </nav>
             <header id="mobile-arena-header" class="mobile-arena-header" aria-label="Участники боя">
               <div class="mobile-arena-title"><b>АРЕНА</b><span>Подготовка боя</span></div>
               <div class="mobile-versus-placeholder">БОЙЦЫ ЗАГРУЖАЮТСЯ</div>
@@ -263,6 +287,6 @@
     <script src="./sprite-library.js?v=26"></script>
     <script src="./visual-engine.js?v=24"></script>
     <script src="./battle-story.js?v=5"></script>
-    <script src="./app.js?v=54"></script>
+    <script src="./app.js?v=56"></script>
   </body>
 </html>

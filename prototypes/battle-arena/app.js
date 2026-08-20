@@ -26,6 +26,10 @@ const {
   fighterBloodLevels,
 } = globalThis.GladiatorBattleStory;
 
+const mobilePageParams = new URLSearchParams(window.location.search);
+let isMobileFullscreenMode = mobilePageParams.get("mobile") === "1";
+document.body.classList.toggle("mobile-fullscreen-mode", isMobileFullscreenMode);
+
 const elements = {
   form: document.querySelector("#setup-form"),
   startButton: document.querySelector('#setup-form button[type="submit"]'),
@@ -36,6 +40,13 @@ const elements = {
   multiplier2: document.querySelector("#arena-multiplier-2"),
   restoreDefaults: document.querySelector("#restore-defaults"),
   spriteVisualCanvas: document.querySelector("#mobile-arena-canvas"),
+  mobileDevice: document.querySelector(".mobile-device"),
+  mobileViewportPreset: document.querySelector("#mobile-viewport-preset"),
+  mobileViewportReadout: document.querySelector("#mobile-viewport-readout"),
+  mobileFullscreenLink: document.querySelector("#mobile-fullscreen-link"),
+  mobileExitFullscreen: document.querySelector("#mobile-exit-fullscreen"),
+  mobileNativeFullscreen: document.querySelector("#mobile-native-fullscreen"),
+  mobileStartButton: document.querySelector("#mobile-start-battle"),
   mobileArenaHeader: document.querySelector("#mobile-arena-header"),
   mobileBattleStory: document.querySelector(".mobile-battle-story"),
   mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
@@ -82,6 +93,61 @@ const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
   ? new BattleVisualEngine(elements.spriteVisualCanvas, { rendererMode: RENDERER_MODES.assets })
   : null;
 const spriteRendererButtons = [...document.querySelectorAll("[data-renderer-mode]")];
+
+const formatViewportRatio = (width, height) => {
+  const ratioToNine = (height / width) * 9;
+  return `${ratioToNine.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}:9`;
+};
+
+const applyMobileViewportPreset = () => {
+  const option = elements.mobileViewportPreset?.selectedOptions[0];
+  if (!option || !elements.mobileDevice) return;
+  const width = Number(option.dataset.width);
+  const height = Number(option.dataset.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+
+  // Значение пресета описывает игровой viewport. Рамка телефона добавляется
+  // снаружи и масштабируется вместе с ним, если панель уже выбранного размера.
+  const shellWidth = width + 28;
+  const shellHeight = height + 44;
+  elements.mobileDevice.style.setProperty("--mobile-device-width", `${shellWidth}px`);
+  elements.mobileDevice.style.setProperty("--mobile-device-ratio", `${shellWidth} / ${shellHeight}`);
+  elements.mobileDevice.dataset.viewportPreset = option.value;
+  if (elements.mobileViewportReadout) {
+    elements.mobileViewportReadout.textContent = `Viewport ${width}×${height} CSS px · ${formatViewportRatio(width, height)}`;
+  }
+};
+
+const requestNativeFullscreen = () => {
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {
+    // iOS и часть встроенных браузеров не дают полноэкранный API. Макет всё
+    // равно занимает весь динамический viewport благодаря mobile-режиму CSS.
+  });
+};
+
+const mobileModeUrl = (enabled) => {
+  const url = new URL(window.location.href);
+  if (enabled) url.searchParams.set("mobile", "1");
+  else url.searchParams.delete("mobile");
+  return url;
+};
+
+const setMobileFullscreenMode = (enabled, { updateUrl = false, nativeFullscreen = false } = {}) => {
+  isMobileFullscreenMode = enabled;
+  document.body.classList.toggle("mobile-fullscreen-mode", enabled);
+  if (updateUrl) window.history.pushState({ mobileFullscreen: enabled }, "", mobileModeUrl(enabled));
+  if (nativeFullscreen && enabled) requestNativeFullscreen();
+  if (!enabled && document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+  window.scrollTo({ top: 0, left: 0 });
+};
+
+const setBattleStartLabels = (debugLabel, mobileLabel) => {
+  elements.startButton.textContent = debugLabel;
+  if (elements.mobileStartButton) elements.mobileStartButton.textContent = mobileLabel;
+};
 
 let lastVisualSnapshot = null;
 let lastVisualInput = null;
@@ -810,7 +876,7 @@ const resetResults = () => {
   elements.statisticsPanel.hidden = true;
   elements.logPanel.hidden = true;
   elements.timeline.hidden = true;
-  elements.startButton.textContent = "▶ Начать симуляцию";
+  setBattleStartLabels("▶ Начать симуляцию", "▶ Начать бой");
 };
 
 const renderPreview = () => {
@@ -863,6 +929,9 @@ const renderPreview = () => {
 const startBattle = (event) => {
   event.preventDefault();
   if (!elements.form.reportValidity()) return;
+  if (!isMobileFullscreenMode && window.matchMedia("(max-width: 700px)").matches) {
+    setMobileFullscreenMode(true, { updateUrl: true, nativeFullscreen: true });
+  }
   try {
     const input = readInput();
     const engine = new BattleEngine(input);
@@ -874,7 +943,7 @@ const startBattle = (event) => {
     elements.slider.max = currentResult.snapshots.length - 1;
     elements.slider.value = 0;
     hideBattleReport();
-    elements.startButton.textContent = "↻ Запустить заново";
+    setBattleStartLabels("↻ Запустить заново", "↻ Новый бой");
     playBattle({ restart: true });
   } catch (error) {
     console.error(error);
@@ -885,6 +954,7 @@ const startBattle = (event) => {
 
 populateMenus();
 setFormFromInput(createSimulatorDefaultInput());
+applyMobileViewportPreset();
 renderPreview();
 
 elements.form.addEventListener("submit", startBattle);
@@ -935,4 +1005,18 @@ elements.downloadBattle.addEventListener("click", downloadBattle);
 elements.downloadLog.addEventListener("click", downloadBattle);
 elements.logFilter.addEventListener("input", renderLog);
 elements.keyEventsOnly.addEventListener("change", renderLog);
+elements.mobileViewportPreset?.addEventListener("change", applyMobileViewportPreset);
+elements.mobileFullscreenLink?.addEventListener("click", (event) => {
+  event.preventDefault();
+  setMobileFullscreenMode(true, { updateUrl: true, nativeFullscreen: true });
+});
+elements.mobileExitFullscreen?.addEventListener("click", (event) => {
+  event.preventDefault();
+  setMobileFullscreenMode(false, { updateUrl: true });
+});
+elements.mobileNativeFullscreen?.addEventListener("click", requestNativeFullscreen);
+elements.mobileStartButton?.addEventListener("click", () => elements.form.requestSubmit());
+window.addEventListener("popstate", () => {
+  setMobileFullscreenMode(new URLSearchParams(window.location.search).get("mobile") === "1");
+});
 })();

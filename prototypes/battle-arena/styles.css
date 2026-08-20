@@ -659,6 +659,52 @@ a.button {
   width: 100%;
 }
 
+.mobile-preview-tools {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mobile-fullscreen-link {
+  min-height: 32px;
+  padding: 7px 9px;
+  font-size: 9px;
+}
+
+.mobile-viewport-picker {
+  display: grid;
+  grid-template-columns: none;
+  gap: 3px;
+  min-width: 188px;
+}
+
+.mobile-viewport-picker > span {
+  color: var(--sand);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.mobile-viewport-picker select {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 24px 5px 8px;
+  color: var(--text);
+  background: #120e0c;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+
+.mobile-viewport-picker small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
 .mobile-preview-heading h2,
 .mobile-preview-heading p {
   margin: 0;
@@ -702,8 +748,14 @@ a.button {
 }
 
 .mobile-device {
+  --mobile-device-width: 388px;
+  --mobile-device-ratio: 388 / 844;
   position: relative;
-  width: min(100%, 390px);
+  display: flex;
+  flex-direction: column;
+  width: min(100%, var(--mobile-device-width));
+  aspect-ratio: var(--mobile-device-ratio);
+  min-height: 0;
   padding: 22px 7px 8px;
   background: #050607;
   border: 7px solid #302820;
@@ -722,7 +774,12 @@ a.button {
   border-radius: 3px;
 }
 
+.mobile-fullscreen-controls {
+  display: none;
+}
+
 .mobile-arena-header {
+  flex: 0 0 auto;
   color: #d7bd85;
   background:
     linear-gradient(90deg, rgba(139, 93, 48, 0.14), transparent 24%, transparent 76%, rgba(139, 93, 48, 0.14)),
@@ -959,6 +1016,7 @@ a.button {
 
 #mobile-arena-canvas {
   display: block;
+  flex: 0 0 auto;
   width: 100%;
   height: auto;
   background: #050607;
@@ -969,6 +1027,7 @@ a.button {
 
 .mobile-battle-story {
   position: relative;
+  flex: 1 1 auto;
   min-height: 136px;
   /* The seal protrudes into the parchment; keep the title below its footprint. */
   padding: 28px 18px 20px;
@@ -979,6 +1038,7 @@ a.button {
     #a98352;
   border: 4px double #4a321d;
   box-shadow: inset 0 0 18px rgba(43, 25, 12, 0.58);
+  overflow: hidden;
 }
 
 .mobile-battle-story::before {
@@ -1268,6 +1328,133 @@ a.button {
 
 .mobile-battle-feed li.empty::before {
   content: none;
+}
+
+body.mobile-fullscreen-mode {
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: #050607;
+}
+
+.mobile-fullscreen-mode .topbar,
+.mobile-fullscreen-mode .setup-panel,
+.mobile-fullscreen-mode .battle-workspace > :not(.mobile-preview-panel),
+.mobile-fullscreen-mode .mobile-preview-heading,
+.mobile-fullscreen-mode .pixi-preview-note {
+  display: none !important;
+}
+
+.mobile-fullscreen-mode .layout,
+.mobile-fullscreen-mode .battle-workspace {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mobile-fullscreen-mode .mobile-preview-panel {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: #050607;
+  border: 0;
+  box-shadow: none;
+}
+
+.mobile-fullscreen-mode .mobile-device {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  aspect-ratio: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.mobile-fullscreen-mode .mobile-device-speaker {
+  display: none;
+}
+
+.mobile-fullscreen-mode .mobile-fullscreen-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 43px;
+  padding:
+    max(7px, env(safe-area-inset-top))
+    max(9px, env(safe-area-inset-right))
+    7px
+    max(9px, env(safe-area-inset-left));
+  color: #bca275;
+  background: #100d0b;
+  border-bottom: 1px solid #5e4930;
+  box-shadow: inset 0 -7px 16px rgba(0, 0, 0, .32);
+}
+
+.mobile-fullscreen-controls a,
+.mobile-fullscreen-controls button {
+  min-height: 28px;
+  color: #cbb688;
+  background: #211811;
+  border: 1px solid #6d5134;
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-fullscreen-controls a {
+  display: grid;
+  place-items: center;
+  padding: 4px 8px;
+}
+
+.mobile-fullscreen-controls button {
+  padding: 4px 8px;
+}
+
+.mobile-fullscreen-controls #mobile-native-fullscreen {
+  width: 30px;
+  padding: 4px;
+}
+
+.mobile-fullscreen-controls #mobile-start-battle {
+  flex: 1;
+  color: #20150c;
+  background: linear-gradient(#e0bb75, #a97738);
+  border-color: #d0a35e;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.mobile-fullscreen-mode .mobile-battle-story {
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 370px) {
+  .mobile-fullscreen-mode .mobile-versus {
+    grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+    padding-inline: 3px;
+  }
+
+  .mobile-fullscreen-mode .mobile-fighter-avatar {
+    flex-basis: 42px;
+    width: 42px;
+  }
+
+  .mobile-fullscreen-mode .mobile-fighter-copy strong {
+    font-size: 9px;
+  }
+
+  .mobile-fullscreen-controls a {
+    padding-inline: 6px;
+  }
 }
 
 .pixi-preview-panel {
@@ -1783,6 +1970,21 @@ th {
   .mobile-preview-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .mobile-preview-tools {
+    align-items: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .mobile-viewport-picker {
+    flex: 1 1 188px;
+  }
+
+  .view-mode-switch {
+    align-self: end;
   }
 
   .fighters-setup,
