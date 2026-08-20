@@ -204,6 +204,27 @@ const escapeHtml = (value) => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
+const battleStoryStamp = (className) => {
+  const stampPaths = className === "state-trauma"
+    ? '<path d="M6 1h4v5h5v4h-5v5H6v-5H1V6h5z"/>'
+    : className === "state-initial"
+      ? '<path d="M3 13V7a5 5 0 0 1 10 0v6H3Zm2-5h6M8 2v11" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+      : className === "outcome-block"
+        ? '<path d="M8 1 13 3v4c0 3.4-1.8 6-5 8-3.2-2-5-4.6-5-8V3l5-2Zm0 3v7" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+        : className === "outcome-dodge"
+          ? '<path d="M2 12c2.8-5.6 6.4-7.5 11-5.7M10 3l3 3-4 2" fill="none" stroke="currentColor" stroke-width="1.7"/>'
+          : className === "outcome-miss"
+            ? '<path d="m3 13 4-4m2-2 4-4M2 10l4 4m4-12 4 4" fill="none" stroke="currentColor" stroke-width="1.6"/>'
+            : className === "impact-critical"
+              ? '<path d="M8 1c2.5 3.4 4 5.6 4 8a4 4 0 0 1-8 0c0-2.4 1.5-4.6 4-8Z"/><circle cx="13.5" cy="12.5" r="1.3"/>'
+              : className === "impact-strong"
+                ? '<path d="m2 3 3 1 8 8-1 2-8-8-2-3Zm12 0-3 1-3 3M5 9l-2 3 1 2 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+                : className === "impact-light"
+                  ? '<path d="m12 2 2 2-7 7-3 1 1-3 7-7Zm-9 11 2 2" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+                  : '<path d="m12 2 2 2-7 7-3 1 1-3 7-7ZM3 13l2 2M9 5l2 2" fill="none" stroke="currentColor" stroke-width="1.7"/>';
+  return `<span class="mobile-story-stamp" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false">${stampPaths}</svg></span>`;
+};
+
 const formatNumber = (value, digits = 2) => Number(value).toLocaleString("ru-RU", {
   maximumFractionDigits: digits,
 });
@@ -622,7 +643,8 @@ const renderMobileBattleUi = (snapshot, input) => {
   elements.mobileBattleFeed.innerHTML = recentStory.length
     ? recentStory.map((entry) => `
         <li class="${escapeHtml(entry.className)}">
-          <span>${escapeHtml(entry.text)}</span>
+          ${battleStoryStamp(entry.className)}
+          <span class="mobile-story-copy">${escapeHtml(entry.text)}</span>
         </li>
       `).join("")
     : "<li class=\"empty\">Бой ещё не начался.</li>";

@@ -1031,7 +1031,7 @@ a.button {
   min-height: 136px;
   /* The seal protrudes into the parchment; keep the title below its footprint. */
   padding: 28px 18px 20px;
-  color: #2b1d11;
+  color: #21140c;
   background:
     radial-gradient(circle at 50% 5%, rgba(255, 229, 164, 0.2), transparent 44%),
     repeating-linear-gradient(0deg, rgba(73, 45, 22, 0.045) 0 1px, transparent 1px 4px),
@@ -1248,73 +1248,102 @@ a.button {
 }
 
 .mobile-battle-feed li {
+  --story-stamp-color: #4f3722;
   position: relative;
-  display: block;
-  padding-left: 10px;
-  border-left: 3px solid #5f4328;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+  padding-left: 5px;
+  border-left: 4px solid var(--story-stamp-color);
   font-size: 9px;
   line-height: 1.3;
 }
 
 .mobile-battle-feed li::before {
-  position: absolute;
-  top: .25em;
-  left: 3px;
-  content: "◆";
-  color: #5f4328;
-  font-size: 5px;
+  content: none;
 }
 
-.mobile-battle-feed li > span {
+.mobile-story-copy {
   position: relative;
+  color: #21140c;
   text-shadow:
-    0 1px rgba(205, 168, 116, .82),
-    0 0 3px rgba(205, 168, 116, .48);
+    -1px 0 rgba(208, 174, 125, .62),
+    1px 0 rgba(208, 174, 125, .62),
+    0 -1px rgba(208, 174, 125, .5),
+    0 1px rgba(208, 174, 125, .78),
+    0 0 4px rgba(218, 181, 126, .54);
+}
+
+.mobile-story-stamp {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-top: -1px;
+  color: var(--story-stamp-color);
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: .88;
+  transform: rotate(-2deg);
+}
+
+.mobile-story-stamp svg {
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+  fill: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .mobile-battle-feed li.impact-light {
-  border-color: #735144;
+  --story-stamp-color: #604333;
 }
 
 .mobile-battle-feed li.impact-normal {
-  border-color: #7a211b;
+  --story-stamp-color: #6b1b17;
 }
 
 .mobile-battle-feed li.impact-strong {
-  border-color: #a83224;
+  --story-stamp-color: #851f19;
 }
 
 .mobile-battle-feed li.impact-critical {
+  --story-stamp-color: #46040d;
   padding: 2px 4px 2px 10px;
   color: #5a0713;
   background: linear-gradient(90deg, rgba(91, 5, 18, .18), rgba(91, 5, 18, 0));
-  border-color: #4a0610;
   font-size: 10px;
   font-weight: 800;
   text-shadow: 0 1px rgba(211, 159, 112, .32);
 }
 
+.mobile-battle-feed li.impact-critical .mobile-story-copy {
+  color: #48040e;
+}
+
 .mobile-battle-feed li.outcome-miss {
+  --story-stamp-color: #594735;
   color: #5d4b38;
-  border-color: #735f49;
 }
 
 .mobile-battle-feed li.outcome-dodge {
-  border-color: #49666a;
+  --story-stamp-color: #3e5b5e;
 }
 
 .mobile-battle-feed li.outcome-block {
-  border-color: #7a673d;
+  --story-stamp-color: #69562f;
 }
 
 .mobile-battle-feed li.state-initial {
+  --story-stamp-color: #75562f;
   color: #685136;
-  border-color: #8b6b40;
 }
 
 .mobile-battle-feed li.state-trauma {
+  --story-stamp-color: #8d261d;
   color: #8f2d22;
-  border-color: #a83224;
   font-weight: 700;
 }
 
