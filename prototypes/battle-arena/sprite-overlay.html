@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — проверка единого спрайта</title>
-    <link rel="stylesheet" href="./sprite-overlay.css?v=8" />
-    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
-    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v6.png" />
+    <link rel="stylesheet" href="./sprite-overlay.css?v=10" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v16.png" />
+    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v8.png" />
     <link rel="preload" as="image" href="./assets/unified-retiarius-character-reference-v1.png" />
   </head>
   <body>
@@ -27,13 +27,13 @@
         <div>
           <p class="eyebrow">ПРОВЕРКА МАТРИЦЫ · БЕЗ БОЯ</p>
           <h2>Матрицы мечника и ретиария</h2>
-          <p>Оба листа имеют логическую ячейку бойца 256×256 px. Ретиарий хранится в физической ячейке 384×384: дополнительные прозрачные поля принадлежат оружию и не уменьшают тело. Трезубец и сеть запечены вместе; соперник использует зеркальную копию.</p>
+          <p>Оба листа имеют логическую ячейку бойца 256×256 px. Мечник расширен до 14 строк, ретиарий — до 13 строк усиленным прыжковым ударом и оглушением. Физическая ячейка 384×384 оставляет прозрачный буфер для оружия; соперник использует зеркальную копию.</p>
         </div>
         <dl class="contract">
           <div><dt>НАПРАВЛЕНИЕ</dt><dd>вправо</dd></div>
           <div><dt>ОППОНЕНТ</dt><dd>зеркалится рендером</dd></div>
           <div><dt>ЛОГИЧЕСКИЙ КАДР</dt><dd>256 × 256 px</dd></div>
-          <div><dt>РЕТИАРИЙ</dt><dd>буферный лист V5</dd></div>
+          <div><dt>РЕТИАРИЙ</dt><dd>буферный лист V8</dd></div>
         </dl>
       </section>
 
@@ -41,7 +41,7 @@
         <div class="preview-copy">
           <p class="eyebrow">ПОКАДРОВАЯ ПРОВЕРКА</p>
           <h2 id="preview-title">Отдельный кадр анимации</h2>
-          <p>Ретиарий использует собственную полную матрицу с трезубцем и сетью. Остальные классы временно используют лист мечника. Для атаки и особого приёма поверх кадра проигрывается тот же программный размах, что и в бою; результат можно переключить отдельно. Состояния автоматически меняются каждые четыре секунды.</p>
+          <p>Ретиарий использует собственную полную матрицу с трезубцем и сетью. Остальные классы временно используют лист мечника. Для атаки и особого приёма поверх кадра проигрывается тот же программный размах, что и в бою; результат можно переключить отдельно. Автосмену состояний при необходимости можно включить вручную.</p>
           <div class="preview-controls">
             <label><span>Персонаж</span><select id="preview-body">
               <option value="murmillo">Мурмиллон</option>
@@ -57,7 +57,10 @@
               <option value="idle.injured" selected>Раненая стойка — полная</option>
               <option value="greeting">Приветствие</option>
               <option value="attack">Атака</option>
+              <option value="attack.spinning" data-swordsman-only>Удар с разворота</option>
               <option value="special">Особый приём</option>
+              <option value="special.enhanced">Усиленный классовый удар</option>
+              <option value="reaction.stunned">Оглушение</option>
               <option value="defense.block">Блок</option>
               <option value="defense.dodge">Уворот</option>
               <option value="defense.miss">Короткий уход при промахе</option>
@@ -75,7 +78,7 @@
               <option value="critical">Критическое попадание</option>
             </select></label>
             <label class="mirror-control"><input id="preview-mirrored" type="checkbox" /> Зеркально</label>
-            <label class="auto-cycle-control"><input id="preview-auto-cycle" type="checkbox" checked /> Состояния каждые 4 сек</label>
+            <label class="auto-cycle-control"><input id="preview-auto-cycle" type="checkbox" /> Состояния каждые 4 сек</label>
             <button id="preview-play" type="button" aria-pressed="true">Ⅱ Пауза</button>
           </div>
         </div>
@@ -100,30 +103,30 @@
       <section class="atlas-pair" aria-label="Матрицы единых спрайтов">
         <article class="atlas-card panel">
           <header>
-            <p class="eyebrow">UNIFIED SWORDSMAN · V9</p>
+            <p class="eyebrow">UNIFIED SWORDSMAN · V16</p>
             <h2>Временный мечник для всех классов</h2>
-            <p>Одиннадцать анимаций сгенерированы отдельными строками и затем проверены и собраны в точную сетку. Строка 10 — особый силовой удар с коротким прыжком.</p>
+            <p>Четырнадцать анимаций собраны в точную сетку. Строка 11 — усиленный классовый удар, строка 12 — оглушённая защитная стойка, строка 13 — удар с разворота.</p>
           </header>
-          <div class="atlas-layout">
+          <div class="atlas-layout fourteen-rows">
             <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
-            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li></ol>
+            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li><li>11</li><li>12</li><li>13</li></ol>
             <figure class="overlay-atlas" aria-label="Матрица единого спрайта мечника">
-              <img class="body-layer" src="./assets/unified-swordsman-grid-v14.png" alt="Матрица мечника с оружием" />
+              <img class="body-layer" src="./assets/unified-swordsman-grid-v16.png" alt="Матрица мечника с усиленным ударом, оглушением и ударом с разворота" />
               <span class="grid-overlay" aria-hidden="true"></span>
             </figure>
           </div>
         </article>
         <article class="atlas-card panel">
           <header>
-            <p class="eyebrow">UNIFIED RETIARIUS · V5</p>
+            <p class="eyebrow">UNIFIED RETIARIUS · V8</p>
             <h2>Ретиарий с трезубцем и сетью</h2>
-            <p>Все одиннадцать строк выровнены по корню ног и плотному контуру тела. Строка 10 показывает классовый бросок сети; физическая ячейка 384×384 сохраняет буфер экипировки.</p>
+            <p>Тринадцать строк выровнены по корню ног и плотному контуру тела. Строка 10 показывает бросок сети, строка 11 — усиленный удар, строка 12 — оглушённую защитную стойку.</p>
           </header>
-          <div class="atlas-layout">
+          <div class="atlas-layout thirteen-rows">
             <ol class="column-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li></ol>
-            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li></ol>
+            <ol class="row-labels" aria-hidden="true"><li>0</li><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li><li>11</li><li>12</li></ol>
             <figure class="overlay-atlas" aria-label="Матрица единого спрайта ретиария">
-              <img class="body-layer" src="./assets/unified-retiarius-grid-v6.png" alt="Буферная матрица ретиария с трезубцем и сетью" />
+              <img class="body-layer" src="./assets/unified-retiarius-grid-v8.png" alt="Буферная матрица ретиария с усиленным ударом и оглушением" />
               <span class="grid-overlay" aria-hidden="true"></span>
             </figure>
           </div>
@@ -144,13 +147,16 @@
           <div><b>8</b><span>Приветствие перед стартовым сближением</span></div>
           <div><b>9</b><span>Победа · полный салют, затем цикл кадров 4↔5</span></div>
           <div><b>10</b><span>Особый приём · мечник: силовой прыжок; ретиарий: бросок сети</span></div>
+          <div><b>11</b><span>Усиленный классовый удар · меч или прыжковый удар трезубцем</span></div>
+          <div><b>12</b><span>Мечник и ретиарий · loop оглушения: 1→2→(3↔5)→6, кадр 4 пропускается</span></div>
+          <div><b>13</b><span>Только мечник · удар с полным разворотом корпуса</span></div>
         </div>
         <p class="warning">Масштаб определяется по плотному телу. Длинное оружие может занимать прозрачный буфер физической ячейки и не должно уменьшать бойца.</p>
       </section>
     </main>
 
-    <script src="./sprite-library.js?v=30"></script>
-    <script src="./visual-engine.js?v=38"></script>
-    <script src="./sprite-overlay.js?v=31"></script>
+    <script src="./sprite-library.js?v=37"></script>
+    <script src="./visual-engine.js?v=48"></script>
+    <script src="./sprite-overlay.js?v=36"></script>
   </body>
 </html>

@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=46" />
+    <link rel="stylesheet" href="./styles.css?v=55" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
-    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v14.png" />
-    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v6.png" />
+    <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v16.png" />
+    <link rel="preload" as="image" href="./assets/unified-retiarius-grid-v8.png" />
     <link rel="preload" as="image" href="./assets/unified-swordsman-character-reference-v1.png" />
     <link rel="preload" as="image" href="./assets/unified-retiarius-character-reference-v1.png" />
     <link rel="preload" as="image" href="./assets/arena-crowd-background-v1.png" />
@@ -79,13 +79,13 @@
               <legend>Боец I</legend>
               <label>
                 <span>Имя</span>
-                <input data-field="name" type="text" value="Маркус" />
+                <input data-field="name" type="text" value="Тит" />
               </label>
               <div class="equipment-picker" data-equipment-picker="0"></div>
               <div class="form-grid stats-input-grid">
-                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="62" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="210" /></label>
-                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="63" /></label>
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="54" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="180" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="68" /></label>
               </div>
               <div class="fighter-chance-grid">
                 <label><span>Критический удар</span><select data-field="criticalChance">
@@ -106,13 +106,13 @@
               <legend>Боец II</legend>
               <label>
                 <span>Имя</span>
-                <input data-field="name" type="text" value="Тит" />
+                <input data-field="name" type="text" value="Маркус" />
               </label>
               <div class="equipment-picker" data-equipment-picker="1"></div>
               <div class="form-grid stats-input-grid">
-                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="54" /></label>
-                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="180" /></label>
-                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="68" /></label>
+                <label><span>Сила</span><input data-field="strength" type="number" min="1" max="500" value="62" /></label>
+                <label><span>Здоровье</span><input data-field="health" type="number" min="1" max="500" value="240" /></label>
+                <label><span>Харизма</span><input data-field="charisma" type="number" min="1" max="500" value="75" /></label>
               </div>
               <div class="fighter-chance-grid">
                 <label><span>Критический удар</span><select data-field="criticalChance">
@@ -218,6 +218,27 @@
               <ol id="mobile-battle-feed" class="mobile-battle-feed" aria-live="polite">
                 <li class="empty">Бой ещё не начался.</li>
               </ol>
+              <div id="mobile-buff-control" class="mobile-buff-control" data-open="false">
+                <p id="mobile-buff-status" class="mobile-buff-status" role="status" aria-live="polite">Удерживайте кнопку</p>
+                <div id="mobile-buff-menu" class="mobile-buff-menu" role="menu" aria-label="Боевые усиления">
+                  <button class="mobile-buff-option buff-rally" type="button" role="menuitem" data-buff-choice="rally" aria-label="Соберись! Сбросить часть усталости">
+                    <span aria-hidden="true">↻</span><b>Соберись!</b>
+                  </button>
+                  <button class="mobile-buff-option buff-forward" type="button" role="menuitem" data-buff-choice="forward" aria-label="Вперёд! Получить инициативу">
+                    <span aria-hidden="true">➤</span><b>Вперёд!</b>
+                  </button>
+                  <button class="mobile-buff-option buff-now" type="button" role="menuitem" data-buff-choice="now" aria-label="Сейчас! Провести усиленный классовый удар">
+                    <span aria-hidden="true">⚔</span><b>Сейчас!</b>
+                  </button>
+                  <button class="mobile-buff-option buff-hold-on" type="button" role="menuitem" data-buff-choice="hold-on" aria-label="Держись! Получить временное здоровье" hidden>
+                    <span aria-hidden="true">◆</span><b>Держись!</b>
+                  </button>
+                </div>
+                <button id="mobile-buff-trigger" class="mobile-buff-trigger" type="button" aria-label="Усиления доступны только во время боя" title="Усиления доступны только во время боя" aria-controls="mobile-buff-menu" aria-expanded="false" aria-describedby="mobile-buff-status" disabled>
+                  <span class="mobile-buff-trigger-icon" aria-hidden="true">✹</span>
+                  <span class="mobile-buff-trigger-count" aria-label="Доступно три усиления">3</span>
+                </button>
+              </div>
             </section>
           </div>
           <p class="pixi-preview-note">Игровой журнал автоматически показывает столько последних событий, сколько помещается на выбранном экране. Полная диагностика находится ниже.</p>
@@ -286,10 +307,10 @@
     </main>
 
     <script src="./reference-data.js?v=2"></script>
-    <script src="./battle-engine.js?v=34"></script>
-    <script src="./sprite-library.js?v=30"></script>
-    <script src="./visual-engine.js?v=38"></script>
-    <script src="./battle-story.js?v=5"></script>
-    <script src="./app.js?v=65"></script>
+    <script src="./battle-engine.js?v=39"></script>
+    <script src="./sprite-library.js?v=37"></script>
+    <script src="./visual-engine.js?v=48"></script>
+    <script src="./battle-story.js?v=6"></script>
+    <script src="./app.js?v=75"></script>
   </body>
 </html>

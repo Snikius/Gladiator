@@ -16,6 +16,7 @@ const {
   PERK_DEFINITIONS,
   SPECTACLE_TIERS,
   BUFF_DEFINITIONS,
+  PLAYER_BUFF_DEFINITIONS,
   calculateSpectacle,
   calculateTraumaChance,
   createBattleLogExport,
@@ -30,6 +31,11 @@ assert.deepEqual(
 );
 assert.equal(PERK_DEFINITIONS.length, 10, "В прототипе должно быть десять постоянных перков");
 assert.equal(BUFF_DEFINITIONS.length, 7, "Нужно семь временных эффектов");
+assert.deepEqual(
+  PLAYER_BUFF_DEFINITIONS.map((buff) => buff.id),
+  ["rally", "forward", "now", "hold-on"],
+  "Каталог содержит четыре доступных для выбора ручных боевых бафа",
+);
 assert.equal(INJURY_DEFINITIONS.length, 5, "Нужно пять стартовых травм");
 assert.equal(typeof BattleModifierManager, "function", "BattleModifierManager должен быть публичной частью прототипа");
 assert.deepEqual(
@@ -87,16 +93,150 @@ const first = new BattleEngine(createDefaultBattleInput()).simulate();
 const second = new BattleEngine(createDefaultBattleInput()).simulate();
 
 assert.deepEqual(first, second, "Одинаковый seed должен давать идентичный полный результат");
+
+const rallyInput = createDefaultBattleInput();
+rallyInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "rally",
+  afterIteration: 2,
+  commandSequence: 1,
+}];
+const rallyResult = new BattleEngine(rallyInput).simulate();
+const rallySnapshot = rallyResult.snapshots.find((snapshot) => (
+  snapshot.playerBuffs.applications.some((application) => application.buffDefinitionId === "rally")
+));
+const rallyPrevious = rallyResult.snapshots[rallySnapshot.index - 1];
+const rallyBeforeFatigue = rallyPrevious.fighters.find((fighter) => fighter.id === "fighter-1").fatigue;
+const rallyAfterFatigue = rallySnapshot.fighters.find((fighter) => fighter.id === "fighter-1").fatigue;
+assert.equal(rallyAfterFatigue, Math.floor(rallyBeforeFatigue * 0.65), "«Соберись!» снимает ровно 35% текущей усталости");
+
+const forwardInput = createDefaultBattleInput();
+forwardInput.fighters[0].base.strength = 20;
+forwardInput.fighters[1].base.health = 500;
+forwardInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "forward",
+  afterIteration: 0,
+  commandSequence: 1,
+}];
+const forwardResult = new BattleEngine(forwardInput).simulate();
+const forwardAppliedSnapshot = forwardResult.snapshots.find((snapshot) => (
+  snapshot.playerBuffs.applications.some((application) => application.buffDefinitionId === "forward")
+));
+assert.ok(
+  Math.abs(
+    forwardAppliedSnapshot.fighters[0].initiative
+      - forwardResult.snapshots[0].fighters[0].initiative
+      - 18
+  ) < 1e-9,
+  "Активный «Вперёд!» добавляет 18 инициативы",
+);
+const forwardTimers = forwardResult.events.filter((event) => (
+  event.type === "modifier.timer.changed" && event.data.modifierId === "player-forward"
+));
+assert.deepEqual(forwardTimers.map((event) => event.data.remainingIterations), [4, 3, 2, 1, 0], "«Вперёд!» действует пять полных итераций");
+assert.ok(forwardResult.events.some((event) => (
+  event.type === "modifier.added" && event.data.modifierId === "player-forward-penalty"
+)), "После «Вперёд!» создаётся бессрочный штраф инициативы");
+
+const holdOnInput = createDefaultBattleInput();
+holdOnInput.seed = "hold-1";
+holdOnInput.maxSteps = 12;
+holdOnInput.fighters.forEach((fighter) => {
+  fighter.base.health = 500;
+  fighter.base.strength = 30;
+});
+holdOnInput.fighters[0].buffLoadout = { buffDefinitionIds: ["hold-on"] };
+holdOnInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "hold-on",
+  afterIteration: 0,
+  commandSequence: 1,
+}];
+const holdOnResult = new BattleEngine(holdOnInput).simulate();
+const holdOnApplied = holdOnResult.snapshots.find((snapshot) => snapshot.label.includes("Держись!"));
+const holdOnFighter = holdOnApplied.fighters.find((fighter) => fighter.id === "fighter-1");
+assert.deepEqual(
+  [holdOnFighter.health, holdOnFighter.maxHealth, holdOnFighter.temporaryHealth],
+  [500, 500, 100],
+  "«Держись!» создаёт отдельный слой в 20% и не лечит постоянное здоровье",
+);
+assert.ok(
+  holdOnFighter.activeEffects.some((effect) => effect.id === "player-hold-on" && effect.remainingIterations === 5),
+  "Временное здоровье отображается активным на пять итераций",
+);
+const absorbedDamageEvent = holdOnResult.events.find((event) => (
+  event.type === "effect.applied"
+    && event.step <= 5
+    && event.data.effect?.type === "health"
+    && event.data.effect.fighterId === "fighter-1"
+));
+assert.deepEqual(
+  [absorbedDamageEvent.data.before.health, absorbedDamageEvent.data.after.health],
+  [500, 500],
+  "Урон сначала поглощается временным здоровьем",
+);
+assert.ok(
+  absorbedDamageEvent.data.after.temporaryHealth < absorbedDamageEvent.data.before.temporaryHealth,
+  "Поглощённый урон уменьшает временный слой",
+);
+assert.deepEqual(
+  holdOnResult.events.filter((event) => (
+    event.type === "modifier.timer.changed" && event.data.modifierId === "player-hold-on"
+  )).map((event) => event.data.remainingIterations),
+  [4, 3, 2, 1, 0],
+  "«Держись!» действует пять полных итераций",
+);
+assert.ok(
+  holdOnResult.events.some((event) => event.type === "modifier.added" && event.data.modifierId === "player-hold-on-penalty"),
+  "После временного здоровья создаётся бессрочный штраф входящего урона",
+);
+assert.ok(
+  holdOnResult.events.some((event) => (
+    event.type === "modifier.hook"
+      && event.data.modifierId === "player-hold-on-penalty"
+      && event.data.before?.outcome === "hit"
+      && event.data.after.damage === event.data.before.damage * 1.25
+  )),
+  "Последствие «Держись!» увеличивает последующий урон на 25%",
+);
+assert.equal(
+  createDefaultBattleInput().fighters[0].buffLoadout.buffDefinitionIds.includes("hold-on"),
+  false,
+  "«Держись!» не входит в активный набор по умолчанию",
+);
+
+const nowInput = createDefaultBattleInput();
+nowInput.fighters[0].base.strength = 20;
+nowInput.fighters[1].base.health = 500;
+nowInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "now",
+  afterIteration: 0,
+  commandSequence: 1,
+}];
+const nowResult = new BattleEngine(nowInput).simulate();
+const nowAppliedSnapshot = nowResult.snapshots.find((snapshot) => snapshot.label.includes("Сейчас!"));
+assert.equal(nowAppliedSnapshot.fighters[0].fatigue, 15, "«Сейчас!» добавляет 15 усталости перед специальным действием");
+const enhancedSnapshot = nowResult.snapshots.find((snapshot) => snapshot.lastAction?.specialAttack === "player-buff-now");
+assert.ok(enhancedSnapshot, "«Сейчас!» создаёт отдельную итерацию усиленного классового удара");
+assert.equal(enhancedSnapshot.lastAction.outcome, "hit", "Усиленный удар гарантированно наносит урон");
+assert.equal(enhancedSnapshot.lastAction.strengthMultiplier, 1.25, "Усиленный удар получает сбалансированный множитель силы 1.25");
+assert.equal(enhancedSnapshot.lastAction.stunIterations, 2, "Усиленный классовый удар оглушает цель на две итерации");
+assert.ok(enhancedSnapshot.fighters.find((fighter) => fighter.id === "fighter-2").activeEffects
+  .some((effect) => effect.id === "player-stunned" && effect.remainingIterations === 2), "Двухходовое оглушение видно в снимке усиленного удара");
+const afterStunSnapshot = nowResult.snapshots.find((snapshot) => snapshot.step === enhancedSnapshot.step + 1 && snapshot.lastAction);
+assert.equal(afterStunSnapshot.lastAction.actorId, "fighter-1", "Оглушённый противник пропускает следующую итерацию выбора");
 assert.equal(first.input.arena.type, "crowd", "Новый бой по умолчанию проходит на арене со зрителями");
 assert.deepEqual(
   first.input.fighters.map((fighter) => fighter.base.health),
-  [210, 180],
+  [180, 240],
   "Стартовое здоровье бойцов по умолчанию зафиксировано отдельно для каждого",
 );
 assert.deepEqual(
   first.input.fighters.map((fighter) => fighter.base.charisma),
-  [63, 68],
-  "Мечник по умолчанию получает ещё 5 пунктов харизмы",
+  [68, 75],
+  "Усиленный мечник по умолчанию получает 75 пунктов харизмы",
 );
 assert.equal(MAX_BASE_HEALTH, 500, "Предельное базовое здоровье равно 500");
 const cappedHealthInput = createDefaultBattleInput();
@@ -205,6 +345,7 @@ assert.ok(
 );
 
 const traumaInput = createDefaultBattleInput();
+traumaInput.seed = "trauma-1";
 traumaInput.fighters.forEach((fighter) => { fighter.perks = []; });
 const traumaResult = new BattleEngine(traumaInput).simulate();
 const traumaSnapshot = traumaResult.snapshots.find((snapshot) => (
@@ -260,7 +401,9 @@ impactCases.forEach(([strikePowerMultiplier, expectedImpact]) => {
   );
   assert.equal(categorized.impact, expectedImpact, `Множитель ${strikePowerMultiplier} получает категорию ${expectedImpact}`);
 });
-const defaultMurmillo = first.snapshots[0].fighters[0];
+const defaultRetiarius = first.snapshots[0].fighters[0];
+const defaultMurmillo = first.snapshots[0].fighters[1];
+assert.equal(defaultRetiarius.fighterClass, "retiarius");
 assert.equal(defaultMurmillo.fighterClass, "murmillo");
 assert.deepEqual(
   {
@@ -271,9 +414,10 @@ assert.deepEqual(
   { weaponPower: 15, armor: 16, weight: 24 },
   "Движок должен разрешить выбранные оружие и доспехи",
 );
-assert.equal(defaultMurmillo.matchup.relation, "advantage", "Мурмиллон должен иметь преимущество против Фракийца");
-assert.equal(defaultMurmillo.matchup.strengthMultiplier, 1.15);
-assert.equal(defaultMurmillo.matchup.initiativeBonus, 10);
+assert.equal(defaultRetiarius.matchup.relation, "advantage", "Ретиарий должен иметь классовое преимущество против Мурмиллона");
+assert.equal(defaultRetiarius.matchup.strengthMultiplier, 1.15);
+assert.equal(defaultRetiarius.matchup.initiativeBonus, 10);
+assert.equal(defaultMurmillo.matchup.relation, "disadvantage", "Мурмиллон должен учитывать преимущество Ретиария");
 assert.ok(
   first.events.some((event) => event.type === "modifier.activated"
     && event.data.modifierId === "weapon.murmillo-shield-advance"
@@ -283,7 +427,7 @@ assert.ok(
 const shieldWallInput = createDefaultBattleInput();
 shieldWallInput.seed = "shield-0";
 shieldWallInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
-shieldWallInput.fighters[0].classTechniqueChance = 1;
+shieldWallInput.fighters[1].classTechniqueChance = 1;
 const shieldWallResult = new BattleEngine(shieldWallInput).simulate();
 assert.ok(
   shieldWallResult.events.some((event) => event.type === "modifier.activated"
@@ -304,12 +448,12 @@ assert.equal(
   murmilloCounterStrikes.length,
   "Каждый подготовительный блок создаёт ровно одну ответную атаку",
 );
-assert.equal(murmilloCounterStrike.actorId, "fighter-1", "Ответный классовый удар выполняет владелец техники");
+assert.equal(murmilloCounterStrike.actorId, "fighter-2", "Ответный классовый удар выполняет владелец техники");
 assert.equal(murmilloCounterStrike.strengthMultiplier, 1.25, "Ответный удар получает усиление силы 25%");
 const disabledShieldInput = createDefaultBattleInput();
 disabledShieldInput.maxSteps = 80;
 disabledShieldInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
-disabledShieldInput.fighters[0].classTechniqueChance = 0;
+disabledShieldInput.fighters[1].classTechniqueChance = 0;
 const disabledShieldResult = new BattleEngine(disabledShieldInput).simulate();
 assert.equal(
   disabledShieldResult.events.some((event) => event.type === "modifier.activated"
@@ -368,6 +512,7 @@ assert.ok(
 );
 
 const namedEquipmentInput = createDefaultBattleInput();
+namedEquipmentInput.fighters[0].fighterClass = "murmillo";
 namedEquipmentInput.fighters[0].equipment = {
   weaponSet: { definitionId: "murmillo-arms.named" },
   armorSet: { definitionId: "murmillo-armor.named" },
@@ -472,9 +617,9 @@ const draw = new BattleEngine(drawInput).simulate();
 assert.deepEqual(draw.outcome, { type: "draw", reason: "step_limit" });
 assert.ok(draw.fighters.every((fighter) => fighter.battleOutcome === "draw"));
 
-const strongBonesResult = first.fighters.find((fighter) => fighter.id === "fighter-2");
-assert.ok(strongBonesResult, "В результате должен присутствовать второй боец");
-assert.ok(first.statistics["fighter-2"].modifierActivations > 0, "Перк должен пройти через hook интерфейс");
+const strongBonesResult = first.fighters.find((fighter) => fighter.id === "fighter-1");
+assert.ok(strongBonesResult, "В результате должен присутствовать игрок-ретиарий");
+assert.ok(first.statistics["fighter-1"].modifierActivations > 0, "Перк должен пройти через hook интерфейс");
 
 const interceptorInput = createDefaultBattleInput();
 interceptorInput.fighters[0].perks = ["turn-interceptor"];
@@ -489,7 +634,7 @@ const redheadInput = createDefaultBattleInput();
 redheadInput.fighters[0].perks = ["redhead"];
 redheadInput.fighters[1].perks = [];
 const redheadResult = new BattleEngine(redheadInput).simulate();
-assert.equal(redheadResult.snapshots[0].fighters[0].support, 53, "Рыжий должен понизить харизму на 10 от нового значения 63");
+assert.equal(redheadResult.snapshots[0].fighters[0].support, 58, "Рыжий должен понизить харизму Ретиария на 10 от значения 68");
 
 const skilledInput = createDefaultBattleInput();
 skilledInput.fighters[0].perks = ["skilled-warrior"];
@@ -565,8 +710,8 @@ assert.equal(
   temporaryInput.fighters[0].base.health + 26,
   "Временные эффекты должны суммировать здоровье поверх текущего базового значения",
 );
-assert.equal(initialFighter.strength, 63.15, "Травма руки должна примениться после экипировки и временных бонусов");
-assert.equal(initialFighter.support, 67, "Харизма и травма головы должны менять поддержку от нового базового значения");
+assert.equal(initialFighter.strength, 55.33, "Травма руки должна примениться после экипировки и временных бонусов");
+assert.equal(initialFighter.support, 72, "Харизма и травма головы должны менять поддержку от нового базового значения");
 assert.equal(initialFighter.fatigue, 18, "Стартовая усталость травм должна суммироваться");
 assert.equal(initialFighter.traumas.length, 2, "Рука и нога должны стать стартовыми травмами");
 assert.equal(initialFighter.buffs.length, 3, "Повторяющиеся временные эффекты разрешены");

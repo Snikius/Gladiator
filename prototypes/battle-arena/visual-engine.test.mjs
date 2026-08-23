@@ -29,14 +29,21 @@ const {
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
+  actionMotion,
   attackTrailStrokes,
   createVisualFrame,
   drawAttackTrailStrokes,
   resolveTerritoryOffset,
+  sheetMotion,
 } = globalThis.GladiatorVisualEngine;
 const { createSkeletalFrame } = globalThis.GladiatorPixiSkeletal;
 
 const input = createDefaultBattleInput();
+input.fighters[0].fighterClass = "murmillo";
+input.fighters[0].equipment = {
+  weaponSet: { definitionId: "murmillo-arms.good" },
+  armorSet: { definitionId: "murmillo-armor.good" },
+};
 input.fighters[0].visual = { skinId: "arena-gold", weaponSkinId: "spear" };
 const inputBeforeRender = JSON.stringify(input);
 const result = new BattleEngine(input).simulate();
@@ -59,6 +66,80 @@ const actionFrame = createVisualFrame(actionSnapshot, input);
 const actorSprite = actionFrame.components.find((component) => component.id === `${actionSnapshot.lastAction.actorId}:fighter`);
 assert.ok(actorSprite.motion.duration > 0, "Действие боя должно стать движением единого визуального компонента");
 assert.ok(Object.isFrozen(actionFrame), "Кадр реплея неизменяем");
+
+const enhancedBuffInput = createDefaultBattleInput();
+enhancedBuffInput.fighters[0].base.strength = 20;
+enhancedBuffInput.fighters[1].base.health = 500;
+enhancedBuffInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "now",
+  afterIteration: 0,
+  commandSequence: 1,
+}];
+const enhancedBuffResult = new BattleEngine(enhancedBuffInput).simulate();
+const enhancedBuffSnapshot = enhancedBuffResult.snapshots.find((snapshot) => snapshot.lastAction?.specialAttack === "player-buff-now");
+const enhancedBuffFrame = createVisualFrame(enhancedBuffSnapshot, enhancedBuffInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(
+  enhancedBuffFrame.components.find((component) => component.fighterId === "fighter-1").animation.clip,
+  "special.enhanced",
+  "Ударный баф проигрывает линейку усиленного классового удара",
+);
+assert.equal(
+  enhancedBuffFrame.components.find((component) => component.fighterId === "fighter-2").animation.clip,
+  "reaction.stunned",
+  "Цель ударного бафа сразу проигрывает линейку оглушения",
+);
+const retiariusBuffInput = createDefaultBattleInput();
+retiariusBuffInput.fighters[0].fighterClass = "retiarius";
+retiariusBuffInput.fighters[0].equipment = {
+  weaponSet: { definitionId: "retiarius-arms.good" },
+  armorSet: { definitionId: "retiarius-armor.good" },
+};
+retiariusBuffInput.fighters[0].base.strength = 20;
+retiariusBuffInput.fighters[1].base.health = 500;
+retiariusBuffInput.playerBuffCommands = enhancedBuffInput.playerBuffCommands;
+const retiariusBuffResult = new BattleEngine(retiariusBuffInput).simulate();
+const retiariusBuffSnapshot = retiariusBuffResult.snapshots.find((snapshot) => snapshot.lastAction?.specialAttack === "player-buff-now");
+const retiariusBuffFrame = createVisualFrame(retiariusBuffSnapshot, retiariusBuffInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+assert.equal(retiariusBuffSnapshot.lastAction.attackType, "retiarius-enhanced-jump", "Ретиарий получает прыжковый тип усиленного удара");
+assert.equal(retiariusBuffSnapshot.lastAction.stunIterations, 2, "Ретиарий оглушает усиленным ударом на две итерации");
+assert.equal(
+  retiariusBuffFrame.components.find((component) => component.fighterId === "fighter-1").animation.clip,
+  "special.enhanced",
+  "Ретиарий использует собственную строку усиленного прыжкового удара",
+);
+const retiariusEnhancedActor = retiariusBuffFrame.components.find((component) => component.fighterId === "fighter-1");
+const sharedRetiariusEnhancedMotion = sheetMotion(
+  actionMotion({ id: "fighter-1" }, retiariusBuffFrame.action),
+  retiariusEnhancedActor.animation.sheet,
+  retiariusEnhancedActor.transform.direction,
+);
+assert.deepEqual(
+  sharedRetiariusEnhancedMotion,
+  retiariusEnhancedActor.motion,
+  "Наложения и бой получают движение усиленного ретиария из одного расчёта",
+);
+assert.equal(retiariusEnhancedActor.motion.x, 14, "Усиленный ретиарий делает короткий выпад, а не остаётся в позиции броска сети");
+const actualRetiariusEnhancedTrails = attackTrailStrokes(retiariusBuffFrame, 0.56);
+const overlayRetiariusEnhancedTrails = attackTrailStrokes({
+  ...retiariusBuffFrame,
+  action: { ...retiariusBuffFrame.action, classTechnique: null },
+}, 0.56);
+assert.deepEqual(
+  actualRetiariusEnhancedTrails,
+  overlayRetiariusEnhancedTrails,
+  "Признак классового броска сети не меняет развод усиленного прыжкового удара",
+);
+assert.ok(
+  actualRetiariusEnhancedTrails.every((trail) => trail.kind === "enhanced-thrust"),
+  "Реальный усиленный удар рисует диагональный след трезубца вместо линий сети",
+);
 const trailFrame = (outcome, overrides = {}) => ({
   ...actionFrame,
   action: {
@@ -113,7 +194,7 @@ const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
 });
 assert.equal(mobileFrame.presentation, "mobile", "Мобильная сцена должна иметь отдельную презентацию");
 assert.equal(mobileFrame.rendererMode, "assets", "Режим ассетов переключается только в визуальном слое");
-assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v14.png");
+assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v16.png");
 assert.equal(mobileFrame.components[0].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID);
 assert.equal(mobileFrame.components[0].animation.equipmentProfileId, "murmillo-armor", "Профиль поз берётся из комплекта брони");
 assert.equal(mobileFrame.components[0].animation.state, "idle.normal");
@@ -122,7 +203,7 @@ assert.equal(UNIFIED_ATLAS.cellWidth, 384, "Единый лист использ
 assert.equal(UNIFIED_ATLAS.cellHeight, 384, "Единый лист использует физическую высоту кадра 384 px");
 assert.equal(UNIFIED_ATLAS.logicalWidth, 256, "Масштаб тела считается по логической ширине 256 px");
 assert.equal(UNIFIED_ATLAS.logicalHeight, 256, "Масштаб тела считается по логической высоте 256 px");
-assert.equal(UNIFIED_ATLAS.rows, 11, "Единый лист содержит отдельную строку особого приёма");
+assert.equal(UNIFIED_ATLAS.rows, 14, "Лист мечника содержит дополнительные строки усиленного приёма, оглушения и удара с разворота");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].grid.columns, 6);
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.frames.length, 6, "Атака занимает всю строку из шести кадров");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.attack.row, 3, "Атака использует собственную строку атласа");
@@ -147,6 +228,16 @@ assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.p
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.victory.playback.repeat.keepAlive, true, "Финальный цикл остаётся активным до нового боя");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.row, 10, "Особый приём занимает отдельную одиннадцатую строку");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips.special.frames.length, 6, "Особый приём использует все шесть кадров строки");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["special.enhanced"].row, 11, "Усиленный классовый удар занимает строку 11");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"].row, 12, "Оглушение занимает строку 12");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"].frames, [0, 1, 2, 4, 2, 4, 2, 5], "Оглушение пропускает четвёртый кадр и циклически чередует третий с пятым перед восстановлением");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"].playback.repeat.sequence, [0, 1, 2, 4, 2, 4, 2, 5], "Preview повторяет полную последовательность оглушения");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"].playback.repeat.keepAlive, true, "Оглушение остаётся зацикленным до смены состояния");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"].playback.frameDurationsMs, [160, 160, 230, 230, 230, 230, 230, 180], "Внутренние кадры оглушения 3↔5 удерживаются дольше входа");
+assert.equal(animationFrameForElapsed(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"], 500), 2, "Третий кадр оглушения удерживается 230 мс");
+assert.equal(animationFrameForElapsed(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["reaction.stunned"], 600), 4, "После замедленной выдержки цикл переходит к пятому кадру");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["attack.spinning"].row, 13, "Удар с разворота занимает строку 13");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_SWORDSMAN_GRID_ID].clips["attack.spinning"].frames, [0, 1, 2, 3, 4, 5], "Удар с разворота использует все шесть кадров");
 const arbitraryClip = defineAnimationClip({
   row: 12,
   fps: 10,
@@ -160,6 +251,11 @@ assert.equal(animationFrameForElapsed(arbitraryClip, 250), 1, "Произвол�
 assert.equal(animationFrameForElapsed(arbitraryClip, 400), 4, "Повтор может использовать кадр, которого не было во вступлении");
 assert.equal(animationFrameForElapsed(arbitraryClip, 500), 3, "Повторяемый сегмент имеет независимый порядок кадров");
 const standardInput = createDefaultBattleInput();
+standardInput.fighters[0].fighterClass = "murmillo";
+standardInput.fighters[0].equipment = {
+  weaponSet: { definitionId: "murmillo-arms.good" },
+  armorSet: { definitionId: "murmillo-armor.good" },
+};
 standardInput.fighters[1].fighterClass = "retiarius";
 standardInput.fighters[1].equipment = {
   weaponSet: { definitionId: "retiarius-arms.good" },
@@ -172,7 +268,12 @@ const standardMobileFrame = createVisualFrame(standardResult.snapshots[0], stand
 });
 assert.equal(standardMobileFrame.components[0].animation.mirrored, false, "Левый боец смотрит в центр без отражения исходного листа");
 assert.equal(standardMobileFrame.components[1].animation.bodyGridId, UNIFIED_RETIARIUS_GRID_ID, "Ретиарий использует собственный единый лист");
-assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v6.png", "Игра использует атлас ретиария с отдельным броском сети");
+assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v8.png", "Игра использует расширенный атлас ретиария");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].grid.rows, 13, "Ретиарий содержит строки усиленного удара и оглушения");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["special.enhanced"].row, 11, "Усиленный удар ретиария занимает строку 11");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["special.enhanced"].frames, [0, 1, 2, 3, 4, 5], "Усиленный удар ретиария использует все шесть кадров");
+assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["reaction.stunned"].row, 12, "Оглушение ретиария занимает строку 12");
+assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["reaction.stunned"].frames, [0, 1, 2, 4, 2, 4, 2, 5], "Ретиарий использует общий замедленный цикл оглушения");
 assert.notEqual(standardMobileFrame.components[1].assetPath, standardMobileFrame.components[0].assetPath, "Ретиарий не подменяется ассетом мечника");
 assert.equal(standardMobileFrame.components[1].animation.weaponSkinId, "trident", "Трезубец запечён в кадры ретиария");
 assert.equal(standardMobileFrame.components[1].animation.assetHeight, 150, "Оба бойца имеют одинаковый визуальный масштаб");
@@ -191,6 +292,19 @@ const retiariusNetTrails = attackTrailStrokes({
   ...standardMobileFrame,
   action: { ...retiariusActionBase, classTechnique: "weapon.retiarius-net-cast" },
 }, 0.4);
+const retiariusEnhancedTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...retiariusActionBase, attackType: "retiarius-enhanced-jump", enhancedClassTechnique: true },
+}, 0.56);
+const retiariusEnhancedHitTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...retiariusActionBase, outcome: "hit", attackType: "retiarius-enhanced-jump", enhancedClassTechnique: true },
+}, 0.56);
+assert.deepEqual(
+  retiariusEnhancedHitTrails,
+  retiariusEnhancedTrails,
+  "Усиленный удар ретиария использует одинаковый воздушный след в наложениях и при реальном попадании",
+);
 const swordsmanActionBase = {
   actorId: standardMobileFrame.fighters[0].id,
   targetId: standardMobileFrame.fighters[1].id,
@@ -208,15 +322,30 @@ const swordsmanSpecialTrails = attackTrailStrokes({
   ...standardMobileFrame,
   action: { ...swordsmanActionBase, specialAttack: "preview-sword-special" },
 }, 0.7);
+const swordsmanSpinningTrails = attackTrailStrokes({
+  ...standardMobileFrame,
+  action: { ...swordsmanActionBase, attackType: "spinning-strike" },
+}, 0.58);
 const trailVerticalTravel = (trail) => trail.points.at(-1).y - trail.points[0].y;
+const trailHorizontalTravel = (trail) => Math.abs(trail.points.at(-1).x - trail.points[0].x);
 assert.ok(retiariusTrails.every((trail) => trail.kind === "thrust"), "Трезубец оставляет прямой след выпада, а не мечевую дугу");
 assert.ok(Math.abs(trailVerticalTravel(retiariusTrails[1])) < 14, "Обычный выпад ретиария остаётся почти горизонтальным");
 assert.equal(retiariusNetTrails.length, 3, "Бросок сети читается как веер из трёх воздушных линий");
 assert.ok(retiariusNetTrails.every((trail) => trail.kind === "net"), "Особый приём ретиария использует профиль сети");
 assert.ok(Math.abs(trailVerticalTravel(retiariusNetTrails[1])) < 8, "Центральная линия броска сети следует горизонтальному движению руки");
+assert.equal(retiariusEnhancedTrails.length, 3, "Усиленный прыжковый удар получает широкий след трезубца");
+assert.ok(retiariusEnhancedTrails.every((trail) => trail.kind === "enhanced-thrust"), "Усиленный удар ретиария не переиспользует профиль сети или обычного выпада");
+assert.ok(trailVerticalTravel(retiariusEnhancedTrails[1]) > 30, "След усиленного трезубца идёт сверху вниз по траектории прыжкового удара");
+const enhancedTrailDx = Math.abs(retiariusEnhancedTrails[1].points.at(-1).x - retiariusEnhancedTrails[1].points[0].x);
+const enhancedTrailDy = Math.abs(trailVerticalTravel(retiariusEnhancedTrails[1]));
+assert.ok(enhancedTrailDy / enhancedTrailDx > 0.9 && enhancedTrailDy / enhancedTrailDx < 1.1, "След усиленного трезубца сохраняет прямой угол около 45 градусов");
 assert.ok(trailVerticalTravel(swordsmanTrails[1]) > 25, "Обычный мечевой след идёт от верхнего замаха вниз к цели");
 assert.ok(trailVerticalTravel(swordsmanSpecialRaiseTrails[1]) < -10, "След спецприёма сначала поднимается вместе с вертикальным клинком");
 assert.ok(trailVerticalTravel(swordsmanSpecialTrails[1]) > 45, "Особый удар мечника получает более высокий нисходящий размах");
+assert.equal(swordsmanSpinningTrails.length, 3, "Разворот получает более широкий след из трёх линий");
+assert.ok(swordsmanSpinningTrails.every((trail) => trail.kind === "spinning-slash"), "Разворот использует отдельный профиль следа меча");
+assert.ok(Math.abs(trailVerticalTravel(swordsmanSpinningTrails[1])) < 10, "След разворота идёт почти прямо по горизонтальной траектории меча");
+assert.ok(trailHorizontalTravel(swordsmanSpinningTrails[1]) > trailHorizontalTravel(swordsmanTrails[1]) + 20, "След разворота заметно длиннее обычного размаха");
 assert.equal(standardMobileFrame.components[1].animation.sheet.logicalHeight, 256, "Рендерер масштабирует ретиария по логическому телу");
 let bufferedDrawArgs = null;
 const bufferedContext = {
@@ -225,7 +354,7 @@ const bufferedContext = {
   drawImage(...args) { bufferedDrawArgs = args; },
 };
 BattleVisualEngine.prototype.drawAsset.call({
-  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
+  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4992 }),
   animationFrameColumn: () => 0,
 }, bufferedContext, standardMobileFrame.components[1], 0, 0);
 assert.equal(bufferedDrawArgs[3], 384, "Рендерер вырезает полную физическую ширину буферного кадра");
@@ -510,7 +639,7 @@ assert.equal(
 );
 let victoryDrawArgs = null;
 BattleVisualEngine.prototype.drawAsset.call({
-  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 4224 }),
+  loadAsset: () => ({ complete: true, naturalWidth: 2304, naturalHeight: 5376 }),
   animationFrameColumn: () => 0,
 }, {
   set filter(value) {},
@@ -518,6 +647,23 @@ BattleVisualEngine.prototype.drawAsset.call({
   drawImage(...args) { victoryDrawArgs = args; },
 }, swordsmanWinner, 0, 0);
 assert.equal(victoryDrawArgs[8], 243, "Победная ячейка мечника рисуется на 8% крупнее от линии стоп");
+
+const retiariusVictorySnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
+retiariusVictorySnapshot.label = "Итог боя";
+retiariusVictorySnapshot.outcome = {
+  type: "victory",
+  winnerId: retiariusVictorySnapshot.fighters[1].id,
+};
+const retiariusVictoryFrame = createVisualFrame(retiariusVictorySnapshot, standardInput, undefined, {
+  presentation: PRESENTATIONS.mobile,
+  rendererMode: RENDERER_MODES.assets,
+});
+const retiariusWinner = retiariusVictoryFrame.components.find(
+  (component) => component.fighterId === retiariusVictorySnapshot.outcome.winnerId,
+);
+assert.equal(retiariusWinner.animation.clip, "victory", "Ретиарий использует собственную победную строку");
+assert.equal(retiariusWinner.animation.renderScale, 0.77, "Крупная победная строка ретиария выравнивается с его обычным ростом");
+assert.equal(swordsmanWinner.animation.renderScale, 1.08, "Коррекция победного размера мечника не изменилась");
 
 const sandInput = JSON.parse(JSON.stringify(standardInput));
 sandInput.arena.type = "sand";
@@ -666,6 +812,11 @@ const swordsmanSpecialActor = swordsmanSpecialFrame.components.find(
 assert.equal(swordsmanSpecialActor.animation.clip, "special", "Прыжок Ахилла использует отдельную строку особого удара");
 assert.equal(Math.abs(swordsmanSpecialActor.motion.x), 14, "Силовой особый удар получает отдельный короткий выпад");
 const murmilloTechniqueInput = createDefaultBattleInput();
+murmilloTechniqueInput.fighters[0].fighterClass = "murmillo";
+murmilloTechniqueInput.fighters[0].equipment = {
+  weaponSet: { definitionId: "murmillo-arms.good" },
+  armorSet: { definitionId: "murmillo-armor.good" },
+};
 murmilloTechniqueInput.seed = "shield-0";
 murmilloTechniqueInput.fighters.forEach((fighter) => { fighter.base.health = 300; });
 murmilloTechniqueInput.fighters[0].classTechniqueChance = 1;
@@ -728,6 +879,7 @@ const lightBlood = bloodAt(bloodFrameFor("light"), 0.65);
 const normalBlood = bloodAt(bloodFrameFor("normal"), 0.65);
 const strongBlood = bloodAt(bloodFrameFor("strong"), 0.65);
 const criticalBlood = bloodAt(criticalFrame, 0.65);
+const enhancedBlood = bloodAt(enhancedBuffFrame, 0.23);
 assert.ok(lightBlood.length > 0, "Даже лёгкое успешное попадание создаёт немного крови");
 assert.ok(
   lightBlood.length < normalBlood.length
@@ -737,6 +889,23 @@ assert.ok(
 );
 assert.ok(criticalBlood.length >= 30, "Критический удар создаёт особенно плотный веер крови");
 assert.ok(criticalBlood.some((particle) => particle.size >= 11), "Крит содержит увеличенные крупные сгустки");
+assert.ok(enhancedBlood.length > criticalBlood.length, "Усиленный классовый удар создаёт больше крови, чем критический");
+const enhancedBloodTarget = enhancedBuffFrame.components.find((component) => (
+  component.kind === "fighter" && component.fighterId === enhancedBuffFrame.action.targetId
+));
+const enhancedBodyTop = enhancedBloodTarget.transform.y - enhancedBloodTarget.animation.assetHeight * 0.8;
+const enhancedBodyBottom = enhancedBloodTarget.transform.y - enhancedBloodTarget.animation.assetHeight * 0.15;
+assert.ok(
+  enhancedBlood.filter((particle) => particle.y >= enhancedBodyTop && particle.y <= enhancedBodyBottom).length
+    >= enhancedBlood.length * 0.8,
+  "Основная масса крови усиленного удара остаётся на уровне корпуса поражённого бойца",
+);
+const enhancedBloodFallen = bloodAt(enhancedBuffFrame, 0.58);
+assert.ok(
+  enhancedBloodFallen.filter((particle) => particle.y >= enhancedBuffFrame.arena.groundY - 6).length
+    >= enhancedBloodFallen.length * 0.7,
+  "После быстрого распыления кровь усиленного удара падает к земле",
+);
 assert.ok(
   criticalBlood.every((particle) => /^#(?:26|3a|4f|61|70)/i.test(particle.color)),
   "Вся кровь использует тёмную бордовую палитру",
@@ -751,6 +920,7 @@ assert.deepEqual(
   [7, 14, 26, 43],
   "У каждого уровня попадания стало немного больше брызг",
 );
+assert.equal(bloodAt(enhancedBuffFrame, 0.95).length, 86, "Усиленный удар создаёт двойной плотный выброс крови");
 assert.ok(
   criticalBlood.some((particle) => particle.x < particle.originX)
     && criticalBlood.some((particle) => particle.x > particle.originX),

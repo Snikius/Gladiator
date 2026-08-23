@@ -16,6 +16,7 @@ const CORE_VISUAL_STATES = Object.freeze({
   greeting: Object.freeze({ kind: "one-shot", description: "Приветствие соперника перед стартовым сближением." }),
   advance: Object.freeze({ kind: "one-shot", description: "Сближение перед атакой." }),
   attack: Object.freeze({ kind: "one-shot", description: "Полная линия атаки, минимум пять кадров." }),
+  "attack.spinning": Object.freeze({ kind: "one-shot", description: "Удар мечом с полным разворотом корпуса." }),
   "defense.block": Object.freeze({ kind: "one-shot", description: "Принятие удара щитом или оружием." }),
   "defense.dodge": Object.freeze({ kind: "one-shot", description: "Уход или backstep." }),
   "defense.miss": Object.freeze({ kind: "one-shot", description: "Короткий неглубокий уход от прошедшего мимо оружия." }),
@@ -23,6 +24,8 @@ const CORE_VISUAL_STATES = Object.freeze({
   defeated: Object.freeze({ kind: "terminal", description: "Падение и лежачая поза." }),
   victory: Object.freeze({ kind: "terminal", description: "Победитель завершает салют и удерживает живую финальную позу." }),
   special: Object.freeze({ kind: "one-shot", description: "Классовый или перковый приём." }),
+  "special.enhanced": Object.freeze({ kind: "one-shot", description: "Усиленная версия классового приёма." }),
+  "reaction.stunned": Object.freeze({ kind: "loop", description: "Оглушённый боец приседает и прикрывает голову свободной рукой." }),
 });
 
 const SIX_FRAMES = Object.freeze([0, 1, 2, 3, 4, 5]);
@@ -31,12 +34,23 @@ const defineAnimationClip = ({
   fps,
   sequence = SIX_FRAMES,
   repeatSequence = null,
+  frameDurationsMs = null,
+  repeatFrameDurationsMs = null,
   keepAlive = false,
   durationMs,
 }) => {
   const frozenSequence = Object.freeze([...sequence]);
+  const frozenFrameDurations = frameDurationsMs
+    ? Object.freeze([...frameDurationsMs])
+    : null;
   const repeat = repeatSequence
-    ? Object.freeze({ sequence: Object.freeze([...repeatSequence]), keepAlive })
+    ? Object.freeze({
+      sequence: Object.freeze([...repeatSequence]),
+      frameDurationsMs: repeatFrameDurationsMs
+        ? Object.freeze([...repeatFrameDurationsMs])
+        : null,
+      keepAlive,
+    })
     : null;
   return Object.freeze({
     row,
@@ -45,7 +59,7 @@ const defineAnimationClip = ({
     /* frames оставлен как read-only alias для рендера старых интеграций;
      * каноническая временная схема находится в playback. */
     frames: frozenSequence,
-    playback: Object.freeze({ sequence: frozenSequence, repeat }),
+    playback: Object.freeze({ sequence: frozenSequence, frameDurationsMs: frozenFrameDurations, repeat }),
   });
 };
 
@@ -53,6 +67,7 @@ const clipFrameSequence = (clip) => clip?.playback?.sequence || clip?.frames || 
 const clipRepeat = (clip) => clip?.playback?.repeat
   || (clip?.loop ? { sequence: clipFrameSequence(clip), keepAlive: false } : null);
 const clipIntroDurationMs = (clip) => clip?.durationMs
+  ?? clip?.playback?.frameDurationsMs?.reduce((total, value) => total + value, 0)
   ?? (clipFrameSequence(clip).length && clip?.fps
     ? clipFrameSequence(clip).length / clip.fps * 1000
     : 0);
@@ -64,8 +79,25 @@ const animationFrameForElapsed = (clip, elapsedMs = 0, introDurationOverride) =>
   const introDuration = introDurationOverride ?? clipIntroDurationMs(clip);
   const repeat = clipRepeat(clip);
   if (repeat?.sequence?.length && elapsed >= introDuration) {
+    if (repeat.frameDurationsMs?.length === repeat.sequence.length) {
+      const repeatDuration = repeat.frameDurationsMs.reduce((total, value) => total + value, 0);
+      let repeatElapsed = (elapsed - introDuration) % repeatDuration;
+      for (let index = 0; index < repeat.sequence.length; index += 1) {
+        if (repeatElapsed < repeat.frameDurationsMs[index]) return repeat.sequence[index];
+        repeatElapsed -= repeat.frameDurationsMs[index];
+      }
+    }
     const repeatElapsedFrame = Math.floor((elapsed - introDuration) / 1000 * clip.fps);
     return repeat.sequence[repeatElapsedFrame % repeat.sequence.length];
+  }
+
+  const frameDurations = clip?.playback?.frameDurationsMs;
+  if (frameDurations?.length === sequence.length) {
+    let introElapsed = Math.min(elapsed, Math.max(0, introDuration - 0.001));
+    for (let index = 0; index < sequence.length; index += 1) {
+      if (introElapsed < frameDurations[index]) return sequence[index];
+      introElapsed -= frameDurations[index];
+    }
   }
 
   if (!introDuration) return sequence.at(-1);
@@ -100,15 +132,37 @@ const UNIFIED_ANIMATION_SPRITE_ROWS = Object.freeze({
   victory: defineAnimationClip({ row: 9, fps: 7, repeatSequence: [4, 5], keepAlive: true, durationMs: 860 }),
   special: defineAnimationClip({ row: 10, fps: 10, durationMs: 680 }),
 });
+const STUNNED_ANIMATION_CLIP = defineAnimationClip({
+  row: 12,
+  fps: 6,
+  sequence: [0, 1, 2, 4, 2, 4, 2, 5],
+  repeatSequence: [0, 1, 2, 4, 2, 4, 2, 5],
+  frameDurationsMs: [160, 160, 230, 230, 230, 230, 230, 180],
+  repeatFrameDurationsMs: [160, 160, 230, 230, 230, 230, 230, 180],
+  keepAlive: true,
+  durationMs: 1650,
+});
+const UNIFIED_SWORDSMAN_ANIMATION_SPRITE_ROWS = Object.freeze({
+  ...UNIFIED_ANIMATION_SPRITE_ROWS,
+  "special.enhanced": defineAnimationClip({ row: 11, fps: 11, durationMs: 760 }),
+  "reaction.stunned": STUNNED_ANIMATION_CLIP,
+  "attack.spinning": defineAnimationClip({ row: 13, fps: 10, durationMs: 780 }),
+});
+const UNIFIED_RETIARIUS_ANIMATION_SPRITE_ROWS = Object.freeze({
+  ...UNIFIED_ANIMATION_SPRITE_ROWS,
+  "special.enhanced": defineAnimationClip({ row: 11, fps: 10, durationMs: 780 }),
+  "reaction.stunned": STUNNED_ANIMATION_CLIP,
+});
 
 /*
- * Контракт unified: тело и экипировка запечены в лист 6×11. Логическая
- * ячейка бойца всегда 256×256, но физическая ячейка может иметь прозрачный
- * буфер для длинного оружия; боец справа зеркалит исходник.
+ * Контракт мечника: тело и экипировка запечены в лист 6×14. Ретиарий расширен
+ * до 13 строк усиленным ударом и оглушением. Логическая ячейка бойца всегда 256×256, но
+ * физическая ячейка может иметь прозрачный буфер для длинного оружия;
+ * боец справа зеркалит исходник.
  */
 const UNIFIED_ATLAS = Object.freeze({
   columns: 6,
-  rows: 11,
+  rows: 14,
   cellWidth: 384,
   cellHeight: 384,
   logicalWidth: 256,
@@ -117,15 +171,15 @@ const UNIFIED_ATLAS = Object.freeze({
 });
 const RETIARIUS_ATLAS = Object.freeze({
   columns: 6,
-  rows: 11,
+  rows: 13,
   cellWidth: 384,
   cellHeight: 384,
   logicalWidth: 256,
   logicalHeight: 256,
   equipmentBuffer: Object.freeze({ top: 128, right: 64, bottom: 0, left: 64 }),
 });
-const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v14";
-const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v6";
+const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v16";
+const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v8";
 
 const ARENA_BACKGROUNDS = Object.freeze({
   crowd: Object.freeze({
@@ -186,12 +240,12 @@ const ARENA_BACKGROUNDS = Object.freeze({
 const BODY_ANIMATION_GRIDS = Object.freeze({
   [UNIFIED_SWORDSMAN_GRID_ID]: Object.freeze({
     id: UNIFIED_SWORDSMAN_GRID_ID,
-    assetPath: "./assets/unified-swordsman-grid-v14.png",
+    assetPath: "./assets/unified-swordsman-grid-v16.png",
     facing: "right",
     renderable: true,
     experimental: true,
     grid: UNIFIED_ATLAS,
-    clips: UNIFIED_ANIMATION_SPRITE_ROWS,
+    clips: UNIFIED_SWORDSMAN_ANIMATION_SPRITE_ROWS,
     weaponLayers: Object.freeze({}),
     displayScale: 1,
     stateRenderScales: Object.freeze({ victory: 1.08 }),
@@ -205,15 +259,17 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
   }),
   [UNIFIED_RETIARIUS_GRID_ID]: Object.freeze({
     id: UNIFIED_RETIARIUS_GRID_ID,
-    assetPath: "./assets/unified-retiarius-grid-v6.png",
+    assetPath: "./assets/unified-retiarius-grid-v8.png",
     facing: "right",
     renderable: true,
     experimental: true,
     grid: RETIARIUS_ATLAS,
-    clips: UNIFIED_ANIMATION_SPRITE_ROWS,
+    clips: UNIFIED_RETIARIUS_ANIMATION_SPRITE_ROWS,
     weaponLayers: Object.freeze({}),
     displayScale: 1,
-    stateRenderScales: Object.freeze({}),
+    // Победная строка исходного атласа нарисована крупнее остальных строк.
+    // Компенсация сохраняет рост ретиария при переходе из стойки в салют.
+    stateRenderScales: Object.freeze({ victory: 0.77 }),
     weaponBakedIn: true,
     bakedWeaponSkinId: "trident",
     baselineInset: 8 / RETIARIUS_ATLAS.logicalHeight,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and validate the exact 6x11 runtime atlas from generated rows."""
+"""Build and validate the exact 6x14 runtime atlas from generated rows."""
 
 from pathlib import Path
 from statistics import median
@@ -21,8 +21,11 @@ ROW_SOURCES = [
     ("greeting", ASSETS / "unified-swordsman-row-8-greeting-source-v1.png"),
     ("victory", ASSETS / "unified-swordsman-row-9-victory-source-v1.png"),
     ("special", ASSETS / "unified-swordsman-row-10-special-source-v1.png"),
+    ("special.enhanced", ASSETS / "unified-swordsman-row-11-enhanced-special-source-v1.png"),
+    ("reaction.stunned", ASSETS / "unified-swordsman-row-12-stunned-source-v1.png"),
+    ("attack.spinning", ASSETS / "unified-swordsman-row-13-spinning-strike-source-v2.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v14.png"
+TARGET = ASSETS / "unified-swordsman-grid-v16.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
@@ -34,6 +37,7 @@ SIGNIFICANT_COMPONENT_PIXELS = 80
 DETACHED_COMPONENT_PIXELS = 600
 TARGET_BODY_HEIGHT = 196
 VICTORY_VISUAL_SCALE = 1.20
+STUNNED_FRAME_SCALE_CORRECTIONS = (0.78, 0.95, 1.0, 1.0, 1.0, 0.93)
 CHECKER_DIFFERENCE_THRESHOLD = 20
 ENCLOSED_BACKGROUND_PIXELS = 150
 
@@ -98,6 +102,19 @@ def grounded_root_x(frame: Image.Image, bounds: tuple[int, int, int, int]) -> in
         if alpha.getpixel((x, y)) >= ALPHA_THRESHOLD
     ]
     return round((min(xs) + max(xs)) / 2) if xs else round((bounds[0] + bounds[2]) / 2)
+
+
+def contact_root_x(frame: Image.Image, bounds: tuple[int, int, int, int]) -> int:
+    """Anchor a stationary reaction by the actual ground-contact pixels of both feet."""
+    alpha = frame.getchannel("A")
+    band_top = bounds[3] - min(12, bounds[3] - bounds[1])
+    xs = [
+        x
+        for y in range(band_top, bounds[3])
+        for x in range(bounds[0], bounds[2])
+        if alpha.getpixel((x, y)) >= ALPHA_THRESHOLD
+    ]
+    return round((min(xs) + max(xs)) / 2) if xs else grounded_root_x(frame, bounds)
 
 
 def dense_body_height(frame: Image.Image) -> int:
@@ -311,7 +328,7 @@ def validate_atlas(
     safe_frame: int = SAFE_FRAME,
 ) -> None:
     padding = (cell - safe_frame) // 2
-    expected_size = (COLUMNS * cell, ROWS * cell)
+    expected_size = (COLUMNS * cell, len(row_sources) * cell)
     if atlas.size != expected_size:
         raise ValueError(f"Atlas size {atlas.size} does not match {expected_size}")
 
@@ -332,7 +349,9 @@ def validate_atlas(
             ):
                 raise ValueError(f"Unsafe bounds in {name} frame {column}: {bounds}")
             validate_runtime_frame(frame, row, column, name)
-            if row in (0, 7) or (row == 6 and column < 3):
+            if name == "reaction.stunned":
+                grounded_roots.append(contact_root_x(frame, bounds))
+            elif row in (0, 7) or (row == 6 and column < 3):
                 grounded_roots.append(grounded_root_x(frame, bounds))
         if grounded_roots and max(grounded_roots) - min(grounded_roots) > 1:
             raise ValueError(f"Unstable grounded root in {name}: {grounded_roots}")
@@ -346,16 +365,16 @@ def build_atlas(
     safe_frame: int = SAFE_FRAME,
     target_body_height: int = TARGET_BODY_HEIGHT,
     buffered_equipment: bool = False,
+    row_scale_corrections=None,
+    frame_scale_corrections=None,
 ) -> None:
-    if len(row_sources) != ROWS:
-        raise ValueError(f"Expected {ROWS} animation rows, got {len(row_sources)}")
     prepared_rows: list[tuple[str, list[Image.Image]]] = []
     for row, (name, source_path) in enumerate(row_sources):
         source = remove_generated_background(Image.open(source_path))
         prepared_rows.append((name, extract_primary_frames(source, name)))
 
     padding = (cell - safe_frame) // 2
-    atlas = Image.new("RGBA", (COLUMNS * cell, ROWS * cell))
+    atlas = Image.new("RGBA", (COLUMNS * cell, len(row_sources) * cell))
     for row, (name, frames) in enumerate(prepared_rows):
         heights = [frame.height for frame in frames]
         widths = [frame.width for frame in frames]
@@ -421,6 +440,23 @@ def build_atlas(
         else:
             frame_scales = [base_scale] * COLUMNS
 
+        row_scale_correction = (row_scale_corrections or {}).get(name, 1.0)
+        if row_scale_correction != 1.0:
+            frame_scales = [
+                frame_scale * row_scale_correction
+                for frame_scale in frame_scales
+            ]
+
+        per_frame_corrections = (frame_scale_corrections or {}).get(name)
+        if per_frame_corrections:
+            frame_scales = [
+                frame_scale * correction
+                for frame_scale, correction in zip(
+                    frame_scales,
+                    per_frame_corrections,
+                )
+            ]
+
         scaled_frames = []
         for _ in range(3):
             scaled_frames = []
@@ -435,7 +471,9 @@ def build_atlas(
                 grounded_pose = row in (0, 7) or (row == 6 and column < 3)
                 center_pose = row == 3 or (row == 6 and column >= 3)
                 anchor_x = (
-                    grounded_root_x(scaled, bounds)
+                    contact_root_x(scaled, bounds)
+                    if name == "reaction.stunned"
+                    else grounded_root_x(scaled, bounds)
                     if grounded_pose
                     else root_x(scaled, bounds, falling=center_pose)
                 )
@@ -462,12 +500,19 @@ def build_atlas(
     atlas.save(target)
     print(
         f"Built and validated {target.name}: {atlas.width}x{atlas.height}, "
-        f"{COLUMNS}x{ROWS} cells of {cell}x{cell}"
+        f"{COLUMNS}x{len(row_sources)} cells of {cell}x{cell}"
     )
 
 
 def main() -> None:
-    build_atlas(ROW_SOURCES, TARGET, buffered_equipment=True)
+    build_atlas(
+        ROW_SOURCES,
+        TARGET,
+        buffered_equipment=True,
+        frame_scale_corrections={
+            "reaction.stunned": STUNNED_FRAME_SCALE_CORRECTIONS,
+        },
+    )
     atlas = Image.open(TARGET).convert("RGBA")
     idle_heights = [
         solid_body_height(atlas.crop((column * CELL, 0, (column + 1) * CELL, CELL)))

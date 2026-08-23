@@ -76,6 +76,7 @@ const BLOOD_IMPACT_PROFILES = Object.freeze({
   normal: Object.freeze({ count: 14, size: 0.66, distance: 0.58, lift: 0.68, gravity: 1, alphaFade: 0.68 }),
   strong: Object.freeze({ count: 26, size: 0.9, distance: 0.86, lift: 0.88, gravity: 1.2, alphaFade: 0.6 }),
   critical: Object.freeze({ count: 43, size: 1.28, distance: 1.22, lift: 1.05, gravity: 1.65, alphaFade: 0.46 }),
+  enhanced: Object.freeze({ count: 43, copies: 2, size: 1.38, distance: 1.12, lift: 0.46, gravity: 0.72, alphaFade: 0.42 }),
 });
 const BLOOD_STAIN_PROFILES = Object.freeze({
   light: Object.freeze({ count: 1, scale: 0.75 }),
@@ -130,11 +131,29 @@ const SWORD_TRAIL_PATHS = Object.freeze({
     freeze({ at: 0.78, x: 0.44, y: -0.23 }),
     freeze({ at: 0.86, x: 0.39, y: -0.32 }),
   ]),
+  spinning: Object.freeze([
+    freeze({ at: 0.12, x: 0.08, y: -0.37 }),
+    freeze({ at: 0.28, x: 0.16, y: -0.38 }),
+    freeze({ at: 0.42, x: 0.3, y: -0.38 }),
+    freeze({ at: 0.58, x: 0.48, y: -0.37 }),
+    freeze({ at: 0.74, x: 0.66, y: -0.36 }),
+    freeze({ at: 0.88, x: 0.78, y: -0.35 }),
+  ]),
+  "retiarius-enhanced": Object.freeze([
+    freeze({ at: 0.22, x: 0.1, y: -0.82 }),
+    freeze({ at: 0.36, x: 0.25, y: -0.67 }),
+    freeze({ at: 0.5, x: 0.4, y: -0.52 }),
+    freeze({ at: 0.64, x: 0.55, y: -0.37 }),
+    freeze({ at: 0.8, x: 0.7, y: -0.22 }),
+  ]),
 });
 
 const attackTrailStrokes = (frame, progress = 0) => {
   const action = frame?.action;
-  const profile = ATTACK_TRAIL_PROFILES[action?.outcome];
+  const retiariusEnhanced = action?.attackType === "retiarius-enhanced-jump";
+  const profile = retiariusEnhanced
+    ? ATTACK_TRAIL_PROFILES.miss
+    : ATTACK_TRAIL_PROFILES[action?.outcome];
   if (!profile) return [];
   const actor = frame.components.find((component) => (
     component.kind === "fighter" && component.fighterId === action.actorId
@@ -149,11 +168,13 @@ const attackTrailStrokes = (frame, progress = 0) => {
   const targetHeight = target.animation?.assetHeight || actorHeight;
   const retiarius = actor.animation?.equipmentProfileId === "retiarius-armor"
     || actor.animation?.weaponSkinId === "trident";
-  const rangedSpecial = action.classTechnique === "weapon.retiarius-net-cast";
+  const rangedSpecial = !retiariusEnhanced
+    && action.classTechnique === "weapon.retiarius-net-cast";
   const special = isSpecialAction(action);
+  const spinning = action.attackType === "spinning-strike";
   const critical = Boolean(action.critical);
-  const motionStart = retiarius && !rangedSpecial ? 0.03 : rangedSpecial ? 0.28 : special ? 0.14 : 0.16;
-  const motionEnd = retiarius && !rangedSpecial ? 0.95 : rangedSpecial ? 0.78 : special ? 0.86 : 0.84;
+  const motionStart = retiariusEnhanced ? 0.22 : retiarius && !rangedSpecial ? 0.03 : rangedSpecial ? 0.28 : spinning ? 0.12 : special ? 0.14 : 0.16;
+  const motionEnd = retiariusEnhanced ? 0.8 : retiarius && !rangedSpecial ? 0.95 : rangedSpecial ? 0.78 : spinning ? 0.88 : special ? 0.86 : 0.84;
   const phase = clamp((progress - motionStart) / (motionEnd - motionStart), 0, 1);
   if (phase <= 0 || phase >= 1) return [];
   const reveal = easeOut(clamp(phase / 0.5, 0, 1));
@@ -176,15 +197,15 @@ const attackTrailStrokes = (frame, progress = 0) => {
     : retiarius
       ? target.transform.y - targetHeight * 0.49 + profile.verticalOffset
       : target.transform.y - targetHeight * (special ? 0.34 : 0.43) + profile.verticalOffset;
-  const strokeCount = rangedSpecial || action.outcome === "miss" || critical ? 3 : 2;
-  const pointCount = 9;
+  const strokeCount = spinning || retiariusEnhanced || rangedSpecial || action.outcome === "miss" || critical ? 3 : 2;
+  const pointCount = spinning ? 11 : retiariusEnhanced ? 10 : 9;
 
   return Object.freeze(Array.from({ length: strokeCount }, (_, strokeIndex) => {
     const spread = strokeIndex - (strokeCount - 1) / 2;
-    const thrust = retiarius && !rangedSpecial;
-    const swordPath = SWORD_TRAIL_PATHS[special ? "special" : "attack"];
-    const trailLength = special ? 0.23 : 0.24;
-    const strikeOrigin = special ? 0.42 : 0.3;
+    const thrust = retiarius && !rangedSpecial && !retiariusEnhanced;
+    const swordPath = SWORD_TRAIL_PATHS[retiariusEnhanced ? "retiarius-enhanced" : spinning ? "spinning" : special ? "special" : "attack"];
+    const trailLength = retiariusEnhanced ? 0.3 : spinning ? 0.29 : special ? 0.23 : 0.24;
+    const strikeOrigin = retiariusEnhanced ? 0.3 : spinning ? 0.28 : special ? 0.42 : 0.3;
     const tailProgress = progress > strikeOrigin
       ? Math.max(strikeOrigin, progress - trailLength)
       : Math.max(motionStart, progress - (special ? 0.18 : 0.14));
@@ -218,24 +239,27 @@ const attackTrailStrokes = (frame, progress = 0) => {
         const sampled = sampleTrailPath(swordPath, lerp(tailProgress, progress, pointProgress));
         return freeze({
           x: Math.round(actorX + direction * actorHeight * (
-            sampled.x * profile.reach + profile.overshoot * pointProgress ** 2
+            sampled.x * (retiariusEnhanced ? 1 : profile.reach * (spinning ? 1.12 : 1))
+              + (retiariusEnhanced ? 0 : profile.overshoot * pointProgress ** 2)
           )),
           y: Math.round(actorY + actorHeight * sampled.y + spread * 5),
         });
       });
-    const outcomeColor = action.outcome === "block"
+    const outcomeColor = retiariusEnhanced
+      ? "#b5aa90"
+      : action.outcome === "block"
       ? "#bda36f"
       : action.outcome === "hit"
         ? critical ? "#9a625b" : "#91776a"
         : "#b5aa90";
     return freeze({
-      kind: rangedSpecial ? "net" : thrust ? "thrust" : special ? "special-slash" : "slash",
+      kind: rangedSpecial ? "net" : thrust ? "thrust" : retiariusEnhanced ? "enhanced-thrust" : spinning ? "spinning-slash" : special ? "special-slash" : "slash",
       points: freeze(points),
       color: outcomeColor,
       alpha: clamp(profile.alpha * fade * (1 - Math.abs(spread) * 0.16), 0, 0.82),
-      width: profile.width + (critical ? 0.55 : 0) - Math.abs(spread) * 0.15,
+      width: profile.width + (spinning ? 0.9 : retiariusEnhanced ? 0.7 : 0) + (critical ? 0.55 : 0) - Math.abs(spread) * 0.15,
       dash: freeze(profile.dash.map((value) => value + (rangedSpecial ? 2 : 0))),
-      edgeColor: action.outcome === "hit" ? "#c09a82" : "#d4c59e",
+      edgeColor: retiariusEnhanced ? "#d4c59e" : action.outcome === "hit" ? "#c09a82" : "#d4c59e",
     });
   }));
 };
@@ -309,8 +333,19 @@ const isSpecialAction = (action) => Boolean(
   || action?.specialAttack,
 );
 
+const isEnhancedClassTechnique = (action) => (
+  action?.specialAttack === "player-buff-now"
+  || action?.attackType === "enhanced-class-technique"
+  || action?.attackType === "retiarius-enhanced-jump"
+);
+
 const isRangedSpecialAction = (action) => (
-  action?.classTechnique === "weapon.retiarius-net-cast"
+  !isEnhancedClassTechnique(action)
+  && action?.classTechnique === "weapon.retiarius-net-cast"
+);
+
+const isStunnedFighter = (fighter) => (
+  fighter.activeEffects?.some((effect) => effect.id === "player-stunned")
 );
 
 const actionMotion = (fighter, action) => {
@@ -326,7 +361,11 @@ const actionMotion = (fighter, action) => {
 const visualStateForFighter = (fighter, action, outcome, showOutcome) => {
   if (fighter.health <= 0) return "defeated";
   if (showOutcome && outcome?.type === "victory" && outcome.winnerId === fighter.id) return "victory";
-  if (action?.actorId === fighter.id) return isSpecialAction(action) ? "special" : "attack";
+  if (isStunnedFighter(fighter)) return "reaction.stunned";
+  if (action?.actorId === fighter.id) {
+    if (isEnhancedClassTechnique(action)) return "special.enhanced";
+    return isSpecialAction(action) ? "special" : "attack";
+  }
   if (action?.targetId === fighter.id) {
     return ({
       hit: "reaction.hit",
@@ -977,42 +1016,62 @@ class BattleVisualEngine {
 
   bloodParticles(frame, progress) {
     if (frame.action?.outcome !== "hit") return [];
-    const impact = frame.action.critical ? "critical" : frame.action.impact || "normal";
+    const enhanced = isEnhancedClassTechnique(frame.action);
+    const impact = enhanced
+      ? "enhanced"
+      : frame.action.critical ? "critical" : frame.action.impact || "normal";
     const profile = BLOOD_IMPACT_PROFILES[impact] || BLOOD_IMPACT_PROFILES.normal;
     const target = frame.components.find((component) => (
       component.kind === "fighter" && component.fighterId === frame.action.targetId
     ));
     if (!target) return [];
-    const burstProgress = clamp((progress - 0.1) / 0.9, 0, 1);
+    // Кровь вылетает заметно быстрее движения бойца. У усиленного удара
+    // импульс короче остальных: сначала резкий веер, затем свободное падение.
+    const burstStart = enhanced ? 0.04 : 0.06;
+    const burstDuration = enhanced ? 0.38 : 0.62;
+    const burstProgress = clamp((progress - burstStart) / burstDuration, 0, 1);
     if (burstProgress <= 0) return [];
     const awayFromAttacker = -target.transform.direction;
     const assetHeight = target.animation?.assetHeight || 150;
     const originX = target.transform.x + awayFromAttacker * 4;
-    const originY = target.transform.y - assetHeight * 0.52;
+    const originY = target.transform.y - assetHeight * (enhanced ? 0.46 : 0.52);
     return BLOOD_PATTERN.slice(0, profile.count).flatMap((particle, index) => {
-      const flight = clamp(
-        (burstProgress - particle.delay) / Math.max(0.01, 1 - particle.delay),
-        0,
-        1,
-      );
-      if (flight <= 0) return [];
-      /* Основной веер летит от атакующего, но часть капель отскакивает в
-       * противоположную сторону. На крите обратный разлёт шире. */
-      const reverse = index % (impact === "critical" ? 4 : 6) === 0;
-      const horizontalDirection = reverse
-        ? -(impact === "critical" ? 0.5 + (index % 3) * 0.16 : 0.32)
-        : 0.76 + (index % 4) * 0.1;
-      const gravity = particle.gravity * profile.gravity;
-      return [freeze({
-        sourceIndex: index,
-        impact,
-        originX,
-        x: Math.round(originX + awayFromAttacker * horizontalDirection * particle.distance * profile.distance * flight),
-        y: Math.round(originY - particle.lift * profile.lift * flight + gravity * flight ** 2),
-        size: Math.max(1, Math.round(particle.size * profile.size)),
-        color: BLOOD_COLORS[index % BLOOD_COLORS.length],
-        alpha: clamp(0.94 - flight * profile.alphaFade, 0.12, 1),
-      })];
+      return Array.from({ length: profile.copies || 1 }, (_, copyIndex) => {
+        const delay = particle.delay + copyIndex * 0.018;
+        const flight = clamp(
+          (burstProgress - delay) / Math.max(0.01, 1 - delay),
+          0,
+          1,
+        );
+        if (flight <= 0) return null;
+        /* Основной веер летит от атакующего, но часть капель отскакивает в
+         * противоположную сторону. Усиленный удар даёт два плотных слоя на
+         * уровне корпуса цели, не превращая выброс в высокий фонтан. */
+        const reverseEvery = impact === "critical" ? 4 : enhanced ? 5 : 6;
+        const reverse = (index + copyIndex * 2) % reverseEvery === 0;
+        const horizontalDirection = reverse
+          ? -(impact === "critical" || enhanced ? 0.5 + (index % 3) * 0.16 : 0.32)
+          : 0.76 + ((index + copyIndex) % 4) * 0.1;
+        const gravity = particle.gravity * profile.gravity
+          + (enhanced ? assetHeight * 0.56 : 0);
+        const layerYOffset = enhanced
+          ? (copyIndex ? 7 : -4) + ((index % 3) - 1) * 2
+          : 0;
+        return freeze({
+          sourceIndex: index * (profile.copies || 1) + copyIndex,
+          impact,
+          originX,
+          originY,
+          x: Math.round(originX + awayFromAttacker * horizontalDirection * particle.distance * profile.distance * flight),
+          y: Math.min(
+            frame.arena.groundY + 3,
+            Math.round(originY + layerYOffset - particle.lift * profile.lift * flight + gravity * flight ** 2),
+          ),
+          size: Math.max(1, Math.round(particle.size * profile.size)),
+          color: BLOOD_COLORS[(index + copyIndex * 2) % BLOOD_COLORS.length],
+          alpha: clamp(0.96 - flight * profile.alphaFade, 0.12, 1),
+        });
+      }).filter(Boolean);
     });
   }
 
@@ -1412,9 +1471,11 @@ globalThis.GladiatorVisualEngine = {
   POSITION_STAGES,
   PRESENTATIONS,
   RENDERER_MODES,
+  actionMotion,
   attackTrailStrokes,
   createVisualFrame,
   drawAttackTrailStrokes,
   resolveTerritoryOffset,
+  sheetMotion,
 };
 })();
