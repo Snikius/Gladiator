@@ -178,8 +178,8 @@ const RETIARIUS_ATLAS = Object.freeze({
   logicalHeight: 256,
   equipmentBuffer: Object.freeze({ top: 128, right: 64, bottom: 0, left: 64 }),
 });
-const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v17";
-const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v8";
+const UNIFIED_SWORDSMAN_GRID_ID = "unified-swordsman-v20";
+const UNIFIED_RETIARIUS_GRID_ID = "unified-retiarius-v11";
 
 const ARENA_BACKGROUNDS = Object.freeze({
   crowd: Object.freeze({
@@ -240,7 +240,7 @@ const ARENA_BACKGROUNDS = Object.freeze({
 const BODY_ANIMATION_GRIDS = Object.freeze({
   [UNIFIED_SWORDSMAN_GRID_ID]: Object.freeze({
     id: UNIFIED_SWORDSMAN_GRID_ID,
-    assetPath: "./assets/unified-swordsman-grid-v17.png",
+    assetPath: "./assets/unified-swordsman-grid-v20.png",
     facing: "right",
     renderable: true,
     experimental: true,
@@ -259,7 +259,7 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
   }),
   [UNIFIED_RETIARIUS_GRID_ID]: Object.freeze({
     id: UNIFIED_RETIARIUS_GRID_ID,
-    assetPath: "./assets/unified-retiarius-grid-v8.png",
+    assetPath: "./assets/unified-retiarius-grid-v11.png",
     facing: "right",
     renderable: true,
     experimental: true,

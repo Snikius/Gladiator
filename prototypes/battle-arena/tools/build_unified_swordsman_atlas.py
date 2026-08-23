@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Build and validate the exact 6x14 runtime atlas from generated rows."""
+"""Build and validate the 6x14 runtime atlas at one canonical scale."""
 
 from pathlib import Path
+from math import sqrt
 from statistics import median
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -25,7 +26,7 @@ ROW_SOURCES = [
     ("reaction.stunned", ASSETS / "unified-swordsman-row-12-stunned-source-v1.png"),
     ("attack.spinning", ASSETS / "unified-swordsman-row-13-spinning-strike-source-v2.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v17.png"
+TARGET = ASSETS / "unified-swordsman-grid-v20.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
@@ -36,8 +37,6 @@ ALPHA_THRESHOLD = 64
 SIGNIFICANT_COMPONENT_PIXELS = 80
 DETACHED_COMPONENT_PIXELS = 600
 TARGET_BODY_HEIGHT = 196
-VICTORY_VISUAL_SCALE = 1.20
-STUNNED_FRAME_SCALE_CORRECTIONS = (0.78, 0.95, 0.92, 1.0, 0.92, 0.93)
 CHECKER_DIFFERENCE_THRESHOLD = 20
 ENCLOSED_BACKGROUND_PIXELS = 150
 
@@ -140,27 +139,13 @@ def dense_body_height(frame: Image.Image) -> int:
     return max(dense_rows) - min(dense_rows) + 1
 
 
-def solid_body_height(frame: Image.Image) -> int:
-    """Measure a body while excluding a raised sword or other thin equipment."""
-    alpha = frame.getchannel("A")
-    bounds = alpha.getbbox()
-    if bounds is None:
-        raise ValueError("Cannot measure an empty sprite frame")
-    minimum_run = max(12, round((bounds[2] - bounds[0]) * 0.15))
-    solid_rows = []
-    for y in range(frame.height):
-        longest_run = current_run = 0
-        for x in range(frame.width):
-            if alpha.getpixel((x, y)) >= ALPHA_THRESHOLD:
-                current_run += 1
-                longest_run = max(longest_run, current_run)
-            else:
-                current_run = 0
-        if longest_run >= minimum_run:
-            solid_rows.append(y)
-    if not solid_rows:
-        return dense_body_height(frame)
-    return max(solid_rows) - min(solid_rows) + 1
+def visual_body_mass(frame: Image.Image) -> int:
+    """Measure perceived body size while discarding thin weapon strokes."""
+    alpha = frame.getchannel("A").filter(ImageFilter.MinFilter(7))
+    mass = sum(1 for value in alpha.getdata() if value >= ALPHA_THRESHOLD)
+    if mass <= 0:
+        raise ValueError("Cannot measure visual mass of an empty sprite frame")
+    return mass
 
 
 def checkerboard_profile(image: Image.Image) -> tuple[int, tuple[int, int, int], tuple[int, int, int]]:
@@ -364,139 +349,50 @@ def build_atlas(
     cell: int = CELL,
     safe_frame: int = SAFE_FRAME,
     target_body_height: int = TARGET_BODY_HEIGHT,
-    buffered_equipment: bool = False,
-    row_scale_corrections=None,
-    frame_scale_corrections=None,
 ) -> None:
     prepared_rows: list[tuple[str, list[Image.Image]]] = []
-    for row, (name, source_path) in enumerate(row_sources):
+    for name, source_path in row_sources:
         source = remove_generated_background(Image.open(source_path))
         prepared_rows.append((name, extract_primary_frames(source, name)))
 
+    reference_frames = next(
+        frames for name, frames in prepared_rows if name == "idle.normal"
+    )
+    reference_body_height = median(dense_body_height(frame) for frame in reference_frames)
+    reference_visual_mass = median(visual_body_mass(frame) for frame in reference_frames)
+    canonical_scale = target_body_height / reference_body_height
     padding = (cell - safe_frame) // 2
     atlas = Image.new("RGBA", (COLUMNS * cell, len(row_sources) * cell))
     for row, (name, frames) in enumerate(prepared_rows):
-        heights = [frame.height for frame in frames]
-        widths = [frame.width for frame in frames]
-        if buffered_equipment:
-            body_heights = [dense_body_height(frame) for frame in frames]
-            base_scale = min(
-                target_body_height / median(body_heights),
-                safe_frame / max(heights),
-                safe_frame / max(widths),
-            )
-        else:
-            base_scale = min(
-                target_body_height / median(heights),
-                safe_frame / max(heights),
-                safe_frame / max(widths),
-            )
-        if row == 6:
-            # Falling poses are naturally short and must not influence the scale
-            # of the standing hit reaction. Use one scale for the entire row so
-            # the fighter does not grow at impact or shrink during the fall.
-            standing_heights = body_heights[:3] if buffered_equipment else heights[:3]
-            base_scale = min(
-                target_body_height / median(standing_heights),
-                safe_frame / max(heights),
-                safe_frame / max(widths),
-            )
-        if row == 9 and not buffered_equipment:
-            # The raised sword makes the final victory poses much taller than
-            # the fighter. Keep one scale across the whole row and constrain it
-            # by the tallest pose so the blade remains inside its 256px cell.
-            base_scale = min(
-                target_body_height / median(heights[:2]),
-                safe_frame / max(heights),
-                safe_frame / max(widths),
-            )
-        if row == 6 and buffered_equipment:
-            # Only the first three frames are standing hit reactions. Normalize
-            # them independently so a wider recoil pose cannot make the body
-            # visibly grow; falling frames keep the shared standing scale.
-            frame_scales = [
-                min(target_body_height / height, safe_frame / frame.height, safe_frame / frame.width)
-                for frame, height in zip(frames[:3], body_heights[:3])
-            ] + [base_scale] * 3
-        elif name == "greeting" and buffered_equipment:
-            # The source salute changes pose height substantially in its first
-            # and final frames. Normalize the body per frame so entering the
-            # greeting never makes the fighter shrink against the idle stance.
-            greeting_body_heights = [dense_body_height(frame) for frame in frames]
-            frame_scales = [
-                min(
-                    target_body_height / height,
-                    safe_frame / frame.height,
-                    safe_frame / frame.width,
-                )
-                for frame, height in zip(frames, greeting_body_heights)
-            ]
-        elif row == 9 and buffered_equipment:
-            # A raised sword is deliberately taller than the fighter and must
-            # not reduce body scale. The upright salute is also much narrower
-            # than the combat stance, so it receives a small perceptual scale
-            # correction while every frame remains normalized independently.
-            victory_body_heights = [solid_body_height(frame) for frame in frames]
-            frame_scales = [
-                min(
-                    target_body_height * VICTORY_VISUAL_SCALE / height,
-                    safe_frame / frame.height,
-                    safe_frame / frame.width,
-                )
-                for frame, height in zip(frames, victory_body_heights)
-            ]
-        elif row in (0, 7) and not buffered_equipment:
-            frame_scales = [
-                min(target_body_height / height, safe_frame / width)
-                for height, width in zip(heights, widths)
-            ]
-        else:
-            frame_scales = [base_scale] * COLUMNS
-
-        row_scale_correction = (row_scale_corrections or {}).get(name, 1.0)
-        if row_scale_correction != 1.0:
-            frame_scales = [
-                frame_scale * row_scale_correction
-                for frame_scale in frame_scales
-            ]
-
-        per_frame_corrections = (frame_scale_corrections or {}).get(name)
-        if per_frame_corrections:
-            frame_scales = [
-                frame_scale * correction
-                for frame_scale, correction in zip(
-                    frame_scales,
-                    per_frame_corrections,
-                )
-            ]
-
         scaled_frames = []
-        for _ in range(3):
-            scaled_frames = []
-            for column, (frame, frame_scale) in enumerate(zip(frames, frame_scales)):
-                scaled = frame.resize(
-                    (round(frame.width * frame_scale), round(frame.height * frame_scale)),
-                    Image.Resampling.NEAREST,
-                )
-                bounds = scaled.getchannel("A").getbbox()
-                if bounds is None:
-                    raise ValueError(f"Empty source frame: {name} frame {column}")
-                grounded_pose = row in (0, 7) or (row == 6 and column < 3)
-                center_pose = row == 3 or (row == 6 and column >= 3)
-                anchor_x = (
-                    contact_root_x(scaled, bounds)
-                    if name == "reaction.stunned"
-                    else grounded_root_x(scaled, bounds)
-                    if grounded_pose
-                    else root_x(scaled, bounds, falling=center_pose)
-                )
-                scaled_frames.append((scaled, bounds, anchor_x))
-            max_left = max(anchor_x - bounds[0] for _, bounds, anchor_x in scaled_frames)
-            max_right = max(bounds[2] - anchor_x for _, bounds, anchor_x in scaled_frames)
-            if max_left + max_right <= safe_frame:
-                break
-            shrink = safe_frame / (max_left + max_right) * 0.98
-            frame_scales = [frame_scale * shrink for frame_scale in frame_scales]
+        for column, frame in enumerate(frames):
+            source_normalization = sqrt(reference_visual_mass / visual_body_mass(frame))
+            normalized_scale = canonical_scale * source_normalization
+            scaled = frame.resize(
+                (round(frame.width * normalized_scale), round(frame.height * normalized_scale)),
+                Image.Resampling.NEAREST,
+            )
+            bounds = scaled.getchannel("A").getbbox()
+            if bounds is None:
+                raise ValueError(f"Empty source frame: {name} frame {column}")
+            grounded_pose = row in (0, 7) or (row == 6 and column < 3)
+            center_pose = row == 3 or (row == 6 and column >= 3)
+            anchor_x = (
+                contact_root_x(scaled, bounds)
+                if name == "reaction.stunned"
+                else grounded_root_x(scaled, bounds)
+                if grounded_pose
+                else root_x(scaled, bounds, falling=center_pose)
+            )
+            scaled_frames.append((scaled, bounds, anchor_x))
+
+        max_left = max(anchor_x - bounds[0] for _, bounds, anchor_x in scaled_frames)
+        max_right = max(bounds[2] - anchor_x for _, bounds, anchor_x in scaled_frames)
+        if max_left + max_right > safe_frame:
+            raise ValueError(
+                f"{name}: normalized frames do not fit the safe frame; "
+                f"required width={max_left + max_right}, available={safe_frame}"
+            )
 
         anchor_min = padding + max_left
         anchor_max = cell - padding - max_right
@@ -513,7 +409,9 @@ def build_atlas(
     atlas.save(target)
     print(
         f"Built and validated {target.name}: {atlas.width}x{atlas.height}, "
-        f"{COLUMNS}x{len(row_sources)} cells of {cell}x{cell}"
+        f"{COLUMNS}x{len(row_sources)} cells of {cell}x{cell}, "
+        f"canonical scale={canonical_scale:.4f}, "
+        f"normalized {COLUMNS * len(row_sources)} source frames"
     )
 
 
@@ -521,44 +419,7 @@ def main() -> None:
     build_atlas(
         ROW_SOURCES,
         TARGET,
-        buffered_equipment=True,
-        frame_scale_corrections={
-            "reaction.stunned": STUNNED_FRAME_SCALE_CORRECTIONS,
-        },
     )
-    atlas = Image.open(TARGET).convert("RGBA")
-    idle_heights = [
-        solid_body_height(atlas.crop((column * CELL, 0, (column + 1) * CELL, CELL)))
-        for column in range(COLUMNS)
-    ]
-    victory_heights = [
-        solid_body_height(atlas.crop((column * CELL, 9 * CELL, (column + 1) * CELL, 10 * CELL)))
-        for column in range(COLUMNS)
-    ]
-    idle_height = median(idle_heights)
-    greeting_endpoint_heights = [
-        solid_body_height(atlas.crop((column * CELL, 8 * CELL, (column + 1) * CELL, 9 * CELL)))
-        for column in (0, 5)
-    ]
-    if any(height < idle_height * 0.98 or height > idle_height * 1.02 for height in greeting_endpoint_heights):
-        raise ValueError(
-            "greeting: entry and return poses must match idle scale; "
-            f"idle={idle_heights}, greeting endpoints={greeting_endpoint_heights}"
-        )
-    stunned_loop_heights = [
-        solid_body_height(atlas.crop((column * CELL, 12 * CELL, (column + 1) * CELL, 13 * CELL)))
-        for column in (2, 4)
-    ]
-    if any(height > idle_height * 0.90 for height in stunned_loop_heights):
-        raise ValueError(
-            "reaction.stunned: crouched loop poses are too large against idle; "
-            f"idle={idle_heights}, stunned loop={stunned_loop_heights}"
-        )
-    if any(height < idle_height * 1.18 or height > idle_height * 1.23 for height in victory_heights):
-        raise ValueError(
-            "victory: swordsman perceptual scale is outside its correction range; "
-            f"idle={idle_heights}, victory={victory_heights}"
-        )
 
 
 if __name__ == "__main__":

@@ -230,7 +230,7 @@ assert.equal(afterStunSnapshot.lastAction.actorId, "fighter-1", "Оглушён�
 assert.equal(first.input.arena.type, "crowd", "Новый бой по умолчанию проходит на арене со зрителями");
 assert.deepEqual(
   first.input.fighters.map((fighter) => fighter.base.health),
-  [180, 240],
+  [200, 240],
   "Стартовое здоровье бойцов по умолчанию зафиксировано отдельно для каждого",
 );
 assert.deepEqual(

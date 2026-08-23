@@ -194,7 +194,7 @@ const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
 });
 assert.equal(mobileFrame.presentation, "mobile", "Мобильная сцена должна иметь отдельную презентацию");
 assert.equal(mobileFrame.rendererMode, "assets", "Режим ассетов переключается только в визуальном слое");
-assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v17.png");
+assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v20.png");
 assert.equal(mobileFrame.components[0].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID);
 assert.equal(mobileFrame.components[0].animation.equipmentProfileId, "murmillo-armor", "Профиль поз берётся из комплекта брони");
 assert.equal(mobileFrame.components[0].animation.state, "idle.normal");
@@ -268,7 +268,7 @@ const standardMobileFrame = createVisualFrame(standardResult.snapshots[0], stand
 });
 assert.equal(standardMobileFrame.components[0].animation.mirrored, false, "Левый боец смотрит в центр без отражения исходного листа");
 assert.equal(standardMobileFrame.components[1].animation.bodyGridId, UNIFIED_RETIARIUS_GRID_ID, "Ретиарий использует собственный единый лист");
-assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v8.png", "Игра использует расширенный атлас ретиария");
+assert.equal(standardMobileFrame.components[1].assetPath, "./assets/unified-retiarius-grid-v11.png", "Игра использует расширенный атлас ретиария");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].grid.rows, 13, "Ретиарий содержит строки усиленного удара и оглушения");
 assert.equal(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["special.enhanced"].row, 11, "Усиленный удар ретиария занимает строку 11");
 assert.deepEqual(BODY_ANIMATION_GRIDS[UNIFIED_RETIARIUS_GRID_ID].clips["special.enhanced"].frames, [0, 1, 2, 3, 4, 5], "Усиленный удар ретиария использует все шесть кадров");
