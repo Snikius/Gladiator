@@ -194,7 +194,7 @@ const mobileFrame = createVisualFrame(result.snapshots[0], input, undefined, {
 });
 assert.equal(mobileFrame.presentation, "mobile", "Мобильная сцена должна иметь отдельную презентацию");
 assert.equal(mobileFrame.rendererMode, "assets", "Режим ассетов переключается только в визуальном слое");
-assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v16.png");
+assert.equal(mobileFrame.components[0].assetPath, "./assets/unified-swordsman-grid-v17.png");
 assert.equal(mobileFrame.components[0].animation.bodyGridId, UNIFIED_SWORDSMAN_GRID_ID);
 assert.equal(mobileFrame.components[0].animation.equipmentProfileId, "murmillo-armor", "Профиль поз берётся из комплекта брони");
 assert.equal(mobileFrame.components[0].animation.state, "idle.normal");

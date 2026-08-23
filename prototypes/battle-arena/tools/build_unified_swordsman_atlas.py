@@ -25,7 +25,7 @@ ROW_SOURCES = [
     ("reaction.stunned", ASSETS / "unified-swordsman-row-12-stunned-source-v1.png"),
     ("attack.spinning", ASSETS / "unified-swordsman-row-13-spinning-strike-source-v2.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v16.png"
+TARGET = ASSETS / "unified-swordsman-grid-v17.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
@@ -37,7 +37,7 @@ SIGNIFICANT_COMPONENT_PIXELS = 80
 DETACHED_COMPONENT_PIXELS = 600
 TARGET_BODY_HEIGHT = 196
 VICTORY_VISUAL_SCALE = 1.20
-STUNNED_FRAME_SCALE_CORRECTIONS = (0.78, 0.95, 1.0, 1.0, 1.0, 0.93)
+STUNNED_FRAME_SCALE_CORRECTIONS = (0.78, 0.95, 0.92, 1.0, 0.92, 0.93)
 CHECKER_DIFFERENCE_THRESHOLD = 20
 ENCLOSED_BACKGROUND_PIXELS = 150
 
@@ -418,6 +418,19 @@ def build_atlas(
                 min(target_body_height / height, safe_frame / frame.height, safe_frame / frame.width)
                 for frame, height in zip(frames[:3], body_heights[:3])
             ] + [base_scale] * 3
+        elif name == "greeting" and buffered_equipment:
+            # The source salute changes pose height substantially in its first
+            # and final frames. Normalize the body per frame so entering the
+            # greeting never makes the fighter shrink against the idle stance.
+            greeting_body_heights = [dense_body_height(frame) for frame in frames]
+            frame_scales = [
+                min(
+                    target_body_height / height,
+                    safe_frame / frame.height,
+                    safe_frame / frame.width,
+                )
+                for frame, height in zip(frames, greeting_body_heights)
+            ]
         elif row == 9 and buffered_equipment:
             # A raised sword is deliberately taller than the fighter and must
             # not reduce body scale. The upright salute is also much narrower
@@ -523,6 +536,24 @@ def main() -> None:
         for column in range(COLUMNS)
     ]
     idle_height = median(idle_heights)
+    greeting_endpoint_heights = [
+        solid_body_height(atlas.crop((column * CELL, 8 * CELL, (column + 1) * CELL, 9 * CELL)))
+        for column in (0, 5)
+    ]
+    if any(height < idle_height * 0.98 or height > idle_height * 1.02 for height in greeting_endpoint_heights):
+        raise ValueError(
+            "greeting: entry and return poses must match idle scale; "
+            f"idle={idle_heights}, greeting endpoints={greeting_endpoint_heights}"
+        )
+    stunned_loop_heights = [
+        solid_body_height(atlas.crop((column * CELL, 12 * CELL, (column + 1) * CELL, 13 * CELL)))
+        for column in (2, 4)
+    ]
+    if any(height > idle_height * 0.90 for height in stunned_loop_heights):
+        raise ValueError(
+            "reaction.stunned: crouched loop poses are too large against idle; "
+            f"idle={idle_heights}, stunned loop={stunned_loop_heights}"
+        )
     if any(height < idle_height * 1.18 or height > idle_height * 1.23 for height in victory_heights):
         raise ValueError(
             "victory: swordsman perceptual scale is outside its correction range; "
