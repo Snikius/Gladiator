@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the validated 6x11 retiarius runtime atlas from generated rows."""
+"""Build the validated 6x13 retiarius runtime atlas from generated rows."""
 
 from pathlib import Path
 from statistics import median
@@ -23,8 +23,10 @@ ROW_SOURCES = [
     ("greeting", ASSETS / "unified-retiarius-row-8-greeting-source-v2.png"),
     ("victory", ASSETS / "unified-retiarius-row-9-victory-source-v2.png"),
     ("special", ASSETS / "unified-retiarius-row-10-special-source-v1.png"),
+    ("special.enhanced", ASSETS / "unified-retiarius-row-11-enhanced-special-source-v2.png"),
+    ("reaction.stunned", ASSETS / "unified-retiarius-row-12-stunned-source-v1.png"),
 ]
-TARGET = ASSETS / "unified-retiarius-grid-v6.png"
+TARGET = ASSETS / "unified-retiarius-grid-v8.png"
 CELL = 384
 SAFE_FRAME = 368
 TARGET_BODY_HEIGHT = 196
@@ -33,7 +35,7 @@ TARGET_BODY_HEIGHT = 196
 def validate_special_pose_proportions(target: Path) -> None:
     atlas = Image.open(target).convert("RGBA")
     row_heights = {}
-    for row in (0, 8, 9, 10):
+    for row in (0, 8, 9, 10, 11, 12):
         row_heights[row] = [
             dense_body_height(atlas.crop((column * CELL, row * CELL, (column + 1) * CELL, (row + 1) * CELL)))
             for column in range(6)
@@ -46,6 +48,26 @@ def validate_special_pose_proportions(target: Path) -> None:
                 f"{name}: retiarius body shrinks relative to idle; "
                 f"idle={row_heights[0]}, {name}={heights}"
             )
+    enhanced_heights = row_heights[11]
+    enhanced_standing_heights = [enhanced_heights[0], enhanced_heights[5]]
+    if any(
+        height < idle_height * 0.94 or height > idle_height * 1.06
+        for height in enhanced_standing_heights
+    ):
+        raise ValueError(
+            "special.enhanced: standing retiarius scale differs from idle; "
+            f"idle={row_heights[0]}, special.enhanced={enhanced_heights}"
+        )
+    stunned_heights = row_heights[12]
+    stunned_standing_heights = [stunned_heights[0], stunned_heights[5]]
+    if any(
+        height < idle_height * 0.94 or height > idle_height * 1.06
+        for height in stunned_standing_heights
+    ):
+        raise ValueError(
+            "reaction.stunned: standing retiarius scale differs from idle; "
+            f"idle={row_heights[0]}, reaction.stunned={stunned_heights}"
+        )
     hit_heights = [
         dense_body_height(atlas.crop((column * CELL, 6 * CELL, (column + 1) * CELL, 7 * CELL)))
         for column in range(3)
@@ -65,5 +87,9 @@ if __name__ == "__main__":
         safe_frame=SAFE_FRAME,
         target_body_height=TARGET_BODY_HEIGHT,
         buffered_equipment=True,
+        row_scale_corrections={
+            "special.enhanced": 0.91,
+            "reaction.stunned": 0.805,
+        },
     )
     validate_special_pose_proportions(TARGET)

@@ -65,6 +65,17 @@ const receivedTraumas = (snapshot) => snapshot.fighters.flatMap((fighter) => (
     .map((trauma) => ({ fighter, trauma }))
 ));
 
+const playerBuffEntry = (result, application) => {
+  const fighter = result.input.fighters.find((item) => item.id === application.fighterId);
+  const definition = battle.PLAYER_BUFF_DEFINITIONS.find((item) => item.id === application.buffDefinitionId);
+  return {
+    kind: "player-buff",
+    className: "state-player-buff",
+    step: application.appliedAfterIteration,
+    text: `${fighter?.name || application.fighterId} слышит команду игрока: «${definition?.name || application.buffDefinitionId}»`,
+  };
+};
+
 const BLOOD_STAIN_THRESHOLDS = Object.freeze([0, 0.22, 0.46, 0.7]);
 const BLOOD_SPLASH_THRESHOLDS = Object.freeze([0, 0.3, 0.6]);
 
@@ -102,15 +113,29 @@ const bloodStainGrowthLimit = (fighterId, stainIndex) => {
 const buildBattleStoryEntries = (result, currentSnapshot, limit = 3) => {
   if (!result || !currentSnapshot) return [];
   const entries = initialConditionEntries(result.input);
+  const seenApplications = new Set();
+  const seenActionSteps = new Set();
+  const seenTraumas = new Set();
   result.snapshots.forEach((snapshot) => {
-    if (snapshot.index > currentSnapshot.index || snapshot.label === "Итог боя" || !snapshot.lastAction?.actorId) return;
-    entries.push({
-      kind: "action",
-      className: actionClass(snapshot.lastAction),
-      step: snapshot.step,
-      text: actionText(snapshot),
+    if (snapshot.index > currentSnapshot.index || snapshot.label === "Итог боя") return;
+    (snapshot.playerBuffs?.applications || []).forEach((application) => {
+      if (seenApplications.has(application.applicationId)) return;
+      seenApplications.add(application.applicationId);
+      entries.push(playerBuffEntry(result, application));
     });
+    if (snapshot.lastAction?.actorId && !seenActionSteps.has(snapshot.step)) {
+      seenActionSteps.add(snapshot.step);
+      entries.push({
+        kind: "action",
+        className: actionClass(snapshot.lastAction),
+        step: snapshot.step,
+        text: actionText(snapshot),
+      });
+    }
     receivedTraumas(snapshot).forEach(({ fighter, trauma }) => {
+      const traumaKey = `${fighter.id}:${trauma.type}:${trauma.step}`;
+      if (seenTraumas.has(traumaKey)) return;
+      seenTraumas.add(traumaKey);
       entries.push({
         kind: "trauma",
         className: "state-trauma",
@@ -133,5 +158,6 @@ globalThis.GladiatorBattleStory = Object.freeze({
   buildBattleStoryEntries,
   fighterBloodLevels,
   initialConditionEntries,
+  playerBuffEntry,
 });
 })();

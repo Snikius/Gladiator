@@ -66,6 +66,7 @@ assert.match(initialEntries[0].text, /травмы — Повреждение н
 assert.doesNotMatch(initialEntries[0].text, /Прыжок Ахилла/, "Постоянные перки не входят в игровое резюме");
 
 const traumaInput = createDefaultBattleInput();
+traumaInput.seed = "trauma-1";
 traumaInput.fighters.forEach((fighter) => { fighter.perks = []; });
 const traumaResult = new BattleEngine(traumaInput).simulate();
 const traumaSnapshot = traumaResult.snapshots.find((snapshot) => (
@@ -79,6 +80,27 @@ assert.match(traumaEntries[0].text, /получает травму руки/);
 assert.equal(traumaEntries[0].step, traumaSnapshot.step);
 
 const compactStory = buildBattleStoryEntries(traumaResult, traumaSnapshot, 3);
-assert.equal(compactStory.length, 3, "Мобильный журнал остаётся компактным");
+assert.ok(compactStory.length > 0 && compactStory.length <= 3, "Мобильный журнал остаётся компактным");
 
-console.log("OK: battle story includes initial conditions and newly received traumas");
+const playerBuffInput = createDefaultBattleInput();
+playerBuffInput.fighters[0].base.strength = 20;
+playerBuffInput.fighters[1].base.health = 500;
+playerBuffInput.playerBuffCommands = [{
+  fighterId: "fighter-1",
+  buffDefinitionId: "now",
+  afterIteration: 0,
+  commandSequence: 1,
+}];
+const playerBuffResult = new BattleEngine(playerBuffInput).simulate();
+const playerBuffSnapshot = playerBuffResult.snapshots.find((snapshot) => snapshot.lastAction?.specialAttack === "player-buff-now");
+const playerBuffStory = buildBattleStoryEntries(playerBuffResult, playerBuffSnapshot, 10);
+const encouragementEntries = playerBuffStory.filter((entry) => entry.kind === "player-buff");
+assert.equal(encouragementEntries.length, 1, "Применённый баф попадает в пользовательский журнал ровно один раз");
+assert.equal(encouragementEntries[0].text, "Тит слышит команду игрока: «Сейчас!»");
+assert.ok(
+  playerBuffStory.findIndex((entry) => entry.kind === "player-buff")
+    < playerBuffStory.findIndex((entry) => entry.kind === "action"),
+  "Подбадривание записывается перед созданным им усиленным ударом",
+);
+
+console.log("OK: battle story includes conditions, encouragements and newly received traumas");

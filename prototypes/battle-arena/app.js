@@ -14,6 +14,7 @@ const {
   PERK_DEFINITIONS,
   SPECTACLE_TIERS,
   BUFF_DEFINITIONS,
+  PLAYER_BUFF_DEFINITIONS,
   createBattleLogExport,
   createDefaultBattleInput,
 } = globalThis.GladiatorBattle;
@@ -52,6 +53,10 @@ const elements = {
   mobileSpectacleVerdict: document.querySelector("#mobile-spectacle-verdict"),
   mobileBattleStory: document.querySelector(".mobile-battle-story"),
   mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
+  mobileBuffControl: document.querySelector("#mobile-buff-control"),
+  mobileBuffTrigger: document.querySelector("#mobile-buff-trigger"),
+  mobileBuffStatus: document.querySelector("#mobile-buff-status"),
+  mobileBuffOptions: [...document.querySelectorAll("[data-buff-choice]")],
   arenaName: document.querySelector("#arena-name"),
   arenaSeed: document.querySelector("#arena-seed"),
   arenaStep: document.querySelector("#arena-step"),
@@ -83,6 +88,12 @@ let currentResult = null;
 let currentSnapshotIndex = 0;
 let playbackTimer = null;
 let isPlaying = false;
+let mobileBuffHoldTimer = null;
+let mobileBuffStatusTimer = null;
+let ignoreMobileBuffClickUntil = 0;
+let mobileBuffHoldOpened = false;
+let playerBuffCommandSequence = 0;
+const MOBILE_BUFF_HOLD_MS = 340;
 const PLAYBACK_STEP_MS = 1000;
 const INTRO_PLAYBACK_STEP_MS = 3600;
 const PLAYBACK_PAUSE_MIN_MULTIPLIER = 1;
@@ -230,6 +241,8 @@ const spectacleTier = (tierId) => SPECTACLE_TIERS.find((tier) => tier.id === tie
 const battleStoryStamp = (className) => {
   const stampPaths = className === "state-trauma"
     ? '<path d="M6 1h4v5h5v4h-5v5H6v-5H1V6h5z"/>'
+    : className === "state-player-buff"
+      ? '<path d="M2 6h3l6-4v12l-6-4H2V6Zm3 5 1 4H4l-1-4m10-6c1.4 1.4 1.4 4.6 0 6" fill="none" stroke="currentColor" stroke-width="1.5"/>'
     : className === "state-initial"
       ? '<path d="M3 13V7a5 5 0 0 1 10 0v6H3Zm2-5h6M8 2v11" fill="none" stroke="currentColor" stroke-width="1.5"/>'
       : className === "outcome-block"
@@ -285,7 +298,6 @@ const percent = (value) => `${formatNumber(value * 100, 2)}%`;
 const arenaName = (arenaId) => ARENA_TYPES.find((arena) => arena.id === arenaId)?.name || arenaId;
 const fighterClass = (classId) => FIGHTER_CLASS_DEFINITIONS.find((item) => item.id === classId);
 const fighterClassName = (classId) => fighterClass(classId)?.name || classId;
-const perkName = (modifierId) => PERK_DEFINITIONS.find((perk) => perk.id === modifierId)?.name || modifierId;
 const modifierName = (modifierId) => ALL_MODIFIER_DEFINITIONS.find((item) => item.id === modifierId)?.name || modifierId;
 const qualityName = (qualityId) => EQUIPMENT_QUALITIES.find((item) => item.id === qualityId)?.name || qualityId;
 const equipmentGlyphs = {
@@ -307,20 +319,9 @@ const effectDefinitions = {
 const effectName = (type, effectId) =>
   effectDefinitions[type].find((effect) => effect.id === effectId)?.name || effectId;
 
-/* Интерфейс использует те же точные стартовые характеристики, что и фабрика
- * движка, и меняет только класс/экипировку второго визуального бойца. */
-const createSimulatorDefaultInput = () => {
-  const input = createDefaultBattleInput();
-  input.fighters[1] = {
-    ...input.fighters[1],
-    fighterClass: "retiarius",
-    equipment: {
-      weaponSet: { definitionId: "retiarius-arms.good" },
-      armorSet: { definitionId: "retiarius-armor.good" },
-    },
-  };
-  return input;
-};
+/* Интерфейс и движок используют один стартовый состав: игрок-ретиарий слева,
+ * усиленный мечник-противник справа. */
+const createSimulatorDefaultInput = () => createDefaultBattleInput();
 
 const appendEffectRow = (fighterIndex, type, selectedValue = "") => {
   const list = document.querySelector(`[data-effect-list="${type}"][data-fighter-index="${fighterIndex}"]`);
@@ -414,6 +415,28 @@ const populateMenus = () => {
           <small data-perk-description>Перк не выбран</small>
         </label>
       `).join("")}
+      ${fighterIndex === 0 ? `
+        <section class="effect-builder player-buff-loadout">
+          <div class="effect-builder-heading">
+            <div>
+              <strong>Боевые усиления</strong>
+              <small>До трёх уникальных команд игрока</small>
+            </div>
+          </div>
+          ${[0, 1, 2].map((slot) => `
+            <label class="perk-slot player-buff-slot">
+              <span>Усиление ${slot + 1}</span>
+              <select data-player-buff-slot="${slot}">
+                <option value="">— Пустой слот —</option>
+                ${PLAYER_BUFF_DEFINITIONS.map((buff) => `
+                  <option value="${buff.id}">${escapeHtml(buff.name)}</option>
+                `).join("")}
+              </select>
+              <small data-player-buff-description>Усиление не выбрано</small>
+            </label>
+          `).join("")}
+        </section>
+      ` : ""}
       <section class="effect-builder temporary-builder">
         <div class="effect-builder-heading">
           <div>
@@ -463,6 +486,19 @@ const renderPerkSlotDescriptions = () => {
     select.closest(".dynamic-effect-row").querySelector("[data-effect-description]").textContent =
       definition?.description || "Элемент не выбран";
   });
+
+  const buffSelects = [...document.querySelectorAll("[data-player-buff-slot]")];
+  buffSelects.forEach((select) => {
+    const definition = PLAYER_BUFF_DEFINITIONS.find((item) => item.id === select.value);
+    select.closest(".player-buff-slot").querySelector("[data-player-buff-description]").textContent =
+      definition?.description || "Усиление не выбрано";
+    const chosenInOtherSlots = new Set(
+      buffSelects.filter((other) => other !== select).map((other) => other.value).filter(Boolean),
+    );
+    [...select.options].forEach((option) => {
+      option.disabled = Boolean(option.value && chosenInOtherSlots.has(option.value));
+    });
+  });
 };
 
 const setFormFromInput = (input) => {
@@ -494,6 +530,11 @@ const setFormFromInput = (input) => {
     document.querySelectorAll(`[data-fighter-perk="${index}"]`).forEach((select, slot) => {
       select.value = fighter.perks[slot] || "";
     });
+    if (index === 0) {
+      document.querySelectorAll("[data-player-buff-slot]").forEach((select, slot) => {
+        select.value = fighter.buffLoadout?.buffDefinitionIds?.[slot] || "";
+      });
+    }
     ["buffs", "injuries"].forEach((type) => {
       const list = document.querySelector(`[data-effect-list="${type}"][data-fighter-index="${index}"]`);
       list.innerHTML = "";
@@ -529,6 +570,11 @@ const readFighter = (index) => {
     buffs: [...document.querySelectorAll(`[data-fighter-effect="${index}"][data-effect-type="buffs"]`)]
       .map((select) => select.value)
       .filter(Boolean),
+    buffLoadout: {
+      buffDefinitionIds: index === 0
+        ? [...document.querySelectorAll("[data-player-buff-slot]")].map((select) => select.value).filter(Boolean)
+        : [],
+    },
     injuries: [...document.querySelectorAll(`[data-fighter-effect="${index}"][data-effect-type="injuries"]`)]
       .map((select) => select.value)
       .filter(Boolean),
@@ -543,11 +589,13 @@ const readInput = () => ({
     supportMultipliers: [Number(elements.multiplier1.value), Number(elements.multiplier2.value)],
   },
   fighters: [readFighter(0), readFighter(1)],
+  playerBuffCommands: [],
 });
 
 const statusLabel = (fighter) => {
   const healthRatio = fighter.health / fighter.maxHealth;
   if (fighter.health <= 0) return "ПОВЕРЖЕН";
+  if (fighter.activeEffects?.some((effect) => effect.id === "player-stunned")) return "ОГЛУШЁН";
   if (healthRatio <= 0.2) return "ЕДВА СТОИТ";
   if (healthRatio < 0.45) return "РАНЕН";
   if (fighter.fatigue >= 85) return "ИЗМОЖДЁН";
@@ -557,6 +605,11 @@ const statusLabel = (fighter) => {
 };
 
 const conditionGlyph = (conditionId) => {
+  if (conditionId === "player-forward") return "➤";
+  if (conditionId === "player-forward-penalty") return "↓";
+  if (conditionId === "player-stunned") return "✹";
+  if (conditionId === "player-hold-on") return "◆";
+  if (conditionId === "player-hold-on-penalty") return "↓";
   if (conditionId.includes("leg")) return "⌁";
   if (conditionId.includes("arm")) return "†";
   if (conditionId.includes("head")) return "◉";
@@ -572,6 +625,21 @@ const mobileConditions = (fighter) => {
     injuryId === "leg-damage" ? ["leg"] : injuryId === "arm-damage" ? ["arm"] : []
   )));
   return [
+    ...(fighter.activeEffects || []).map((effect) => ({
+      id: effect.id,
+      label: effect.id === "player-forward"
+        ? `Вперёд! · осталось ${effect.remainingIterations}`
+        : effect.id === "player-forward-penalty"
+          ? "Последствие «Вперёд!» · −8 инициативы"
+          : effect.id === "player-stunned"
+            ? `Оглушение · осталось ${effect.remainingIterations}`
+            : effect.id === "player-hold-on"
+              ? `Держись! · +${formatNumber(effect.temporaryHealth)} временного здоровья · осталось ${effect.remainingIterations}`
+              : effect.id === "player-hold-on-penalty"
+                ? "Последствие «Держись!» · получаемый урон +25%"
+            : effect.id,
+      source: effect.kind === "status" ? "status" : effect.kind,
+    })),
     ...injuries.map((injuryId) => ({
       id: injuryId,
       label: modifierName(injuryId),
@@ -591,6 +659,105 @@ const mobileConditions = (fighter) => {
         source: "trauma",
       })),
   ];
+};
+
+const combatConditionDescription = (fighter) => {
+  const healthRatio = fighter.health / Math.max(1, fighter.maxHealth);
+  if (fighter.health <= 0) return "Здоровье исчерпано; боец больше не участвует в действиях.";
+  if (fighter.activeEffects?.some((effect) => effect.id === "player-stunned")) {
+    return "Боец оглушён и пропускает следующую итерацию выбора действия.";
+  }
+  if (healthRatio <= 0.2) return "Критически мало здоровья: боец едва держится на ногах.";
+  if (healthRatio < 0.45) return "Тяжёлое ранение заметно изменяет стойку бойца.";
+  if (fighter.fatigue >= 85) return "Крайняя усталость сильно снижает эффективную силу и инициативу.";
+  if (fighter.fatigue >= 55) return "Высокая усталость снижает эффективную силу и инициативу.";
+  if (healthRatio <= 0.55) return "Здоровье опустилось ниже безопасного уровня.";
+  return "Нет критических состояний здоровья или усталости.";
+};
+
+const fighterStateEntries = (fighter) => {
+  const entries = [{
+    kind: "condition",
+    name: statusLabel(fighter),
+    description: combatConditionDescription(fighter),
+  }];
+  (fighter.activeEffects || []).forEach((effect) => {
+    if (effect.id === "player-forward") {
+      entries.push({
+        kind: "buff",
+        name: "Вперёд!",
+        description: `Инициатива повышена на 18. Осталось итераций: ${effect.remainingIterations}; после истечения появится штраф −8.`,
+      });
+    } else if (effect.id === "player-forward-penalty") {
+      entries.push({
+        kind: "debuff",
+        name: "Последствие «Вперёд!»",
+        description: "Инициатива снижена на 8 до конца боя.",
+      });
+    } else if (effect.id === "player-stunned") {
+      entries.push({
+        kind: "status",
+        name: "Оглушение",
+        description: `Боец не может быть выбран для действия. Осталось итераций: ${effect.remainingIterations}.`,
+      });
+    } else if (effect.id === "player-hold-on") {
+      entries.push({
+        kind: "buff",
+        name: "Держись!",
+        description: `Временное здоровье: ${formatNumber(effect.temporaryHealth)}. Осталось итераций: ${effect.remainingIterations}; затем получаемый урон увеличится на 25%.`,
+      });
+    } else if (effect.id === "player-hold-on-penalty") {
+      entries.push({
+        kind: "debuff",
+        name: "Последствие «Держись!»",
+        description: "Получаемый урон увеличен на 25% до конца боя.",
+      });
+    }
+  });
+  (fighter.buffs || []).forEach((buffId) => {
+    const definition = BUFF_DEFINITIONS.find((item) => item.id === buffId);
+    entries.push({ kind: "buff", name: definition?.name || buffId, description: definition?.description || "Временный эффект боя." });
+  });
+  (fighter.injuries || []).forEach((injuryId) => {
+    const definition = INJURY_DEFINITIONS.find((item) => item.id === injuryId);
+    entries.push({ kind: "injury", name: definition?.name || injuryId, description: definition?.description || "Стартовая травма бойца." });
+  });
+  (fighter.traumas || []).forEach((trauma) => {
+    const traumaDescription = trauma.type === "arm"
+      ? "Травма руки снижает текущую силу на 15%."
+      : trauma.type === "leg"
+        ? "Травма ноги снижает инициативу на 9."
+        : trauma.type === "post-battle"
+          ? "Итоговая травма, полученная после завершения боя."
+          : "Боевая травма влияет на состояние бойца.";
+    entries.push({
+      kind: "trauma",
+      name: trauma.type === "arm" ? "Травма руки" : trauma.type === "leg" ? "Травма ноги" : "Итоговая травма",
+      description: `${traumaDescription} Получена на итерации ${trauma.step}.`,
+    });
+  });
+  (fighter.perks || []).forEach((perkId) => {
+    const definition = PERK_DEFINITIONS.find((item) => item.id === perkId);
+    entries.push({ kind: "perk", name: definition?.name || perkId, description: definition?.description || "Постоянный перк бойца." });
+  });
+  return entries;
+};
+
+const renderFighterStateEntries = (fighter) => {
+  const entries = fighterStateEntries(fighter);
+  return `
+    <section class="fighter-state-panel">
+      <h4><span>Состояния и эффекты</span><b>${entries.length}</b></h4>
+      <ul>
+        ${entries.map((entry) => `
+          <li class="fighter-state-${escapeHtml(entry.kind)}">
+            <div><strong>${escapeHtml(entry.name)}</strong><small>${escapeHtml(entry.kind)}</small></div>
+            <p>${escapeHtml(entry.description)}</p>
+          </li>
+        `).join("")}
+      </ul>
+    </section>
+  `;
 };
 
 const meterRow = (label, value, max, className, displayValue = null) => {
@@ -693,8 +860,161 @@ const updateMobileBattleFeed = (entries) => {
   });
 };
 
+const showMobileBuffStatus = (message, durationMs = 0) => {
+  if (!elements.mobileBuffControl || !elements.mobileBuffStatus) return;
+  clearTimeout(mobileBuffStatusTimer);
+  elements.mobileBuffStatus.textContent = message;
+  elements.mobileBuffControl.classList.add("show-status");
+  if (durationMs > 0) {
+    mobileBuffStatusTimer = window.setTimeout(() => {
+      elements.mobileBuffControl?.classList.remove("show-status");
+    }, durationMs);
+  }
+};
+
+const setMobileBuffMenuOpen = (open) => {
+  if (!elements.mobileBuffControl || !elements.mobileBuffTrigger) return;
+  elements.mobileBuffControl.dataset.open = String(open);
+  elements.mobileBuffTrigger.setAttribute("aria-expanded", String(open));
+  elements.mobileBuffTrigger.setAttribute(
+    "aria-label",
+    open
+      ? "Закрыть боевые усиления"
+      : elements.mobileBuffTrigger.disabled
+        ? "Усиления доступны только во время боя"
+        : "Открыть боевые усиления. На мобильном устройстве удерживайте кнопку",
+  );
+  if (!open) {
+    elements.mobileBuffControl.classList.remove("show-status");
+  }
+};
+
+const stopMobileBuffHold = () => {
+  clearTimeout(mobileBuffHoldTimer);
+  mobileBuffHoldTimer = null;
+  elements.mobileBuffControl?.classList.remove("is-pressing");
+};
+
+const setMobileBuffAvailability = (available, unavailableLabel = "Усиления доступны только во время боя") => {
+  if (!elements.mobileBuffTrigger) return;
+  elements.mobileBuffTrigger.disabled = !available;
+  elements.mobileBuffTrigger.title = available
+    ? "Боевые усиления"
+    : unavailableLabel;
+  if (available) {
+    elements.mobileBuffTrigger.setAttribute(
+      "aria-label",
+      "Открыть боевые усиления. На мобильном устройстве удерживайте кнопку",
+    );
+  }
+  if (!available) {
+    elements.mobileBuffTrigger.setAttribute("aria-label", unavailableLabel);
+    stopMobileBuffHold();
+    setMobileBuffMenuOpen(false);
+  }
+};
+
+const playerBuffRejectionLabel = (reason) => ({
+  "zero-fatigue": "Усталости ещё нет",
+  "already-used": "Это усиление уже использовано",
+  "battle-limit-reached": "Лимит усилений исчерпан",
+  "battle-finished": "Бой уже завершён",
+  "not-in-loadout": "Усиления нет в наборе",
+}[reason] || "Усиление сейчас недоступно");
+
+const applyPlayerBuffFromUi = (option) => {
+  if (!currentResult || option.disabled) return;
+  const label = option.querySelector("b")?.textContent?.trim() || "Усиление";
+  const glyph = option.querySelector("span")?.textContent || "✹";
+  const snapshot = currentResult.snapshots[currentSnapshotIndex];
+  const fighterId = currentResult.input.fighters[0].id;
+  const commandSequence = ++playerBuffCommandSequence;
+  const command = {
+    type: "apply-player-buff",
+    fighterId,
+    buffDefinitionId: option.dataset.buffChoice,
+    afterIteration: snapshot.step,
+    commandSequence,
+  };
+  const wasPlaying = isPlaying;
+  clearPlayback();
+  const nextInput = JSON.parse(JSON.stringify(currentResult.input));
+  nextInput.playerBuffCommands = [...(nextInput.playerBuffCommands || []), command];
+  const nextResult = new BattleEngine(nextInput).simulate();
+  const commandEvent = nextResult.events.find((event) => (
+    ["player-buff.applied", "player-buff.rejected"].includes(event.type)
+      && event.data.command?.commandSequence === commandSequence
+  ));
+  currentResult = nextResult;
+  elements.slider.max = currentResult.snapshots.length - 1;
+  const accepted = commandEvent?.type === "player-buff.applied";
+  let targetIndex = currentResult.snapshots.findIndex((item) => (
+    item.playerBuffs?.applications?.some((application) => application.commandSequence === commandSequence)
+  ));
+  if (accepted && option.dataset.buffChoice === "now") {
+    const specialIndex = currentResult.snapshots.findIndex((item) => (
+      item.lastAction?.playerBuffApplicationId === commandEvent.data.application.applicationId
+    ));
+    if (specialIndex >= 0) targetIndex = specialIndex;
+  }
+  if (targetIndex < 0) {
+    targetIndex = currentResult.snapshots.reduce((best, item, index) => (
+      item.step <= snapshot.step ? index : best
+    ), 0);
+  }
+  hideBattleReport();
+  renderSnapshot(targetIndex);
+  setMobileBuffMenuOpen(false);
+  if (accepted) {
+    const triggerGlyph = elements.mobileBuffTrigger?.querySelector(".mobile-buff-trigger-icon");
+    if (triggerGlyph) triggerGlyph.textContent = glyph;
+    showMobileBuffStatus(`${label} · применено`, 1600);
+    if (wasPlaying && currentSnapshotIndex < currentResult.snapshots.length - 1) playBattle();
+  } else {
+    showMobileBuffStatus(playerBuffRejectionLabel(commandEvent?.data.reason), 1600);
+  }
+};
+
+const renderMobileBuffControls = (snapshot, input) => {
+  const fighterId = input.fighters[0]?.id;
+  const fighterBuffs = snapshot.playerBuffs?.fighters?.[fighterId];
+  const inProgress = Boolean(currentResult) && snapshot.label !== "Итог боя" && snapshot.status !== "finished";
+  const appliedCount = fighterBuffs?.appliedCount || 0;
+  const loadout = fighterBuffs?.buffs || [];
+  const loadoutIds = loadout.map((buff) => buff.definitionId);
+  const remaining = Math.min(
+    Math.max(0, 3 - appliedCount),
+    loadout.filter((buff) => buff.state === "available").length,
+  );
+  const count = elements.mobileBuffTrigger?.querySelector(".mobile-buff-trigger-count");
+  if (count) {
+    count.textContent = String(remaining);
+    count.setAttribute("aria-label", `Доступно усилений: ${remaining}`);
+  }
+  elements.mobileBuffOptions.forEach((option) => {
+    const definition = PLAYER_BUFF_DEFINITIONS.find((item) => item.id === option.dataset.buffChoice);
+    const slot = loadoutIds.indexOf(option.dataset.buffChoice);
+    const state = loadout.find((item) => item.definitionId === option.dataset.buffChoice)?.state || "unselected";
+    option.hidden = slot < 0;
+    if (slot >= 0) option.dataset.buffSlot = String(slot);
+    else delete option.dataset.buffSlot;
+    option.disabled = slot < 0 || !inProgress || state !== "available" || remaining <= 0;
+    option.classList.toggle("is-active", state === "active");
+    option.classList.toggle("is-used", state === "used");
+    const stateLabel = state === "active" ? "Активно" : state === "used" ? "Использовано" : state === "available" ? "Доступно" : "Не выбрано";
+    option.setAttribute("aria-label", `${definition?.name || option.dataset.buffChoice}. ${definition?.description || ""} ${stateLabel}`);
+  });
+  setMobileBuffAvailability(
+    inProgress && remaining > 0 && loadoutIds.length > 0,
+    inProgress
+      ? loadoutIds.length > 0 ? "Все усиления использованы" : "Набор усилений пуст"
+      : "Усиления доступны только во время боя",
+  );
+};
+
 const renderMobileBattleUi = (snapshot, input) => {
   if (!snapshot || !elements.mobileArenaHeader || !elements.mobileBattleFeed) return;
+  renderMobileBuffControls(snapshot, input);
   fighterBloodLevels(snapshot).forEach((level, index) => {
     const bloodLayer = elements.mobileBattleStory
       ?.querySelector(`.mobile-story-blood.side-${index + 1}`);
@@ -740,9 +1060,9 @@ const renderMobileBattleUi = (snapshot, input) => {
         <div class="mobile-fighter-copy">
           <strong>${escapeHtml(fighter.name)}</strong>
           <small>${escapeHtml(fighterClassName(fighter.fighterClass))}</small>
-          <div class="mobile-health-track" aria-label="Здоровье ${escapeHtml(fighter.name)}">
+          <div class="mobile-health-track ${fighter.temporaryHealth > 0 ? "has-temporary-health" : ""}" aria-label="Здоровье ${escapeHtml(fighter.name)}${fighter.temporaryHealth > 0 ? `, временное здоровье ${formatNumber(fighter.temporaryHealth)}` : ""}">
             <i style="width:${healthRatio * 100}%"></i>
-            <span>${formatNumber(health)} / ${formatNumber(fighter.maxHealth)}</span>
+            <span>${formatNumber(health)} / ${formatNumber(fighter.maxHealth)}${fighter.temporaryHealth > 0 ? ` · +${formatNumber(fighter.temporaryHealth)}` : ""}</span>
           </div>
           <div class="mobile-fatigue" aria-label="Усталость ${escapeHtml(fighter.name)}: ${formatNumber(fighter.fatigue)} из 150">
             <span>УСТ</span>
@@ -809,10 +1129,6 @@ const renderNumbers = (snapshot) => {
   elements.fighterNumbers.innerHTML = snapshot.fighters.map((fighter, index) => {
     const base = input.fighters[index].base;
     const multiplier = snapshot.arena.supportMultipliers[index];
-    const traumas = fighter.traumas?.length
-      ? fighter.traumas.map((trauma) => `${trauma.type}@${trauma.step}`).join(", ")
-      : "нет";
-    const perks = fighter.perks?.length ? fighter.perks.map(perkName).join(", ") : "нет";
     return `
       <article class="number-card fighter-${index === 0 ? "one" : "two"}">
         <h3>
@@ -820,6 +1136,7 @@ const renderNumbers = (snapshot) => {
           <small>${statusLabel(fighter)}</small>
         </h3>
         ${meterRow("Здоровье", Math.max(0, fighter.health), fighter.maxHealth, "health", `${formatNumber(fighter.health)} / ${formatNumber(fighter.maxHealth)}`)}
+        ${fighter.temporaryHealth > 0 ? meterRow("Временное здоровье", fighter.temporaryHealth, fighter.maxHealth * 0.2, "temporary-health", `+${formatNumber(fighter.temporaryHealth)}`) : ""}
         ${meterRow("Сила", fighter.strength, 150, "strength", `${formatNumber(fighter.strength)} / база ${base.strength}`)}
         ${meterRow("Поддержка", fighter.support, 150, "support")}
         ${meterRow("Инициатива", fighter.initiative, 150, "initiative")}
@@ -832,8 +1149,7 @@ const renderNumbers = (snapshot) => {
           ОРУЖИЕ +${fighter.weaponPower} · ТОЧНОСТЬ ${fighter.accuracy} · БРОНЯ ${fighter.armor} ·
           ВЕС ${fighter.equipmentWeight} · ПОДВИЖНОСТЬ ${fighter.mobility}
         </p>
-        <p class="perks-line">ПЕРКИ: ${escapeHtml(perks)}</p>
-        <p class="trauma-line">ТРАВМЫ: ${escapeHtml(traumas)}</p>
+        ${renderFighterStateEntries(fighter)}
       </article>
     `;
   }).join("");
@@ -1081,6 +1397,7 @@ const downloadBattle = (event) => {
 
 const resetResults = () => {
   clearPlayback();
+  playerBuffCommandSequence = 0;
   currentResult = null;
   currentSnapshotIndex = 0;
   elements.resultPanel.hidden = true;
@@ -1107,6 +1424,7 @@ const renderPreview = () => {
       name: fighter.name,
       health: fighter.base.health,
       maxHealth: fighter.base.health,
+      temporaryHealth: 0,
       strength: fighter.base.strength,
       criticalChance: fighter.criticalChance,
       classTechniqueChance: fighter.classTechniqueChance,
@@ -1145,6 +1463,7 @@ const startBattle = (event) => {
     setMobileFullscreenMode(true, { updateUrl: true, nativeFullscreen: true });
   }
   try {
+    playerBuffCommandSequence = 0;
     const input = readInput();
     const engine = new BattleEngine(input);
     currentResult = engine.simulate();
@@ -1228,6 +1547,59 @@ elements.mobileExitFullscreen?.addEventListener("click", (event) => {
 });
 elements.mobileNativeFullscreen?.addEventListener("click", requestNativeFullscreen);
 elements.mobileStartButton?.addEventListener("click", () => elements.form.requestSubmit());
+elements.mobileBuffTrigger?.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse") return;
+  event.preventDefault();
+  ignoreMobileBuffClickUntil = Date.now() + 600;
+  if (elements.mobileBuffControl?.dataset.open === "true") {
+    setMobileBuffMenuOpen(false);
+    return;
+  }
+  mobileBuffHoldOpened = false;
+  elements.mobileBuffControl?.classList.add("is-pressing");
+  mobileBuffHoldTimer = window.setTimeout(() => {
+    mobileBuffHoldTimer = null;
+    mobileBuffHoldOpened = true;
+    elements.mobileBuffControl?.classList.remove("is-pressing");
+    setMobileBuffMenuOpen(true);
+  }, MOBILE_BUFF_HOLD_MS);
+});
+elements.mobileBuffTrigger?.addEventListener("pointerup", (event) => {
+  if (event.pointerType === "mouse") return;
+  event.preventDefault();
+  const opened = mobileBuffHoldOpened;
+  stopMobileBuffHold();
+  if (!opened && elements.mobileBuffControl?.dataset.open !== "true") {
+    showMobileBuffStatus("Удерживайте, чтобы открыть", 1200);
+  }
+  mobileBuffHoldOpened = false;
+});
+elements.mobileBuffTrigger?.addEventListener("pointercancel", () => {
+  stopMobileBuffHold();
+  mobileBuffHoldOpened = false;
+});
+elements.mobileBuffTrigger?.addEventListener("contextmenu", (event) => event.preventDefault());
+elements.mobileBuffTrigger?.addEventListener("click", (event) => {
+  if (Date.now() < ignoreMobileBuffClickUntil) {
+    event.preventDefault();
+    return;
+  }
+  setMobileBuffMenuOpen(elements.mobileBuffControl?.dataset.open !== "true");
+});
+elements.mobileBuffOptions.forEach((option) => {
+  option.addEventListener("click", () => applyPlayerBuffFromUi(option));
+});
+document.addEventListener("pointerdown", (event) => {
+  if (elements.mobileBuffControl?.dataset.open !== "true") return;
+  if (elements.mobileBuffControl.contains(event.target)) return;
+  setMobileBuffMenuOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && elements.mobileBuffControl?.dataset.open === "true") {
+    setMobileBuffMenuOpen(false);
+    elements.mobileBuffTrigger?.focus();
+  }
+});
 window.addEventListener("popstate", () => {
   setMobileFullscreenMode(new URLSearchParams(window.location.search).get("mobile") === "1");
 });

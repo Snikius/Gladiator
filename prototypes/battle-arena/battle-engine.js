@@ -163,6 +163,25 @@ const normalizeModifierRefs = (items, limit = Infinity) => items
   .filter(Boolean)
   .slice(0, limit);
 
+const normalizePlayerBuffLoadout = (rawLoadout) => ({
+  buffDefinitionIds: [...new Set(normalizeModifierRefs(
+    rawLoadout?.buffDefinitionIds || rawLoadout || [],
+    3,
+  ))],
+});
+
+const normalizePlayerBuffCommands = (commands) => (commands || [])
+  .filter(Boolean)
+  .map((command, index) => ({
+    type: "apply-player-buff",
+    fighterId: String(command.fighterId || "fighter-1"),
+    buffDefinitionId: String(command.buffDefinitionId || ""),
+    afterIteration: Math.max(0, Math.floor(Number(command.afterIteration) || 0)),
+    commandSequence: Math.max(1, Math.floor(Number(command.commandSequence) || index + 1)),
+  }))
+  .filter((command) => command.buffDefinitionId)
+  .sort((left, right) => left.afterIteration - right.afterIteration || left.commandSequence - right.commandSequence);
+
 const normalizeEquipmentRef = (rawRef, catalog, fighterClass, slot) => {
   const requestedId = typeof rawRef === "string" ? rawRef : rawRef?.definitionId;
   const item = catalog.find((candidate) => (
@@ -190,6 +209,7 @@ const normalizeInput = (input) => ({
       clamp(Number(input.arena?.supportMultipliers?.[1]) || 1, 0.1, MAX_ARENA_MULTIPLIER),
     ],
   },
+  playerBuffCommands: normalizePlayerBuffCommands(input.playerBuffCommands),
   fighters: input.fighters.map((fighter, index) => {
     const requestedClass = fighter.fighterClass || fighter.equipmentType;
     const fighterClass = FIGHTER_CLASS_DEFINITIONS.some((item) => item.id === requestedClass)
@@ -216,6 +236,7 @@ const normalizeInput = (input) => ({
       },
       perks: [...new Set(normalizeModifierRefs(fighter.perks, 3))],
       buffs: normalizeModifierRefs(fighter.buffs || fighter.temporaryPerks || []),
+      buffLoadout: normalizePlayerBuffLoadout(fighter.buffLoadout),
       injuries: normalizeModifierRefs(fighter.injuries || []),
     };
   }),
@@ -317,6 +338,31 @@ const BUFF_DEFINITIONS = [
     description: "+3 к силе, +6 к здоровью и +2 к харизме.",
   },
 ];
+
+const PLAYER_BUFF_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    id: "rally",
+    name: "Соберись!",
+    description: "Немедленно снимает 35% текущей усталости.",
+  }),
+  Object.freeze({
+    id: "forward",
+    name: "Вперёд!",
+    description: "+18 инициативы на 5 итераций, затем −8 инициативы до конца боя.",
+    durationIterations: 5,
+  }),
+  Object.freeze({
+    id: "now",
+    name: "Сейчас!",
+    description: "+15 усталости и немедленный усиленный классовый удар с оглушением цели на 2 итерации.",
+  }),
+  Object.freeze({
+    id: "hold-on",
+    name: "Держись!",
+    description: "Даёт 20% временного здоровья на 5 итераций, затем увеличивает получаемый урон на 25% до конца боя.",
+    durationIterations: 5,
+  }),
+]);
 
 const INJURY_DEFINITIONS = [
   {
@@ -865,6 +911,47 @@ const BUFF_IMPLEMENTATIONS = {
   },
 };
 
+const PLAYER_BUFF_MODIFIER_IMPLEMENTATIONS = {
+  "player-forward": {
+    afterRecalculateInitiative(data, api) {
+      if (data.fighterId !== api.ownerId) return data;
+      return { ...data, initiative: round(data.initiative + 18) };
+    },
+  },
+  "player-forward-penalty": {
+    afterRecalculateInitiative(data, api) {
+      if (data.fighterId !== api.ownerId) return data;
+      return { ...data, initiative: Math.max(1, round(data.initiative - 8)) };
+    },
+  },
+  "player-hold-on": {},
+  "player-hold-on-penalty": {
+    afterAction(data, api) {
+      if (data.targetId !== api.ownerId || data.outcome !== "hit") return data;
+      const target = api.state.fighters.find((fighter) => fighter.id === api.ownerId);
+      const damage = Math.max(1, round(data.damage * 1.25));
+      api.activate("Последствие «Держись!» увеличило получаемый урон на 25%");
+      return {
+        ...data,
+        damage,
+        traumaChance: target ? round(calculateTraumaChance(damage, target.maxHealth), 4) : data.traumaChance,
+      };
+    },
+  },
+  "player-stunned": {
+    beforeSelectActor(data, api) {
+      return {
+        ...data,
+        candidates: data.candidates.map((candidate) => (
+          candidate.fighterId === api.ownerId
+            ? { ...candidate, weight: 0, reason: "status:stunned" }
+            : candidate
+        )),
+      };
+    },
+  },
+};
+
 const INJURY_IMPLEMENTATIONS = {
   "leg-damage": {
     beforeInitialize: (data, api) => applyInitializationModifiers(
@@ -922,8 +1009,24 @@ const createDefaultBattleInput = () => ({
   fighters: [
     {
       id: "fighter-1",
+      name: "Тит",
+      base: { strength: 54, health: 180, charisma: 68 },
+      criticalChance: COMBAT_RULES.critical.chance,
+      classTechniqueChance: COMBAT_RULES.classTechnique.chance,
+      fighterClass: "retiarius",
+      equipment: {
+        weaponSet: { definitionId: "retiarius-arms.good" },
+        armorSet: { definitionId: "retiarius-armor.good" },
+      },
+      perks: ["strong-bones"],
+      buffs: [],
+      buffLoadout: { buffDefinitionIds: ["rally", "forward", "now"] },
+      injuries: [],
+    },
+    {
+      id: "fighter-2",
       name: "Маркус",
-      base: { strength: 62, health: 210, charisma: 63 },
+      base: { strength: 62, health: 240, charisma: 75 },
       criticalChance: COMBAT_RULES.critical.chance,
       classTechniqueChance: COMBAT_RULES.classTechnique.chance,
       fighterClass: "murmillo",
@@ -933,21 +1036,7 @@ const createDefaultBattleInput = () => ({
       },
       perks: ["cornered-beast"],
       buffs: [],
-      injuries: [],
-    },
-    {
-      id: "fighter-2",
-      name: "Тит",
-      base: { strength: 54, health: 180, charisma: 68 },
-      criticalChance: COMBAT_RULES.critical.chance,
-      classTechniqueChance: COMBAT_RULES.classTechnique.chance,
-      fighterClass: "thraex",
-      equipment: {
-        weaponSet: { definitionId: "thraex-arms.good" },
-        armorSet: { definitionId: "thraex-armor.good" },
-      },
-      perks: ["strong-bones"],
-      buffs: [],
+      buffLoadout: { buffDefinitionIds: [] },
       injuries: [],
     },
   ],
@@ -984,6 +1073,19 @@ class BattleModifierManager {
     return data;
   }
 
+  add(instance) {
+    this.instances.push(instance);
+    this.instances.sort((left, right) =>
+      left.priority - right.priority
+        || left.id.localeCompare(right.id)
+        || left.instanceId.localeCompare(right.instanceId));
+  }
+
+  remove(instanceId) {
+    const index = this.instances.findIndex((modifier) => modifier.instanceId === instanceId);
+    if (index >= 0) this.instances.splice(index, 1);
+  }
+
   snapshot() {
     return this.instances.map((modifier) => ({
       id: modifier.id,
@@ -992,6 +1094,7 @@ class BattleModifierManager {
       ownerId: modifier.ownerId,
       sourceId: modifier.sourceId,
       priority: modifier.priority,
+      durationIterations: modifier.durationIterations ?? null,
       runtime: clone(modifier.runtime),
     }));
   }
@@ -1011,6 +1114,7 @@ class BattleEngine {
     this.lastAction = null;
     this.lastActorId = null;
     this.consecutiveActions = 0;
+    this.dynamicModifierSequence = 0;
     this.modifierManager = new BattleModifierManager(this, this.createModifiers());
     this.state = null;
   }
@@ -1059,6 +1163,7 @@ class BattleEngine {
 
   simulate() {
     this.initialize();
+    this.processScheduledPlayerBuffCommands(0);
 
     while (this.state.status === "running") {
       this.runStep();
@@ -1102,6 +1207,7 @@ class BattleEngine {
         initiativeEquipmentBonus: 0,
         maxHealth: fighter.base.health,
         health: fighter.base.health,
+        temporaryHealth: 0,
         strength: fighter.base.strength,
         support: round(support),
         initiative: 1,
@@ -1109,6 +1215,7 @@ class BattleEngine {
         traumas: [],
         perks: [...fighter.perks],
         buffs: [...fighter.buffs],
+        buffLoadout: clone(fighter.buffLoadout),
         injuries: [...fighter.injuries],
         stats: createStats(),
       };
@@ -1121,6 +1228,17 @@ class BattleEngine {
       fighters,
       arena: clone(this.input.arena),
       pendingEffects: [],
+      playerBuffs: {
+        applications: [],
+        fighters: Object.fromEntries(fighters.map((fighter) => [fighter.id, {
+          appliedCount: 0,
+          buffs: fighter.buffLoadout.buffDefinitionIds.map((definitionId) => ({
+            definitionId,
+            state: "available",
+            applicationId: null,
+          })),
+        }])),
+      },
     };
 
     const initialized = this.runPhase(
@@ -1151,6 +1269,262 @@ class BattleEngine {
       (data) => data,
     );
     this.captureSnapshot("Начальное состояние");
+  }
+
+  addDynamicModifier({ id, kind, ownerId, sourceId = null, durationIterations = null }) {
+    const implementation = PLAYER_BUFF_MODIFIER_IMPLEMENTATIONS[id];
+    if (!implementation) throw new Error(`Неизвестный динамический модификатор ${id}`);
+    const instance = {
+      id,
+      instanceId: `${kind}:${ownerId}:${++this.dynamicModifierSequence}:${id}`,
+      kind,
+      ownerId,
+      sourceId,
+      priority: 50,
+      implementation,
+      durationIterations,
+      runtime: {
+        activations: 1,
+        used: false,
+        activatedAfterIteration: this.state.step,
+        ...(durationIterations == null ? {} : { remainingIterations: durationIterations }),
+      },
+    };
+    this.modifierManager.add(instance);
+    this.emit("modifier.added", `Добавлен модификатор ${id}`, {
+      modifierId: id,
+      kind,
+      instanceId: instance.instanceId,
+      ownerId,
+      sourceId,
+      durationIterations,
+    });
+    return instance;
+  }
+
+  tickTimedModifiers() {
+    const expiring = [];
+    this.modifierManager.instances.forEach((modifier) => {
+      if (!Number.isInteger(modifier.runtime.remainingIterations)) return;
+      if (modifier.runtime.activatedAfterIteration >= this.state.step) return;
+      modifier.runtime.remainingIterations -= 1;
+      this.emit("modifier.timer.changed", `Таймер ${modifier.id}: ${modifier.runtime.remainingIterations}`, {
+        modifierId: modifier.id,
+        instanceId: modifier.instanceId,
+        ownerId: modifier.ownerId,
+        remainingIterations: modifier.runtime.remainingIterations,
+      });
+      if (modifier.runtime.remainingIterations <= 0) expiring.push(modifier);
+    });
+    if (!expiring.length) return;
+
+    expiring.forEach((modifier) => {
+      this.modifierManager.remove(modifier.instanceId);
+      this.emit("modifier.expired", `Истёк модификатор ${modifier.id}`, {
+        modifierId: modifier.id,
+        instanceId: modifier.instanceId,
+        ownerId: modifier.ownerId,
+        sourceId: modifier.sourceId,
+      });
+      if (modifier.id === "player-forward") {
+        this.addDynamicModifier({
+          id: "player-forward-penalty",
+          kind: "debuff",
+          ownerId: modifier.ownerId,
+          sourceId: modifier.sourceId,
+        });
+      }
+      if (modifier.id === "player-hold-on") {
+        const fighter = this.getFighter(modifier.ownerId);
+        const expiredTemporaryHealth = fighter.temporaryHealth;
+        fighter.temporaryHealth = 0;
+        this.emit("temporary-health.expired", `${fighter.name}: временное здоровье «Держись!» исчезло`, {
+          fighterId: fighter.id,
+          sourceId: modifier.sourceId,
+          expiredTemporaryHealth,
+        });
+        this.addDynamicModifier({
+          id: "player-hold-on-penalty",
+          kind: "debuff",
+          ownerId: modifier.ownerId,
+          sourceId: modifier.sourceId,
+        });
+      }
+      if (modifier.id === "player-stunned") {
+        this.emit("status.expired", `${this.getFighter(modifier.ownerId).name} больше не оглушён`, {
+          fighterId: modifier.ownerId,
+          statusId: "stunned",
+        });
+      }
+      const application = this.state.playerBuffs.applications.find((item) => (
+        item.applicationId === modifier.sourceId
+      ));
+      if (application && modifier.id !== "player-forward-penalty") {
+        application.state = "used";
+        const buffState = this.state.playerBuffs.fighters[application.fighterId]?.buffs
+          .find((item) => item.definitionId === application.buffDefinitionId);
+        if (buffState) buffState.state = "used";
+      }
+    });
+    this.recalculateAll("modifier-expired");
+  }
+
+  endTimedModifiersAtBattleEnd() {
+    const timed = this.modifierManager.instances.filter((modifier) => (
+      Number.isInteger(modifier.runtime.remainingIterations)
+    ));
+    timed.forEach((modifier) => {
+      this.modifierManager.remove(modifier.instanceId);
+      if (modifier.id === "player-hold-on") this.getFighter(modifier.ownerId).temporaryHealth = 0;
+      this.emit("modifier.battle-ended", `Действие ${modifier.id} прекращено с завершением боя`, {
+        modifierId: modifier.id,
+        instanceId: modifier.instanceId,
+        ownerId: modifier.ownerId,
+        sourceId: modifier.sourceId,
+        remainingIterations: modifier.runtime.remainingIterations,
+      });
+      const application = this.state.playerBuffs.applications.find((item) => item.applicationId === modifier.sourceId);
+      if (application) {
+        application.state = "used";
+        const buffState = this.state.playerBuffs.fighters[application.fighterId]?.buffs
+          .find((item) => item.definitionId === application.buffDefinitionId);
+        if (buffState) buffState.state = "used";
+      }
+    });
+  }
+
+  processScheduledPlayerBuffCommands(afterIteration) {
+    this.input.playerBuffCommands
+      .filter((command) => command.afterIteration === afterIteration)
+      .forEach((command) => this.applyPlayerBuffCommand(command));
+  }
+
+  rejectPlayerBuffCommand(command, reason) {
+    this.emit("player-buff.rejected", `Баф ${command.buffDefinitionId} отклонён: ${reason}`, {
+      command,
+      reason,
+    });
+  }
+
+  applyPlayerBuffCommand(command) {
+    const fighterBuffs = this.state.playerBuffs.fighters[command.fighterId];
+    const buffState = fighterBuffs?.buffs.find((item) => item.definitionId === command.buffDefinitionId);
+    if (this.state.status !== "running") return this.rejectPlayerBuffCommand(command, "battle-finished");
+    if (!fighterBuffs || !buffState) return this.rejectPlayerBuffCommand(command, "not-in-loadout");
+    if (buffState.state !== "available") return this.rejectPlayerBuffCommand(command, "already-used");
+    if (fighterBuffs.appliedCount >= 3) return this.rejectPlayerBuffCommand(command, "battle-limit-reached");
+    const fighter = this.getFighter(command.fighterId);
+    if (command.buffDefinitionId === "rally" && fighter.fatigue <= 0) {
+      return this.rejectPlayerBuffCommand(command, "zero-fatigue");
+    }
+
+    const applicationId = `player-buff:${command.fighterId}:${command.commandSequence}:${command.buffDefinitionId}`;
+    const isTimed = ["forward", "hold-on"].includes(command.buffDefinitionId);
+    const application = {
+      applicationId,
+      commandSequence: command.commandSequence,
+      fighterId: command.fighterId,
+      buffDefinitionId: command.buffDefinitionId,
+      appliedAfterIteration: command.afterIteration,
+      state: isTimed ? "active" : "used",
+    };
+    fighterBuffs.appliedCount += 1;
+    buffState.state = application.state;
+    buffState.applicationId = applicationId;
+    this.state.playerBuffs.applications.push(application);
+
+    if (command.buffDefinitionId === "rally") {
+      const nextFatigue = Math.floor(fighter.fatigue * 0.65);
+      this.applyEffects([{
+        type: "fatigue",
+        fighterId: fighter.id,
+        value: nextFatigue - fighter.fatigue,
+        reason: "player-buff:rally",
+      }]);
+      this.recalculateAll("player-buff:rally");
+    }
+    if (command.buffDefinitionId === "forward") {
+      this.addDynamicModifier({
+        id: "player-forward",
+        kind: "buff",
+        ownerId: fighter.id,
+        sourceId: applicationId,
+        durationIterations: 5,
+      });
+      this.recalculateAll("player-buff:forward");
+    }
+    if (command.buffDefinitionId === "now") {
+      this.applyEffects([{
+        type: "fatigue",
+        fighterId: fighter.id,
+        value: 15,
+        reason: "player-buff:now",
+      }]);
+      this.recalculateAll("player-buff:now");
+    }
+    if (command.buffDefinitionId === "hold-on") {
+      this.addDynamicModifier({
+        id: "player-hold-on",
+        kind: "buff",
+        ownerId: fighter.id,
+        sourceId: applicationId,
+        durationIterations: 5,
+      });
+      this.applyEffects([{
+        type: "temporary-health",
+        fighterId: fighter.id,
+        value: round(fighter.maxHealth * 0.2),
+        reason: "player-buff:hold-on",
+      }]);
+    }
+
+    const definition = PLAYER_BUFF_DEFINITIONS.find((item) => item.id === command.buffDefinitionId);
+    this.emit("player-buff.applied", `${fighter.name}: ${definition?.name || command.buffDefinitionId}`, {
+      command,
+      application: clone(application),
+    });
+    this.captureSnapshot(`${fighter.name} применяет «${definition?.name || command.buffDefinitionId}»`);
+
+    if (command.buffDefinitionId === "now" && this.state.status === "running") {
+      this.runPlayerBuffSpecialAction(fighter.id, applicationId);
+    }
+    return application;
+  }
+
+  runPlayerBuffSpecialAction(fighterId, applicationId) {
+    const actor = this.getFighter(fighterId);
+    const target = this.getOpponent(fighterId);
+    if (actor.health <= 0 || target.health <= 0) return;
+    this.state.step += 1;
+    this.trackActionStreak(actor.id);
+    const classTechnique = actor.equipmentPerks[0] || null;
+    const attackType = actor.fighterClass === "retiarius"
+      ? "retiarius-enhanced-jump"
+      : "enhanced-class-technique";
+    const actionSelection = this.runPhase(
+      "select-action",
+      "beforeSelectAction",
+      "afterSelectAction",
+      {
+        actorId: actor.id,
+        targetId: target.id,
+        availableActions: ["enhanced-class-technique"],
+        classTechnique,
+        playerBuffApplicationId: applicationId,
+      },
+      (data) => ({
+        ...data,
+        action: "attack",
+        attackType,
+        specialAttack: "player-buff-now",
+        strengthMultiplier: 1.25,
+        unblockable: true,
+        undodgeable: true,
+        guaranteedHit: true,
+        stunIterations: 2,
+      }),
+    );
+    this.executeAction(actionSelection);
   }
 
   runStep() {
@@ -1200,6 +1574,12 @@ class BattleEngine {
       (data) => ({ ...data, action: "attack" }),
     );
 
+    this.executeAction(actionSelection);
+  }
+
+  executeAction(actionSelection) {
+    const actor = this.getFighter(actionSelection.actorId);
+    const target = this.getFighter(actionSelection.targetId);
     const resolvedAction = this.runPhase(
       "action",
       "beforeAction",
@@ -1240,6 +1620,22 @@ class BattleEngine {
       this.emit("effect.queue.flush", "Дополнительные эффекты перков добавлены к фазе", { queuedEffects });
     }
     this.applyEffects([...effectsResult.appliedEffects, ...queuedEffects]);
+
+    if (action.stunIterations > 0 && target.health > 0) {
+      this.addDynamicModifier({
+        id: "player-stunned",
+        kind: "status",
+        ownerId: target.id,
+        sourceId: action.playerBuffApplicationId || null,
+        durationIterations: action.stunIterations,
+      });
+      this.emit("status.applied", `${target.name} оглушён`, {
+        fighterId: target.id,
+        statusId: "stunned",
+        durationIterations: action.stunIterations,
+        sourceApplicationId: action.playerBuffApplicationId || null,
+      });
+    }
 
     this.updateStats(action);
     this.lastAction = clone(action);
@@ -1287,7 +1683,15 @@ class BattleEngine {
       }
     }
 
+    if (this.state.status === "running") {
+      this.tickTimedModifiers();
+    } else {
+      this.endTimedModifiersAtBattleEnd();
+    }
     this.captureSnapshot(this.describeAction(action));
+    if (this.state.status === "running") {
+      this.processScheduledPlayerBuffCommands(this.state.step);
+    }
   }
 
   resolveAction(data) {
@@ -1297,7 +1701,7 @@ class BattleEngine {
     const strengthMultiplier = data.strengthMultiplier || 1;
     const effectiveStrength = actor.strength * fatigueEfficiency * strengthMultiplier;
 
-    if (data.attackType === "achilles-leap") {
+    if (data.attackType === "achilles-leap" || data.guaranteedHit) {
       const strike = this.rollStrikeDamage(actor, target, effectiveStrength);
       const damage = strike.damage;
       const traumaChance = calculateTraumaChance(damage, target.maxHealth);
@@ -1465,7 +1869,13 @@ class BattleEngine {
       const fighter = this.getFighter(effect.fighterId);
       const before = clone(fighter);
       if (effect.type === "health") {
-        fighter.health = round(fighter.health + effect.value);
+        const incomingDamage = Math.max(0, -effect.value);
+        const absorbed = Math.min(fighter.temporaryHealth || 0, incomingDamage);
+        if (absorbed > 0) fighter.temporaryHealth = round(fighter.temporaryHealth - absorbed);
+        fighter.health = round(fighter.health + effect.value + absorbed);
+      }
+      if (effect.type === "temporary-health") {
+        fighter.temporaryHealth = Math.max(0, round(fighter.temporaryHealth + effect.value));
       }
       if (effect.type === "fatigue") {
         fighter.fatigue = clamp(round(fighter.fatigue + effect.value), 0, 150);
@@ -1729,6 +2139,7 @@ class BattleEngine {
       ),
       spectacle: clone(this.snapshots.at(-1).spectacle),
       reward: clone(finishData.reward),
+      playerBuffs: clone(this.state.playerBuffs),
       events: clone(this.events),
       snapshots: clone(this.snapshots),
     };
@@ -1759,7 +2170,9 @@ class BattleEngine {
         buffs: [...fighter.buffs],
         injuries: [...fighter.injuries],
         traumas: clone(fighter.traumas),
+        activeEffects: this.activeEffectsForFighter(fighter.id),
       })),
+      playerBuffs: clone(this.state.playerBuffs),
       eventSequence: this.sequence,
     });
   }
@@ -1777,6 +2190,7 @@ class BattleEngine {
       spectacle: this.createSpectacleState(),
       fighters: clone(this.state.fighters),
       pendingEffects: clone(this.state.pendingEffects),
+      playerBuffs: clone(this.state.playerBuffs),
       lastAction: clone(this.lastAction),
       turn: {
         lastActorId: this.lastActorId,
@@ -1806,6 +2220,7 @@ class BattleEngine {
       id: fighter.id,
       health: round(fighter.health),
       maxHealth: round(fighter.maxHealth),
+      temporaryHealth: round(fighter.temporaryHealth || 0),
       strength: round(fighter.strength),
       support: round(fighter.support),
       initiative: round(fighter.initiative),
@@ -1822,7 +2237,22 @@ class BattleEngine {
       armorSet: clone(fighter.equipment.armorSet),
       equipmentPerks: clone(fighter.equipmentPerks || []),
       matchup: clone(fighter.matchup),
+      activeEffects: this.activeEffectsForFighter(fighter.id),
     };
+  }
+
+  activeEffectsForFighter(fighterId) {
+    return this.modifierManager.instances
+      .filter((modifier) => modifier.ownerId === fighterId && modifier.id.startsWith("player-"))
+      .map((modifier) => ({
+        id: modifier.id,
+        kind: modifier.kind,
+        remainingIterations: modifier.runtime.remainingIterations ?? null,
+        sourceId: modifier.sourceId || null,
+        temporaryHealth: modifier.id === "player-hold-on"
+          ? round(this.getFighter(fighterId).temporaryHealth || 0)
+          : null,
+      }));
   }
 
   describeAction(action) {
@@ -1833,6 +2263,9 @@ class BattleEngine {
     }
     if (action.attackType === "achilles-leap") {
       return `${actor} выполняет Прыжок Ахилла и ранит ${target} на ${action.damage}`;
+    }
+    if (action.specialAttack === "player-buff-now") {
+      return `${actor} выполняет усиленный классовый удар, наносит ${action.damage} урона и оглушает ${target}`;
     }
     const labels = {
       miss: `${actor} промахивается`,
@@ -1893,6 +2326,7 @@ globalThis.GladiatorBattle = {
   MAX_BATTLE_STEPS,
   PERK_DEFINITIONS,
   BUFF_DEFINITIONS,
+  PLAYER_BUFF_DEFINITIONS,
   SPECTACLE_TIERS,
   calculateSpectacle,
   calculateTraumaChance,
