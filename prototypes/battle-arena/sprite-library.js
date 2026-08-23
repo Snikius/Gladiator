@@ -248,7 +248,6 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
     clips: UNIFIED_SWORDSMAN_ANIMATION_SPRITE_ROWS,
     weaponLayers: Object.freeze({}),
     displayScale: 1,
-    stateRenderScales: Object.freeze({ victory: 1.08 }),
     weaponBakedIn: true,
     bakedWeaponSkinId: "sword",
     baselineInset: 8 / UNIFIED_ATLAS.logicalHeight,
@@ -267,9 +266,6 @@ const BODY_ANIMATION_GRIDS = Object.freeze({
     clips: UNIFIED_RETIARIUS_ANIMATION_SPRITE_ROWS,
     weaponLayers: Object.freeze({}),
     displayScale: 1,
-    // Победная строка исходного атласа нарисована крупнее остальных строк.
-    // Компенсация сохраняет рост ретиария при переходе из стойки в салют.
-    stateRenderScales: Object.freeze({ victory: 0.77 }),
     weaponBakedIn: true,
     bakedWeaponSkinId: "trident",
     baselineInset: 8 / RETIARIUS_ATLAS.logicalHeight,

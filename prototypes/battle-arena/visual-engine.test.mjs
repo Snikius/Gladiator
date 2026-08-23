@@ -634,8 +634,8 @@ assert.deepEqual(
 );
 assert.equal(
   swordsmanWinner.animation.renderScale,
-  1.08,
-  "Победный мечник получает явную коррекцию масштаба поверх атласа",
+  1,
+  "Нормализованный победный мечник не получает runtime-коррекцию масштаба",
 );
 let victoryDrawArgs = null;
 BattleVisualEngine.prototype.drawAsset.call({
@@ -646,7 +646,7 @@ BattleVisualEngine.prototype.drawAsset.call({
   scale() {},
   drawImage(...args) { victoryDrawArgs = args; },
 }, swordsmanWinner, 0, 0);
-assert.equal(victoryDrawArgs[8], 243, "Победная ячейка мечника рисуется на 8% крупнее от линии стоп");
+assert.equal(victoryDrawArgs[8], 225, "Победная ячейка мечника рисуется в общем масштабе от линии стоп");
 
 const retiariusVictorySnapshot = JSON.parse(JSON.stringify(standardResult.snapshots[0]));
 retiariusVictorySnapshot.label = "Итог боя";
@@ -662,8 +662,8 @@ const retiariusWinner = retiariusVictoryFrame.components.find(
   (component) => component.fighterId === retiariusVictorySnapshot.outcome.winnerId,
 );
 assert.equal(retiariusWinner.animation.clip, "victory", "Ретиарий использует собственную победную строку");
-assert.equal(retiariusWinner.animation.renderScale, 0.77, "Крупная победная строка ретиария выравнивается с его обычным ростом");
-assert.equal(swordsmanWinner.animation.renderScale, 1.08, "Коррекция победного размера мечника не изменилась");
+assert.equal(retiariusWinner.animation.renderScale, 1, "Нормализованный ретиарий сохраняет общий масштаб в победной позе");
+assert.equal(swordsmanWinner.animation.renderScale, 1, "Победные состояния не имеют отдельных runtime-коррекций");
 
 const sandInput = JSON.parse(JSON.stringify(standardInput));
 sandInput.arena.type = "sand";
