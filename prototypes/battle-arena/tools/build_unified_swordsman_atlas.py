@@ -26,7 +26,7 @@ ROW_SOURCES = [
     ("reaction.stunned", ASSETS / "unified-swordsman-row-12-stunned-source-v1.png"),
     ("attack.spinning", ASSETS / "unified-swordsman-row-13-spinning-strike-source-v2.png"),
 ]
-TARGET = ASSETS / "unified-swordsman-grid-v20.png"
+TARGET = ASSETS / "unified-swordsman-grid-v21.png"
 
 COLUMNS = 6
 ROWS = len(ROW_SOURCES)
@@ -341,6 +341,29 @@ def validate_atlas(
         if grounded_roots and max(grounded_roots) - min(grounded_roots) > 1:
             raise ValueError(f"Unstable grounded root in {name}: {grounded_roots}")
 
+    row_indexes = {name: row for row, (name, _) in enumerate(row_sources)}
+    if "idle.normal" in row_indexes and "reaction.defeat" in row_indexes:
+        idle_row = row_indexes["idle.normal"]
+        defeat_row = row_indexes["reaction.defeat"]
+        idle_heights = []
+        for column in range(COLUMNS):
+            bounds = atlas.crop(
+                (column * cell, idle_row * cell, (column + 1) * cell, (idle_row + 1) * cell)
+            ).getchannel("A").getbbox()
+            idle_heights.append(bounds[3] - bounds[1])
+        defeated_bounds = atlas.crop(
+            ((COLUMNS - 1) * cell, defeat_row * cell, COLUMNS * cell, (defeat_row + 1) * cell)
+        ).getchannel("A").getbbox()
+        defeated_width = defeated_bounds[2] - defeated_bounds[0]
+        idle_height = median(idle_heights)
+        defeated_width_ratio = defeated_width / idle_height
+        if not 0.7 <= defeated_width_ratio <= 1.2:
+            raise ValueError(
+                "reaction.defeat: final fallen pose is out of proportion; "
+                f"idle height={idle_height}, defeated width={defeated_width}, "
+                f"ratio={defeated_width_ratio:.3f}"
+            )
+
 
 def build_atlas(
     row_sources: list[tuple[str, Path]],
@@ -364,9 +387,18 @@ def build_atlas(
     padding = (cell - safe_frame) // 2
     atlas = Image.new("RGBA", (COLUMNS * cell, len(row_sources) * cell))
     for row, (name, frames) in enumerate(prepared_rows):
+        # The second half of reaction.defeat loses visible area because limbs
+        # overlap while falling. It must inherit the calibration of the three
+        # upright hit-reaction frames instead of being enlarged to restore area.
+        shared_visual_mass = (
+            median(visual_body_mass(frame) for frame in frames[:3])
+            if name == "reaction.defeat"
+            else None
+        )
         scaled_frames = []
         for column, frame in enumerate(frames):
-            source_normalization = sqrt(reference_visual_mass / visual_body_mass(frame))
+            measured_visual_mass = shared_visual_mass or visual_body_mass(frame)
+            source_normalization = sqrt(reference_visual_mass / measured_visual_mass)
             normalized_scale = canonical_scale * source_normalization
             scaled = frame.resize(
                 (round(frame.width * normalized_scale), round(frame.height * normalized_scale)),

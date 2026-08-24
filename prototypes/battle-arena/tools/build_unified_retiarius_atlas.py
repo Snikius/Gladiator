@@ -22,7 +22,7 @@ ROW_SOURCES = [
     ("special.enhanced", ASSETS / "unified-retiarius-row-11-enhanced-special-source-v2.png"),
     ("reaction.stunned", ASSETS / "unified-retiarius-row-12-stunned-source-v1.png"),
 ]
-TARGET = ASSETS / "unified-retiarius-grid-v11.png"
+TARGET = ASSETS / "unified-retiarius-grid-v12.png"
 CELL = 384
 SAFE_FRAME = 368
 TARGET_BODY_HEIGHT = 196
