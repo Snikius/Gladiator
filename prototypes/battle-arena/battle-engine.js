@@ -343,7 +343,7 @@ const PLAYER_BUFF_DEFINITIONS = Object.freeze([
   Object.freeze({
     id: "rally",
     name: "Соберись!",
-    description: "Немедленно снимает 35% текущей усталости.",
+    description: "Немедленно снимает 40% текущей усталости.",
   }),
   Object.freeze({
     id: "forward",
@@ -1434,7 +1434,7 @@ class BattleEngine {
     this.state.playerBuffs.applications.push(application);
 
     if (command.buffDefinitionId === "rally") {
-      const nextFatigue = Math.floor(fighter.fatigue * 0.65);
+      const nextFatigue = Math.floor(fighter.fatigue * 0.6);
       this.applyEffects([{
         type: "fatigue",
         fighterId: fighter.id,

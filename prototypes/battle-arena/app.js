@@ -57,6 +57,9 @@ const elements = {
   mobileBuffTrigger: document.querySelector("#mobile-buff-trigger"),
   mobileBuffStatus: document.querySelector("#mobile-buff-status"),
   mobileBuffOptions: [...document.querySelectorAll("[data-buff-choice]")],
+  predictionSamples: document.querySelector("#prediction-samples"),
+  calculatePrediction: document.querySelector("#calculate-prediction"),
+  predictionResult: document.querySelector("#prediction-result"),
   arenaName: document.querySelector("#arena-name"),
   arenaSeed: document.querySelector("#arena-seed"),
   arenaStep: document.querySelector("#arena-step"),
@@ -93,6 +96,7 @@ let mobileBuffStatusTimer = null;
 let ignoreMobileBuffClickUntil = 0;
 let mobileBuffHoldOpened = false;
 let playerBuffCommandSequence = 0;
+let predictionRunId = 0;
 const MOBILE_BUFF_HOLD_MS = 340;
 const PLAYBACK_STEP_MS = 1000;
 const INTRO_PLAYBACK_STEP_MS = 3600;
@@ -311,6 +315,73 @@ const equipmentStatNames = {
   armor: "броня",
   weight: "вес",
   mobility: "подвижность",
+};
+const renderCombatParameters = (fighter, base, arenaMultiplier) => {
+  const parameters = [
+    {
+      label: "Класс",
+      value: fighterClassName(fighter.fighterClass),
+      description: "Определяет доступный стиль оружия и уникальный классовый приём.",
+    },
+    {
+      label: "Харизма",
+      value: formatNumber(base.charisma),
+      description: "Базовый источник поддержки: харизма умножается на множитель арены.",
+    },
+    {
+      label: "Множитель арены",
+      value: formatNumber(arenaMultiplier),
+      description: "Усиливает или ослабляет вклад харизмы и её изменений в поддержку бойца.",
+    },
+    {
+      label: "Крит",
+      value: percent(fighter.criticalChance),
+      description: "Шанс после успешного попадания нанести двойной урон.",
+    },
+    {
+      label: "Приём",
+      value: percent(fighter.classTechniqueChance),
+      description: "Шанс активировать уникальную технику выбранного оружейного стиля.",
+    },
+    {
+      label: "Оружие",
+      value: `+${formatNumber(fighter.weaponPower)}`,
+      description: "Прибавляется к эффективной силе перед расчётом урона и вычитанием брони.",
+    },
+    {
+      label: "Точность",
+      value: formatNumber(fighter.accuracy),
+      description: "Каждая единица снижает вес промаха на 0,8: чем выше значение, тем реже промахи.",
+    },
+    {
+      label: "Броня",
+      value: formatNumber(fighter.armor),
+      description: "Каждая единица повышает шанс блока и уменьшает урон попадания на 0,6.",
+    },
+    {
+      label: "Вес",
+      value: formatNumber(fighter.equipmentWeight),
+      description: "Увеличивает усталость от действия, блока и уклонения; тяжёлая экипировка быстрее утомляет.",
+    },
+    {
+      label: "Подвижность",
+      value: `${fighter.mobility > 0 ? "+" : ""}${formatNumber(fighter.mobility)}`,
+      description: "Прибавляется к инициативе и вероятности уклонения. Отрицательное значение снижает оба показателя.",
+    },
+  ];
+  return `
+    <section class="combat-parameter-panel" aria-label="Расшифровка боевых параметров">
+      <h4>Боевые параметры <small>как значения влияют на бой</small></h4>
+      <dl class="combat-parameter-list">
+        ${parameters.map((parameter) => `
+          <div class="combat-parameter">
+            <dt><span>${escapeHtml(parameter.label)}</span><strong>${escapeHtml(String(parameter.value))}</strong></dt>
+            <dd>${escapeHtml(parameter.description)}</dd>
+          </div>
+        `).join("")}
+      </dl>
+    </section>
+  `;
 };
 const effectDefinitions = {
   buffs: BUFF_DEFINITIONS,
@@ -591,6 +662,126 @@ const readInput = () => ({
   fighters: [readFighter(0), readFighter(1)],
   playerBuffCommands: [],
 });
+
+const setPredictionMessage = (message, state = "is-empty") => {
+  if (!elements.predictionResult) return;
+  elements.predictionResult.className = `prediction-result ${state}`;
+  elements.predictionResult.innerHTML = `<p>${escapeHtml(message)}</p>`;
+};
+
+const invalidatePrediction = () => {
+  predictionRunId += 1;
+  elements.predictionResult?.removeAttribute("aria-busy");
+  if (elements.calculatePrediction) {
+    elements.calculatePrediction.disabled = false;
+    elements.calculatePrediction.textContent = "◎ Рассчитать прогноз";
+  }
+  setPredictionMessage("Настройки изменились — рассчитайте прогноз заново.");
+};
+
+const wilsonInterval = (successes, samples) => {
+  const probability = successes / samples;
+  const z = 1.96;
+  const zSquared = z * z;
+  const denominator = 1 + zSquared / samples;
+  const center = (probability + zSquared / (2 * samples)) / denominator;
+  const margin = z * Math.sqrt(
+    probability * (1 - probability) / samples + zSquared / (4 * samples * samples),
+  ) / denominator;
+  return [Math.max(0, center - margin), Math.min(1, center + margin)];
+};
+
+const renderPrediction = ({ samples, wins, draws, totalSteps, fighters, exactResult, baseSeed }) => {
+  const exactWinner = exactResult.outcome.type === "draw"
+    ? null
+    : exactResult.fighters.find((fighter) => fighter.id === exactResult.outcome.winnerId);
+  const exactOutcome = exactWinner
+    ? `${exactWinner.name} победит за ${exactResult.steps} ходов`
+    : `ничья после ${exactResult.steps} ходов`;
+  const fighterCards = fighters.map((fighter) => {
+    const fighterWins = wins.get(fighter.id) || 0;
+    const winRate = fighterWins / samples;
+    const [intervalMin, intervalMax] = wilsonInterval(fighterWins, samples);
+    return `
+      <article class="prediction-fighter">
+        <div class="prediction-fighter-header">
+          <span>${escapeHtml(fighter.name)}</span>
+          <strong>${percent(winRate)}</strong>
+        </div>
+        <div class="prediction-bar" aria-label="Вероятность победы ${percent(winRate)}">
+          <i style="width: ${Math.max(0, Math.min(100, winRate * 100))}%"></i>
+        </div>
+        <small>${fighterWins} побед из ${samples}</small>
+        <small>95%-й диапазон: ${percent(intervalMin)}–${percent(intervalMax)}</small>
+      </article>`;
+  }).join("");
+  elements.predictionResult.className = "prediction-result";
+  elements.predictionResult.innerHTML = `
+    <p class="prediction-seed-outcome">
+      Текущий seed <code>${escapeHtml(baseSeed)}</code>: <strong>${escapeHtml(exactOutcome)}</strong> без ручных бафов.
+    </p>
+    ${fighterCards}
+    <p class="prediction-summary">
+      Ничья: <strong>${percent(draws / samples)}</strong> ·
+      средняя длительность: <strong>${formatNumber(totalSteps / samples, 1)} хода</strong> ·
+      выборка: <strong>${samples} боёв</strong>
+    </p>`;
+};
+
+const calculatePrediction = async () => {
+  if (!elements.form.reportValidity()) return;
+  const runId = ++predictionRunId;
+  const samples = Number(elements.predictionSamples?.value) || 100;
+  const baseInput = readInput();
+  const wins = new Map(baseInput.fighters.map((fighter) => [fighter.id, 0]));
+  let draws = 0;
+  let totalSteps = 0;
+
+  elements.calculatePrediction.disabled = true;
+  elements.calculatePrediction.textContent = "Считаем…";
+  elements.predictionResult?.setAttribute("aria-busy", "true");
+  setPredictionMessage(`Выполнено 0 из ${samples} боёв…`, "is-progress");
+
+  try {
+    const exactResult = new BattleEngine(JSON.parse(JSON.stringify(baseInput))).simulate();
+    for (let index = 0; index < samples; index += 1) {
+      const sampleInput = JSON.parse(JSON.stringify(baseInput));
+      sampleInput.seed = `${baseInput.seed}::prediction-${index + 1}`;
+      const result = new BattleEngine(sampleInput).simulate();
+      totalSteps += result.steps;
+      if (result.outcome.type === "draw") {
+        draws += 1;
+      } else {
+        wins.set(result.outcome.winnerId, (wins.get(result.outcome.winnerId) || 0) + 1);
+      }
+
+      if ((index + 1) % 5 === 0 && index + 1 < samples) {
+        if (runId !== predictionRunId) return;
+        setPredictionMessage(`Выполнено ${index + 1} из ${samples} боёв…`, "is-progress");
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (runId !== predictionRunId) return;
+    renderPrediction({
+      samples,
+      wins,
+      draws,
+      totalSteps,
+      fighters: baseInput.fighters,
+      exactResult,
+      baseSeed: baseInput.seed,
+    });
+  } catch (error) {
+    console.error(error);
+    if (runId === predictionRunId) setPredictionMessage(`Не удалось построить прогноз: ${error.message}`);
+  } finally {
+    if (runId === predictionRunId) {
+      elements.calculatePrediction.disabled = false;
+      elements.calculatePrediction.textContent = "↻ Пересчитать прогноз";
+      elements.predictionResult?.removeAttribute("aria-busy");
+    }
+  }
+};
 
 const statusLabel = (fighter) => {
   const healthRatio = fighter.health / fighter.maxHealth;
@@ -1141,14 +1332,7 @@ const renderNumbers = (snapshot) => {
         ${meterRow("Поддержка", fighter.support, 150, "support")}
         ${meterRow("Инициатива", fighter.initiative, 150, "initiative")}
         ${meterRow("Усталость", fighter.fatigue, 150, "fatigue")}
-        <p class="equipment-line">
-          КЛАСС ${escapeHtml(fighterClassName(fighter.fighterClass)).toUpperCase()} ·
-          ХАРИЗМА ${base.charisma} · МНОЖИТЕЛЬ АРЕНЫ ${formatNumber(multiplier)} ·
-          КРИТ ${percent(fighter.criticalChance)} ·
-          ПРИЁМ ${percent(fighter.classTechniqueChance)} ·
-          ОРУЖИЕ +${fighter.weaponPower} · ТОЧНОСТЬ ${fighter.accuracy} · БРОНЯ ${fighter.armor} ·
-          ВЕС ${fighter.equipmentWeight} · ПОДВИЖНОСТЬ ${fighter.mobility}
-        </p>
+        ${renderCombatParameters(fighter, base, multiplier)}
         ${renderFighterStateEntries(fighter)}
       </article>
     `;
@@ -1492,6 +1676,7 @@ elements.form.addEventListener("submit", startBattle);
 elements.form.addEventListener("input", () => {
   document.querySelectorAll("[data-equipment-picker]").forEach(updateEquipmentPreview);
   renderPerkSlotDescriptions();
+  invalidatePrediction();
   if (!currentResult) renderPreview();
 });
 elements.form.addEventListener("click", (event) => {
@@ -1499,6 +1684,7 @@ elements.form.addEventListener("click", (event) => {
   if (classButton) {
     const picker = classButton.closest("[data-equipment-picker]");
     renderEquipmentPicker(Number(picker.dataset.equipmentPicker), classButton.dataset.classChoice);
+    invalidatePrediction();
     if (!currentResult) renderPreview();
     return;
   }
@@ -1506,22 +1692,27 @@ elements.form.addEventListener("click", (event) => {
   if (addButton) {
     appendEffectRow(Number(addButton.dataset.fighterIndex), addButton.dataset.addEffect);
     renderPerkSlotDescriptions();
+    invalidatePrediction();
     if (!currentResult) renderPreview();
     return;
   }
   const removeButton = event.target.closest("[data-remove-effect]");
   if (removeButton) {
     removeButton.closest(".dynamic-effect-row").remove();
+    invalidatePrediction();
     if (!currentResult) renderPreview();
   }
 });
 elements.restoreDefaults.addEventListener("click", () => {
   resetResults();
   setFormFromInput(createSimulatorDefaultInput());
+  invalidatePrediction();
   elements.battleCallout.textContent = "Настройте бойцов и запустите симуляцию";
   elements.battleCallout.className = "battle-callout idle";
   renderPreview();
 });
+elements.calculatePrediction?.addEventListener("click", calculatePrediction);
+elements.predictionSamples?.addEventListener("change", invalidatePrediction);
 elements.slider.addEventListener("input", () => pauseAndRender(Number(elements.slider.value)));
 elements.previousStep.addEventListener("click", () => pauseAndRender(currentSnapshotIndex - 1));
 elements.nextStep.addEventListener("click", () => pauseAndRender(currentSnapshotIndex + 1));

@@ -108,7 +108,7 @@ const rallySnapshot = rallyResult.snapshots.find((snapshot) => (
 const rallyPrevious = rallyResult.snapshots[rallySnapshot.index - 1];
 const rallyBeforeFatigue = rallyPrevious.fighters.find((fighter) => fighter.id === "fighter-1").fatigue;
 const rallyAfterFatigue = rallySnapshot.fighters.find((fighter) => fighter.id === "fighter-1").fatigue;
-assert.equal(rallyAfterFatigue, Math.floor(rallyBeforeFatigue * 0.65), "«Соберись!» снимает ровно 35% текущей усталости");
+assert.equal(rallyAfterFatigue, Math.floor(rallyBeforeFatigue * 0.6), "«Соберись!» снимает 40% текущей усталости");
 
 const forwardInput = createDefaultBattleInput();
 forwardInput.fighters[0].base.strength = 20;

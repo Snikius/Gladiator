@@ -638,6 +638,165 @@ a.button {
   overflow: hidden;
 }
 
+.prediction-panel {
+  justify-self: center;
+  width: min(94%, 1000px);
+  padding: 16px;
+}
+
+.prediction-heading {
+  margin-bottom: 14px;
+}
+
+.prediction-controls {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--ink-soft);
+}
+
+.prediction-controls label {
+  width: min(220px, 100%);
+}
+
+.prediction-controls .button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.prediction-controls .button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.prediction-result {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.prediction-result.is-empty,
+.prediction-result.is-progress {
+  display: block;
+  padding: 14px;
+  border-left: 3px solid var(--sand);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+}
+
+.prediction-result p {
+  margin: 0;
+}
+
+.prediction-fighter {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.prediction-fighter-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  color: var(--sand-light);
+  font-weight: 700;
+}
+
+.prediction-fighter-header strong {
+  font-size: 18px;
+}
+
+.prediction-bar {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #17110e;
+}
+
+.prediction-bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--blood), var(--sand));
+}
+
+.prediction-fighter small,
+.prediction-summary {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.prediction-fighter small {
+  display: block;
+  margin-top: 7px;
+}
+
+.prediction-summary {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+}
+
+.prediction-seed-outcome {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-left: 3px solid var(--sand);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+}
+
+.prediction-seed-outcome code,
+.prediction-seed-outcome strong {
+  color: var(--sand-light);
+}
+
+.prediction-method {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.prediction-method summary {
+  padding: 10px 12px;
+  color: var(--sand-light);
+  cursor: pointer;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.prediction-method[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.prediction-method > div {
+  padding: 12px;
+}
+
+.prediction-method p {
+  margin: 0;
+}
+
+.prediction-method ol {
+  margin: 9px 0;
+  padding-left: 20px;
+}
+
+.prediction-method li + li {
+  margin-top: 5px;
+}
+
+.prediction-method code {
+  color: var(--text);
+}
+
 .replay-heading {
   padding: 15px 16px;
   border-bottom: 2px solid var(--line);
@@ -2211,6 +2370,80 @@ body.mobile-fullscreen-mode {
   line-height: 1.5;
 }
 
+.combat-parameter-panel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #55412f;
+}
+
+.combat-parameter-panel h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--sand-light);
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.combat-parameter-panel h4 small {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.combat-parameter-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.combat-parameter {
+  min-width: 0;
+  padding: 7px 8px;
+  background: #19120e;
+  border-left: 3px solid #8c6a3e;
+}
+
+.combat-parameter dt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 7px;
+  margin: 0;
+}
+
+.combat-parameter dt span {
+  color: #bca77f;
+  font-size: 8px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.combat-parameter dt strong {
+  color: #f0cf8b;
+  font-size: 10px;
+  text-align: right;
+}
+
+.combat-parameter dd {
+  margin: 4px 0 0;
+  color: #9f8c70;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .combat-parameter-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 .fighter-state-panel {
   margin-top: 12px;
   padding-top: 10px;
@@ -2503,6 +2736,24 @@ th {
 
   .arena-panel {
     width: 100%;
+  }
+
+  .prediction-panel {
+    width: 100%;
+  }
+
+  .prediction-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prediction-controls label,
+  .prediction-controls .button {
+    width: 100%;
+  }
+
+  .prediction-result {
+    grid-template-columns: 1fr;
   }
 
   .mobile-preview-panel {

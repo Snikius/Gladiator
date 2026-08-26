@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Gladiator — управление школой</title>
+    <link rel="preload" as="image" href="./assets/school-tier-1-courtyard-v4.png" />
+    <link rel="preload" as="image" href="./assets/icons/coins-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/school-tier-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/battles-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/school-upgrade-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/medicine-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/fighter-market-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/mentors-fighters-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/armory-v1.png" />
+    <link rel="preload" as="image" href="./assets/equipment/murmillo-weapon-v1.png" />
+    <link rel="preload" as="image" href="./assets/equipment/murmillo-armor-v1.png" />
+    <link rel="preload" as="image" href="./assets/equipment/retiarius-weapon-v1.png" />
+    <link rel="preload" as="image" href="./assets/equipment/retiarius-armor-v1.png" />
+    <link rel="preload" as="image" href="./assets/upgrades/saniarium-upgrade-v1.png" />
+    <link rel="preload" as="image" href="./assets/upgrades/armamentarium-upgrade-v1.png" />
+    <link rel="preload" as="image" href="./assets/medicine/saniarium-scene-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/rest-v1.png" />
+    <link rel="preload" as="image" href="./assets/rest/rest-courtyard-v1.png" />
+    <link rel="preload" as="image" href="./assets/armory/armamentarium-scene-v1.png" />
+    <link rel="preload" as="image" href="./assets/market/fighter-market-scene-v1.png" />
+    <link rel="preload" as="image" href="./assets/fighters/fighters-courtyard-scene-v1.png" />
+    <link rel="preload" as="image" href="./assets/battles/battle-offers-scene-v1.png" />
+    <link rel="preload" as="image" href="./assets/market/slave-portrait-a-v1.png" />
+    <link rel="preload" as="image" href="./assets/market/slave-portrait-b-v1.png" />
+    <link rel="preload" as="image" href="./assets/market/slave-portrait-c-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/income-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/hourglass-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/experience-v1.png" />
+    <link rel="preload" as="image" href="./assets/fighters/mark-murmillo-idle-v4.png" />
+    <link rel="preload" as="image" href="./assets/fighters/lucius-retiarius-idle-v4.png" />
+    <link rel="preload" as="image" href="./assets/fighters/mark-murmillo-v1.png" />
+    <link rel="preload" as="image" href="./assets/fighters/lucius-retiarius-v1.png" />
+    <link rel="preload" as="image" href="./assets/fighters/mark-murmillo-face-v1.png" />
+    <link rel="preload" as="image" href="./assets/fighters/lucius-retiarius-face-v1.png" />
+    <link rel="preload" as="image" href="./assets/opponents/cassius-thraex-v1.png" />
+    <link rel="preload" as="image" href="./assets/opponents/titus-secutor-v1.png" />
+    <link rel="preload" as="image" href="./assets/opponents/decimus-hoplomachus-v1.png" />
+    <link rel="preload" as="image" href="./assets/opponents/gaius-murmillo-v1.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">GLADIATOR / MANAGEMENT DEBUG</p>
+        <h1>Эмулятор школы</h1>
+      </div>
+      <div class="build-badge"><i></i> MANAGEMENT V1.2</div>
+    </header>
+
+    <main class="workspace">
+      <aside class="settings-panel panel">
+        <div class="section-heading">
+          <span>01</span>
+          <div>
+            <h2>Начальные условия</h2>
+            <p>Изменение параметров создаёт новую сессию.</p>
+          </div>
+        </div>
+
+        <form id="economy-form">
+          <label>
+            <span>Начальная казна</span>
+            <input id="initial-treasury" type="number" min="0" max="999999" value="180" />
+          </label>
+          <label>
+            <span>Уровень лагеря (Tier)</span>
+            <input id="initial-tier" type="number" min="1" step="1" value="1" inputmode="numeric" />
+            <small class="field-help">Tier только растёт; максимальный уровень в спеке не задан.</small>
+          </label>
+          <label>
+            <span>Вместимость бойцов</span>
+            <input id="fighter-capacity" type="number" min="2" step="1" value="4" inputmode="numeric" />
+            <small class="field-help">Пока задаётся балансными настройками прототипа.</small>
+          </label>
+          <label>
+            <span>Базовая награда за победу</span>
+            <input id="income" type="number" min="0" max="99999" value="38" />
+          </label>
+          <fieldset>
+            <legend>Предстоящие расходы</legend>
+            <label><span>Еда</span><input id="food" type="number" min="0" value="18" /></label>
+            <label><span>Лечение</span><input id="medicine" type="number" min="0" value="9" /></label>
+            <label><span>Содержание бойцов</span><input id="wages" type="number" min="0" value="16" /></label>
+          </fieldset>
+          <button class="debug-button primary" type="submit">Применить и начать заново</button>
+        </form>
+
+        <div class="debug-note">
+          <strong>Правило прототипа</strong>
+          <p>В конце хода сначала начисляется доход, затем полностью списывается содержание.</p>
+        </div>
+      </aside>
+
+      <section class="preview-panel panel">
+        <div class="preview-heading">
+          <div class="section-heading">
+            <span>02</span>
+            <div>
+              <h2>Мобильный экран</h2>
+              <p>Рабочий цикл управления школой первого уровня.</p>
+            </div>
+          </div>
+          <label class="viewport-picker">
+            <span>Экран</span>
+            <select id="viewport-preset">
+              <option value="390x844" selected>390 × 844</option>
+              <option value="375x667">375 × 667</option>
+              <option value="430x932">430 × 932</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="device-stage">
+          <article class="phone" id="phone">
+            <div class="phone-speaker"></div>
+            <div class="game-screen">
+              <header class="school-titlebar">
+                <span class="roman-mark" id="header-tier-number">I</span>
+                <div>
+                  <small>ШКОЛА ГЛАДИАТОРОВ</small>
+                  <strong>ЛУДУС</strong>
+                </div>
+                <span class="turn-badge" id="turn-number">ХОД 1</span>
+              </header>
+
+              <div id="school-home-view">
+              <section class="school-scene" aria-label="Двор школы первого уровня">
+                <img src="./assets/school-tier-1-courtyard-v4.png" alt="Взрослые гладиаторы в простых туниках тренируются во дворе школы" />
+                <div class="sun-flicker"></div>
+                <div class="scene-caption"><span></span> ШКОЛА <b id="scene-tier-number">I</b> УРОВНЯ</div>
+              </section>
+
+              <section class="resource-strip" aria-label="Ресурсы школы">
+                <div class="resource treasury-resource">
+                  <span class="resource-icon coin-icon" aria-hidden="true">
+                    <img src="./assets/icons/coins-v1.png" alt="" />
+                  </span>
+                  <div><small>КАЗНА</small><strong id="treasury">180</strong></div>
+                </div>
+                <div class="resource level-resource">
+                  <span class="resource-icon tier-icon" aria-hidden="true">
+                    <img src="./assets/icons/school-tier-v1.png" alt="" />
+                  </span>
+                  <div class="level-copy">
+                    <span class="level-heading"><small>УРОВЕНЬ</small><strong id="tier-number">I</strong></span>
+                    <span class="tier-progress-row">
+                      <progress id="tier-progress" max="100" value="0" aria-label="Прогресс уровня школы"></progress>
+                      <em id="tier-progress-text">0/100</em>
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              <nav class="school-sections" aria-label="Разделы школы">
+                <button class="school-section-button battles" id="battles-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/battles-v1.png" alt="" />
+                  </span>
+                  <strong>Бои</strong>
+                  <span class="section-stat">
+                    <span>НОВЫХ ПРЕДЛОЖЕНИЙ</span>
+                    <b id="battle-offers-count">0</b>
+                  </span>
+                  <small>ПРЕДЛОЖЕНИЯ</small>
+                </button>
+                <button class="school-section-button armory" id="armory-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/armory-v1.png" alt="" />
+                  </span>
+                  <strong>Оружейня</strong>
+                  <span class="section-stat"><span>В РАБОТЕ</span><b id="armory-orders-home-count">0</b></span>
+                  <small>СНАРЯЖЕНИЕ</small>
+                </button>
+                <button class="school-section-button upgrades" id="upgrades-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/school-upgrade-v1.png" alt="" />
+                  </span>
+                  <strong>Улучшение школы</strong>
+                  <span class="section-stat"><span>В РАБОТЕ</span><b id="school-upgrades-home-count">0</b></span>
+                  <small>РАЗВИТИЕ</small>
+                </button>
+                <button class="school-section-button market" id="market-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/fighter-market-v1.png" alt="" />
+                  </span>
+                  <strong>Рынок бойцов</strong>
+                  <span class="section-stat"><span>КАНДИДАТОВ</span><b id="market-offers-count">0</b></span>
+                  <small>ТОРГИ</small>
+                </button>
+                <button class="school-section-button people" id="fighters-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/mentors-fighters-v1.png" alt="" />
+                  </span>
+                  <strong>Наставники и бойцы</strong>
+                  <span class="section-stat">
+                    <span>БОЙЦОВ</span>
+                    <b id="fighters-count">0</b>
+                  </span>
+                  <small>СОСТАВ</small>
+                </button>
+                <button class="school-section-button medicine" id="medicine-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/medicine-v1.png" alt="" />
+                  </span>
+                  <strong>Саниарий</strong>
+                  <span class="section-stat"><span>РАНЕНЫ</span><b id="medicine-home-count">0</b></span>
+                  <small>САНИАРИЙ</small>
+                </button>
+                <button class="school-section-button rest" id="rest-section-button" type="button">
+                  <span class="section-icon" aria-hidden="true">
+                    <img src="./assets/icons/rest-v1.png" alt="" />
+                  </span>
+                  <strong>Отдых</strong>
+                  <span class="section-stat"><span>ОТДЫХАЮТ</span><b id="rest-home-count">0</b></span>
+                  <small>ДОСУГ</small>
+                </button>
+              </nav>
+
+              <section class="economy-cards">
+                <button class="economy-card expense-card" id="expense-toggle" type="button" aria-expanded="false" aria-controls="expense-details">
+                  <span class="card-icon expense-coins-icon" aria-hidden="true">
+                    <img src="./assets/icons/coins-v1.png" alt="" />
+                  </span>
+                  <span class="card-copy">
+                    <small>ПРЕДСТОЯЩИЕ РАСХОДЫ</small>
+                    <strong id="expense-total">−43</strong>
+                    <em>Нажмите, чтобы посмотреть состав</em>
+                  </span>
+                  <span class="chevron">⌄</span>
+                </button>
+                <div class="expense-details" id="expense-details" hidden></div>
+
+                <div class="economy-card income-card">
+                  <span class="card-icon income-icon" aria-hidden="true">
+                    <img src="./assets/icons/income-v1.png" alt="" />
+                  </span>
+                  <span class="card-copy">
+                    <small id="income-label">ПРОГНОЗ ДОХОДА ХОДА</small>
+                    <strong id="income-total">+38</strong>
+                    <em id="income-note">Зависит от назначенных боёв</em>
+                  </span>
+                </div>
+              </section>
+
+              <section class="turn-forecast" id="turn-forecast">
+                <span id="forecast-label">После расчёта хода</span>
+                <strong id="forecast">175</strong>
+              </section>
+
+              <button class="end-turn-button" id="end-turn" type="button">
+                <span class="end-turn-main">
+                  <img class="pixel-hourglass" src="./assets/icons/hourglass-v1.png" alt="" aria-hidden="true" />
+                  <span id="end-turn-label">КОНЕЦ ХОДА</span>
+                </span>
+                <small id="turn-net">Казна изменится на −5</small>
+                <span class="end-turn-progress" aria-hidden="true"><i></i></span>
+              </button>
+              </div>
+
+              <section class="fighters-view" id="fighters-view" aria-labelledby="fighters-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="fighters-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div>
+                    <small>СОСТАВ ШКОЛЫ</small>
+                    <strong id="fighters-view-title">БОЙЦЫ</strong>
+                  </div>
+                  <span id="fighter-capacity-summary">0 / 4</span>
+                </header>
+
+                <figure class="fighters-scene">
+                  <img src="./assets/fighters/fighters-courtyard-scene-v1.png" alt="Бойцы школы собрались вместе во дворе лудуса после тренировки" />
+                  <figcaption><small>FAMILIA GLADIATORIA</small><strong>БОЙЦЫ ЛУДУСА</strong></figcaption>
+                </figure>
+
+                <div id="fighter-roster-panel">
+                  <section class="roster-summary" aria-label="Сводка состава">
+                    <div>
+                      <small>СОСТАВ</small>
+                      <strong id="roster-count">0 / 4</strong>
+                    </div>
+                    <div>
+                      <small>СОДЕРЖАНИЕ</small>
+                      <strong id="roster-upkeep">−0 / ХОД</strong>
+                    </div>
+                  </section>
+                  <div class="roster-notice" id="roster-notice" hidden></div>
+                  <div class="fighter-list" id="fighter-list"></div>
+                  <div class="roster-empty" id="roster-empty" hidden>
+                    <strong>В школе не осталось бойцов</strong>
+                    <span>Новый состав позднее можно будет набрать на рынке.</span>
+                  </div>
+                </div>
+
+                <section class="fighter-detail-panel" id="fighter-detail-panel" hidden>
+                  <button class="fighter-list-back" id="fighter-back-list" type="button">‹ К СОСТАВУ</button>
+                  <div id="fighter-detail"></div>
+                </section>
+              </section>
+
+              <section class="market-view commerce-view" id="market-view" aria-labelledby="market-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="market-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div><small>ТОРГОВАЯ ПЛОЩАДЬ</small><strong id="market-view-title">РЫНОК БОЙЦОВ</strong></div>
+                  <span id="market-offer-summary">0</span>
+                </header>
+                <figure class="market-scene">
+                  <img src="./assets/market/fighter-market-scene-v1.png" alt="Торговец представляет взрослых кандидатов покупателю гладиаторской школы" />
+                  <figcaption><small>MERCATUS</small><strong>ТОРГОВАЯ ПЛОЩАДЬ</strong></figcaption>
+                </figure>
+                <section class="commerce-summary">
+                  <div><small>КАЗНА</small><strong id="market-treasury">0 HS</strong></div>
+                  <div><small>МЕСТА</small><strong id="market-capacity">0 / 0</strong></div>
+                </section>
+                <div class="commerce-notice" id="market-notice" hidden></div>
+                <p class="commerce-intro">Рабы продаются без специализации. Иногда у кандидата уже есть один природный перк.</p>
+                <div class="market-offer-list" id="market-offer-list"></div>
+              </section>
+
+              <section class="armory-view commerce-view" id="armory-view" aria-labelledby="armory-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="armory-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div><small>МАСТЕРСКАЯ ШКОЛЫ</small><strong id="armory-view-title">ОРУЖЕЙНЯ</strong></div>
+                  <span id="armory-order-summary">0</span>
+                </header>
+                <figure class="armory-scene">
+                  <img src="./assets/armory/armamentarium-scene-v1.png" alt="Оружейник школы куёт клинок в римской мастерской" />
+                  <figcaption><small>ARMAMENTARIUM</small><strong>КУЗНИЦА И СКЛАД ШКОЛЫ</strong></figcaption>
+                </figure>
+                <section class="commerce-summary">
+                  <div><small>КАЗНА</small><strong id="armory-treasury">0 HS</strong></div>
+                  <div><small>В РАБОТЕ</small><strong id="armory-orders-count">0</strong></div>
+                </section>
+                <div class="commerce-notice" id="armory-notice" hidden></div>
+                <p class="commerce-intro">Простые комплекты выдаются сразу. Хорошее снаряжение кузнец изготовит за несколько ходов.</p>
+                <section class="armory-section"><header><small>КАТАЛОГ</small><strong>ОРУЖИЕ И ОБМУНДИРОВАНИЕ</strong></header><div class="armory-catalog-list" id="armory-catalog-list"></div></section>
+                <section class="armory-section"><header><small>МАСТЕРСКАЯ</small><strong>ТЕКУЩИЕ ЗАКАЗЫ</strong></header><div id="armory-orders-list"></div></section>
+                <section class="armory-section"><header><small>СКЛАД</small><strong>ГОТОВОЕ СНАРЯЖЕНИЕ</strong></header><div id="armory-inventory-list"></div></section>
+              </section>
+
+              <section class="upgrades-view commerce-view" id="upgrades-view" aria-labelledby="upgrades-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="upgrades-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div><small>СТРОИТЕЛЬСТВО</small><strong id="upgrades-view-title">УЛУЧШЕНИЕ ШКОЛЫ</strong></div>
+                  <span id="school-upgrades-summary">0</span>
+                </header>
+                <section class="commerce-summary">
+                  <div><small>КАЗНА</small><strong id="school-upgrades-treasury">0 HS</strong></div>
+                  <div><small>В РАБОТЕ</small><strong id="school-upgrades-orders-count">0</strong></div>
+                </section>
+                <div class="commerce-notice" id="school-upgrades-notice" hidden></div>
+                <p class="commerce-intro">Цена списывается при начале строительства. Каждый конец хода уменьшает оставшийся срок на один.</p>
+                <div class="school-upgrade-list" id="school-upgrade-list"></div>
+              </section>
+
+              <section class="medicine-view commerce-view" id="medicine-view" aria-labelledby="medicine-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="medicine-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div><small>ЛЕЧЕБНИЦА ЛУДУСА</small><strong id="medicine-view-title">САНИАРИЙ</strong></div>
+                  <span id="medicine-injured-summary">0</span>
+                </header>
+                <figure class="medicine-scene">
+                  <img src="./assets/medicine/saniarium-scene-v1.png" alt="Римский лекарь перевязывает раненого гладиатора" />
+                  <figcaption><small>SANIARIUM</small><strong>САНИАРИЙ · УРОВЕНЬ <span id="medicine-level">I</span></strong></figcaption>
+                </figure>
+                <section class="commerce-summary medicine-summary">
+                  <div><small>МЕСТА</small><strong id="medicine-capacity">0 / 0</strong></div>
+                  <div><small>СРОК ЛЕЧЕНИЯ</small><strong id="medicine-duration">2 ХОДА</strong></div>
+                </section>
+                <div class="commerce-notice" id="medicine-notice" hidden></div>
+                <section class="medicine-section">
+                  <header><small>ПАЛАТА</small><strong>ЯЧЕЙКИ ЛЕЧЕНИЯ</strong></header>
+                  <div class="medicine-slot-list" id="medicine-slot-list"></div>
+                </section>
+                <section class="medicine-section">
+                  <header><small>НУЖДАЮТСЯ В ПОМОЩИ</small><strong>РАНЕНЫЕ БОЙЦЫ</strong></header>
+                  <div class="medicine-candidate-list" id="medicine-candidate-list"></div>
+                </section>
+              </section>
+
+              <section class="rest-view commerce-view" id="rest-view" aria-labelledby="rest-view-title" hidden>
+                <header class="subpage-header">
+                  <button class="subpage-back" id="rest-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div><small>ДОСУГ БОЙЦОВ</small><strong id="rest-view-title">ОТДЫХ</strong></div>
+                  <span id="rest-active-summary">0</span>
+                </header>
+                <figure class="rest-scene">
+                  <img src="./assets/rest/rest-courtyard-v1.png" alt="Гладиаторы отдыхают во дворе школы у бани и вина" />
+                  <figcaption><small>OTIUM GLADIATORUM</small><strong>ТИХИЙ ВЕЧЕР В ЛУДУСЕ</strong></figcaption>
+                </figure>
+                <section class="commerce-summary rest-summary">
+                  <div><small>КАЗНА</small><strong id="rest-treasury">0 HS</strong></div>
+                  <div><small>РАСХОДЫ НА ОТДЫХ</small><strong id="rest-expenses">−0 HS</strong></div>
+                </section>
+                <div class="commerce-notice" id="rest-notice" hidden></div>
+                <p class="commerce-intro">Место оплачивается при назначении. Отдыхающий боец освободится после завершения хода.</p>
+                <div class="rest-activity-list" id="rest-activity-list"></div>
+                <section class="rest-fighter-section">
+                  <header><small>СВОБОДНЫЕ БОЙЦЫ</small><strong>НАЗНАЧИТЬ ОТДЫХ</strong></header>
+                  <div class="rest-fighter-list" id="rest-fighter-list"></div>
+                </section>
+              </section>
+
+              <section class="battles-view" id="battles-view" aria-labelledby="battles-view-title" hidden>
+                <header class="subpage-header battle-subpage-header">
+                  <button class="subpage-back" id="battles-back-home" type="button" aria-label="Назад к школе">‹</button>
+                  <div>
+                    <small>ПРЕДЛОЖЕНИЯ АРЕН</small>
+                    <strong id="battles-view-title">БОИ</strong>
+                  </div>
+                  <span id="battle-offer-summary">0</span>
+                </header>
+
+                <figure class="battle-scene">
+                  <img src="./assets/battles/battle-offers-scene-v1.png" alt="Распорядитель арены показывает ланисте предложения будущих боёв" />
+                  <figcaption><small>MUNERA</small><strong>ПРЕДЛОЖЕНИЯ АРЕН</strong></figcaption>
+                </figure>
+
+                <section class="battle-round-summary" aria-label="Назначения текущего хода">
+                  <div>
+                    <small>ТЕКУЩИЙ ХОД</small>
+                    <strong id="battle-current-turn">1</strong>
+                  </div>
+                  <div>
+                    <small>НАЗНАЧЕНО</small>
+                    <strong id="battle-assigned-summary">0 / 0</strong>
+                  </div>
+                  <p>Назначенные бои автоматически пройдут при завершении хода.</p>
+                </section>
+
+                <div class="battle-offer-list" id="battle-offer-list"></div>
+
+                <section class="battle-results-section">
+                  <header>
+                    <small>ПРОШЛЫЙ ХОД</small>
+                    <strong>РЕЗУЛЬТАТЫ БОЁВ</strong>
+                  </header>
+                  <div class="battle-results-list" id="battle-results-list"></div>
+                </section>
+              </section>
+            </div>
+          </article>
+        </div>
+
+        <section class="replay-panel">
+          <div class="replay-heading">
+            <div>
+              <small>ИСТОРИЯ СЕССИИ</small>
+              <strong id="snapshot-label">Начало управления</strong>
+            </div>
+            <span id="snapshot-count">1 снимок</span>
+          </div>
+          <div class="timeline-controls">
+            <button id="previous-snapshot" type="button" aria-label="Предыдущий снимок">◀</button>
+            <input id="snapshot-slider" type="range" min="0" max="0" value="0" />
+            <button id="next-snapshot" type="button" aria-label="Следующий снимок">▶</button>
+          </div>
+          <div class="ledger" id="ledger">
+            <p class="ledger-empty">Завершите первый ход — здесь появятся операции казны.</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./management-engine.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
