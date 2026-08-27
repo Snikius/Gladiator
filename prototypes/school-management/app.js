@@ -16,6 +16,10 @@ const elements = {
   wages: $("#wages"),
   phone: $("#phone"),
   gameScreen: $(".game-screen"),
+  schoolScene: $("#school-scene"),
+  schoolSceneImage: $("#school-scene-image"),
+  battleOverlay: $("#phone-battle-overlay"),
+  battleFrame: $("#phone-battle-frame"),
   schoolHomeView: $("#school-home-view"),
   battlesView: $("#battles-view"),
   battlesSection: $("#battles-section-button"),
@@ -26,6 +30,9 @@ const elements = {
   battleAssignedSummary: $("#battle-assigned-summary"),
   battleOfferList: $("#battle-offer-list"),
   battleResultsList: $("#battle-results-list"),
+  turnSummaryModal: $("#turn-summary-modal"),
+  turnSummaryTitle: $("#turn-summary-title"),
+  turnSummaryContent: $("#turn-summary-content"),
   marketView: $("#market-view"),
   marketSection: $("#market-section-button"),
   marketBackHome: $("#market-back-home"),
@@ -118,14 +125,35 @@ const elements = {
   ledger: $("#ledger"),
 };
 
+const returnedManualBattleToken = new URLSearchParams(window.location.search).get("manualBattleResult");
+let restoredManualBattle = false;
 let engine = new SchoolManagementEngine(DEFAULT_MANAGEMENT_INPUT);
-let viewedSnapshotIndex = 0;
+if (returnedManualBattleToken) {
+  const storageKey = `gladiator-management-battle:${returnedManualBattleToken}`;
+  try {
+    const payload = JSON.parse(localStorage.getItem(storageKey) || "null");
+    const battleResult = JSON.parse(localStorage.getItem(`${storageKey}:result`) || "null");
+    if (payload?.managementSession && battleResult) {
+      engine = SchoolManagementEngine.fromResult(payload.managementSession);
+      engine.recordManualBattleResult(payload.offerId, payload.fighterId, battleResult.outcome);
+      restoredManualBattle = true;
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem(`${storageKey}:result`);
+    }
+  } catch (_error) {
+    restoredManualBattle = false;
+  }
+  window.history.replaceState({}, "", window.location.pathname);
+}
+let viewedSnapshotIndex = engine.result().snapshots.length - 1;
 let isEndingTurn = false;
 let turnResolutionId = 0;
 let selectedFighterId = null;
 let renderedFighterState = null;
+let activeManualBattle = null;
 
 const END_TURN_LOADING_MS = 1250;
+const MANUAL_BATTLE_STORAGE_PREFIX = "gladiator-management-battle:";
 
 const number = new Intl.NumberFormat("ru-RU");
 const money = (value) => number.format(value);
@@ -185,6 +213,21 @@ const toRoman = (value) => {
 
 const currentResult = () => engine.result();
 
+const SCHOOL_TIER_SCENES = Object.freeze({
+  1: {
+    src: "./assets/school-tier-1-courtyard-v4.png",
+    alt: "Скромный двор школы гладиаторов первого уровня",
+  },
+  2: {
+    src: "./assets/school-tier-2-courtyard-v1.png",
+    alt: "Укреплённый и обустроенный двор школы гладиаторов второго уровня",
+  },
+  3: {
+    src: "./assets/school-tier-3-courtyard-v1.png",
+    alt: "Состоятельный двор школы гладиаторов третьего уровня",
+  },
+});
+
 const isLatestSnapshot = () => viewedSnapshotIndex === currentResult().snapshots.length - 1;
 
 const setEndTurnLoading = (loading) => {
@@ -193,20 +236,15 @@ const setEndTurnLoading = (loading) => {
   elements.endTurn.setAttribute("aria-busy", String(loading));
   elements.endTurn.disabled = loading
     || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
-  elements.fightersSection.disabled = loading
-    || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
+  elements.fightersSection.disabled = true;
   elements.battlesSection.disabled = loading
     || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
-  elements.marketSection.disabled = loading
-    || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
-  elements.armorySection.disabled = loading
-    || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
+  elements.marketSection.disabled = true;
+  elements.armorySection.disabled = true;
   elements.upgradesSection.disabled = loading
     || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
-  elements.medicineSection.disabled = loading
-    || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
-  elements.restSection.disabled = loading
-    || viewedSnapshotIndex !== currentResult().snapshots.length - 1;
+  elements.medicineSection.disabled = true;
+  elements.restSection.disabled = true;
   elements.battlesView.setAttribute("aria-busy", String(loading));
   elements.battleOfferList.querySelectorAll("[data-fighter-picker]").forEach((button) => {
     button.disabled = loading;
@@ -409,12 +447,14 @@ const renderBattlePage = (state) => {
   const treatedFighterIds = new Set((state.treatmentOrders || []).map(({ fighterId }) => fighterId));
   const restingFighterIds = new Set((state.restOrders || []).map(({ fighterId }) => fighterId));
   const eligibleFighters = fighters.filter(({ id, fighterClass, trainingTurnsRemaining }) => (
-    fighterClass && trainingTurnsRemaining <= 0 && !treatedFighterIds.has(id) && !restingFighterIds.has(id)
+    ["murmillo", "retiarius"].includes(fighterClass)
+    && trainingTurnsRemaining <= 0
+    && !treatedFighterIds.has(id)
+    && !restingFighterIds.has(id)
   ));
   const assignedIds = new Set(offers.map(({ assignedFighterId }) => assignedFighterId).filter(Boolean));
   const assignedCount = assignedIds.size;
-  const unassignedCount = offers.filter(({ assignedFighterId }) => !assignedFighterId).length;
-  elements.battleOffersCount.textContent = String(unassignedCount);
+  elements.battleOffersCount.textContent = String(offers.filter(({ assignedFighterId }) => !assignedFighterId).length);
   elements.battleOfferSummary.textContent = String(offers.length);
   elements.battleCurrentTurn.textContent = String(state.turn);
   elements.battleAssignedSummary.textContent = `${assignedCount} / ${offers.length}`;
@@ -425,7 +465,7 @@ const renderBattlePage = (state) => {
       return `
         <button class="fighter-picker-option ${fighter.id === offer.assignedFighterId ? "is-selected" : ""}" type="button"
           data-assign-offer-id="${escapeHTML(offer.id)}" data-assign-fighter-id="${escapeHTML(fighter.id)}" ${usedElsewhere ? "disabled" : ""}>
-          <span class="fighter-picker-portrait"><img src="${escapeHTML(fighter.portrait)}" alt="" /></span>
+          <span class="fighter-picker-portrait"><img src="${escapeHTML(fighter.rosterPortrait || fighter.portrait)}" alt="" /></span>
           <span class="fighter-picker-copy">
             <strong>${escapeHTML(fighter.name)}</strong>
             <small>${fighterClassLabelHTML(fighter.fighterClass, fighter.classLabel)}</small>
@@ -435,16 +475,37 @@ const renderBattlePage = (state) => {
         </button>
       `;
     }).join("");
+    const levelMarks = Array.from({ length: 3 }, (_, levelIndex) => (
+      `<i class="${levelIndex < offer.difficultyLevel ? "is-active" : ""}"></i>`
+    )).join("");
     const lossReward = Math.round(offer.victoryReward * currentResult().input.battleRules.lossRewardRate);
+    const manualOutcome = offer.manualResult?.outcome || null;
+    const manualOutcomeLabel = manualOutcome === "victory"
+      ? "ПОБЕДА"
+      : manualOutcome === "defeat"
+        ? "ПОРАЖЕНИЕ"
+        : manualOutcome === "draw"
+          ? "НИЧЬЯ"
+          : null;
+    const manualOutcomeNote = manualOutcome === "victory"
+      ? "Соперник повержен · результат будет учтён в конце хода"
+      : manualOutcome === "defeat"
+        ? "Ваш боец проиграл · результат будет учтён в конце хода"
+        : "Бой завершился без победителя · результат будет учтён в конце хода";
+    const fighterCondition = offer.manualResult?.fighterCondition || null;
+    const fighterConditionStatus = ["healthy", "injured", "dead"].includes(fighterCondition?.status)
+      ? fighterCondition.status
+      : "healthy";
     return `
-      <article class="battle-offer-card ${assignedFighter ? "is-assigned" : ""}">
+      <article class="battle-offer-card difficulty-${escapeHTML(offer.difficultyId)} ${assignedFighter ? "is-assigned" : ""} ${manualOutcome ? `has-result ${manualOutcome}` : ""}">
         <header>
           <span>ПРЕДЛОЖЕНИЕ ${index + 1}</span>
           <b>${escapeHTML(offer.difficulty)}</b>
         </header>
         <div class="battle-offer-opponent">
-          <span class="battle-opponent-portrait">
-            <img src="${escapeHTML(offer.opponentPortrait)}" alt="${escapeHTML(offer.opponentName)}" />
+          <span class="battle-opponent-portrait ${manualOutcome === "victory" ? "is-defeated" : ""}">
+            <img class="battle-opponent-image" src="${escapeHTML(offer.opponentPortrait)}" alt="${escapeHTML(offer.opponentName)}" />
+            ${manualOutcome === "victory" ? '<img class="battle-defeated-mark" src="./assets/icons/defeated-blood-cross-v1.png" alt="Соперник побеждён" />' : ""}
           </span>
           <div>
             <small>${escapeHTML(offer.arena)}</small>
@@ -453,51 +514,43 @@ const renderBattlePage = (state) => {
           </div>
           <b class="battle-versus-mark">VS</b>
         </div>
+        <div class="battle-offer-level">
+          <span><small>УРОВЕНЬ СОПЕРНИКА</small><strong>${offer.difficultyLevel} / 3</strong></span>
+          <div>${levelMarks}</div>
+        </div>
         <div class="battle-reward-outcomes">
-          <div>
-            <strong>ПОБЕДА</strong>
-            <span class="battle-resource-value money"><img src="./assets/icons/coins-v1.png" alt="" />+${money(offer.victoryReward)}</span>
-            <span class="battle-resource-value experience"><img src="./assets/icons/experience-v1.png" alt="" />+${money(offer.victoryExperience)}</span>
-          </div>
-          <div>
-            <strong>ПОРАЖЕНИЕ</strong>
-            <span class="battle-resource-value money"><img src="./assets/icons/coins-v1.png" alt="" />+${money(lossReward)}</span>
-            <span class="battle-resource-value experience"><img src="./assets/icons/experience-v1.png" alt="" />+${money(offer.defeatExperience)}</span>
-          </div>
+          <div><strong>ПОБЕДА</strong><span class="battle-resource-value money"><img src="./assets/icons/coins-v1.png" alt="" />+${money(offer.victoryReward)}</span><span class="battle-resource-value experience"><img src="./assets/icons/experience-v1.png" alt="" />+${money(offer.victoryExperience)}</span></div>
+          <div><strong>ПОРАЖЕНИЕ</strong><span class="battle-resource-value money"><img src="./assets/icons/coins-v1.png" alt="" />+${money(lossReward)}</span><span class="battle-resource-value experience"><img src="./assets/icons/experience-v1.png" alt="" />+${money(offer.defeatExperience)}</span></div>
         </div>
         <div class="battle-assignment">
           <span>ВАШ БОЕЦ</span>
           <button class="fighter-picker-trigger ${assignedFighter ? "has-fighter" : ""}" type="button"
             data-fighter-picker="${escapeHTML(offer.id)}" aria-expanded="false" ${isEndingTurn ? "disabled" : ""}>
             ${assignedFighter ? `
-              <span class="fighter-picker-portrait"><img src="${escapeHTML(assignedFighter.portrait)}" alt="" /></span>
-              <span class="fighter-picker-copy">
-                <strong>${escapeHTML(assignedFighter.name)}</strong>
-                <small>${fighterClassLabelHTML(assignedFighter.fighterClass, assignedFighter.classLabel)}</small>
-                <em>${escapeHTML(assignedFighter.condition)}</em>
-              </span>
+              <span class="fighter-picker-portrait"><img src="${escapeHTML(assignedFighter.rosterPortrait || assignedFighter.portrait)}" alt="" /></span>
+              <span class="fighter-picker-copy"><strong>${escapeHTML(assignedFighter.name)}</strong><small>${fighterClassLabelHTML(assignedFighter.fighterClass, assignedFighter.classLabel)}</small><em>${escapeHTML(assignedFighter.condition)}</em></span>
             ` : `
               <span class="fighter-picker-empty-mark">+</span>
-              <span class="fighter-picker-copy">
-                <strong>Назначить бойца</strong>
-                <em>Открыть состав школы</em>
-              </span>
+              <span class="fighter-picker-copy"><strong>Назначить бойца</strong><em>Открыть состав школы</em></span>
             `}
             <b class="fighter-picker-chevron">⌄</b>
           </button>
           <div class="fighter-picker-menu" data-fighter-picker-menu="${escapeHTML(offer.id)}" hidden>
-            ${assignedFighter ? `
-              <button class="fighter-picker-clear" type="button" data-assign-offer-id="${escapeHTML(offer.id)}" data-assign-fighter-id="">СНЯТЬ НАЗНАЧЕНИЕ</button>
-            ` : ""}
-            ${fighterOptions || '<div class="fighter-picker-empty">Нет бойцов со специализацией</div>'}
+            ${assignedFighter ? `<button class="fighter-picker-clear" type="button" data-assign-offer-id="${escapeHTML(offer.id)}" data-assign-fighter-id="">СНЯТЬ НАЗНАЧЕНИЕ</button>` : ""}
+            ${fighterOptions || '<div class="fighter-picker-empty">Нет свободных Ретиариев или Мечников</div>'}
           </div>
         </div>
-        <div class="battle-auto-note ${assignedFighter ? "is-ready" : ""}">
-          <strong>${assignedFighter ? `Автобой: ${escapeHTML(assignedFighter.name)}` : "Назначьте бойца"}</strong>
-          <span>${assignedFighter ? "Будет проведён при завершении хода" : "Без назначения бой не состоится"}</span>
+        <div class="battle-auto-note ${manualOutcome ? `is-result ${manualOutcome}` : assignedFighter ? "is-ready" : ""}">
+          ${manualOutcome && assignedFighter ? `<img class="battle-result-fighter-icon" src="${escapeHTML(assignedFighter.rosterPortrait || assignedFighter.portrait)}" alt="${escapeHTML(assignedFighter.name)}" />` : ""}
+          <div class="battle-result-copy">
+            <strong>${manualOutcomeLabel || (assignedFighter ? `Боец: ${escapeHTML(assignedFighter.name)}` : "Назначьте бойца")}</strong>
+            <span>${manualOutcome ? manualOutcomeNote : assignedFighter ? "Бой можно провести сейчас или рассчитать в конце хода" : "Без назначения бой не состоится"}</span>
+            ${fighterCondition ? `<em class="battle-fighter-condition ${fighterConditionStatus}">СОСТОЯНИЕ: ${escapeHTML(fighterCondition.label)}</em>` : ""}
+          </div>
         </div>
-        <button class="manual-battle-button" type="button" disabled>▣ ПРОВЕСТИ БОЙ САМОМУ</button>
-        <small class="manual-battle-note">Просмотр боя пока закрыт · доступен только автобой</small>
+        <button class="manual-battle-button ${assignedFighter && !offer.manualResult ? "is-active" : ""}" type="button"
+          data-manual-battle="${escapeHTML(offer.id)}" ${assignedFighter && !offer.manualResult && !isEndingTurn ? "" : "disabled"}>${offer.manualResult ? "✓ БОЙ ЗАВЕРШЁН" : "▣ ПРОВЕСТИ БОЙ"}</button>
+        <small class="manual-battle-note">Сессия школы сохранится · после боя вы вернётесь к этому ходу</small>
       </article>
     `;
   }).join("");
@@ -527,6 +580,216 @@ const renderBattlePage = (state) => {
       </article>
     `).join("")
     : '<div class="battle-results-empty">В прошлом ходу боёв не было.</div>';
+};
+
+const battleEquipmentQuality = (fighter, slot) => (
+  fighter.equipment?.[slot]?.quality === "Хорошее" ? "good" : "common"
+);
+
+const battlePerkIds = (fighter) => {
+  const perkMap = {
+    "Крепкие кости": "strong-bones",
+    "Любимец толпы": "crowd-favorite",
+    "Лёгкая поступь": "light-footed",
+    "Быстрая реакция": "turn-interceptor",
+  };
+  return (fighter.perks || []).map((perk) => perkMap[perk]).filter(Boolean);
+};
+
+const battleInjuryIds = (fighter) => (fighter.injuries || []).map((injury) => (
+  injury.toLowerCase().includes("ног") ? "leg-damage"
+    : injury.toLowerCase().includes("рук") ? "arm-damage"
+      : null
+)).filter(Boolean);
+
+const battleArenaType = (arena) => ({
+  "Малая арена": "sand",
+  "Городские игры": "crowd",
+  "Вечерние игры": "normal",
+  "Военный праздник": "crowd",
+}[arena] || "normal");
+
+const createManualBattleInput = (offer, fighter) => {
+  const playerClass = fighter.fighterClass === "retiarius" ? "retiarius" : "murmillo";
+  const opponentClass = offer.combatArchetype === "retiarius" ? "retiarius" : "murmillo";
+  const equipment = (fighterClass, weaponQuality = "good", armorQuality = "good") => ({
+    weaponSet: { definitionId: `${fighterClass}-arms.${weaponQuality}` },
+    armorSet: { definitionId: `${fighterClass}-armor.${armorQuality}` },
+  });
+  return {
+    seed: `management-${offer.id}-${fighter.id}`,
+    maxSteps: 80,
+    arena: { type: battleArenaType(offer.arena), supportMultipliers: [1, 1] },
+    fighters: [
+      {
+        id: "fighter-1",
+        name: fighter.name,
+        base: {
+          strength: 50 + fighter.wins * 2 + Math.floor(fighter.experience / 6),
+          health: playerClass === "murmillo" ? 220 : 195,
+          charisma: 52 + fighter.wins * 3,
+        },
+        criticalChance: 0.03,
+        classTechniqueChance: 0.1,
+        fighterClass: playerClass,
+        equipment: equipment(
+          playerClass,
+          battleEquipmentQuality(fighter, "weapon"),
+          battleEquipmentQuality(fighter, "armor"),
+        ),
+        perks: battlePerkIds(fighter),
+        buffs: [],
+        buffLoadout: { buffDefinitionIds: ["rally", "forward", "now"] },
+        injuries: battleInjuryIds(fighter),
+      },
+      {
+        id: "fighter-2",
+        name: offer.opponentName,
+        base: {
+          strength: 46 + offer.difficultyLevel * 8,
+          health: (opponentClass === "murmillo" ? 205 : 180) + offer.difficultyLevel * 14,
+          charisma: 48 + offer.difficultyLevel * 7,
+        },
+        criticalChance: 0.03,
+        classTechniqueChance: 0.1,
+        fighterClass: opponentClass,
+        equipment: equipment(opponentClass),
+        perks: offer.difficultyLevel === 3 ? ["cornered-beast"] : [],
+        buffs: [],
+        buffLoadout: { buffDefinitionIds: [] },
+        injuries: [],
+      },
+    ],
+  };
+};
+
+const launchManualBattle = (offerId) => {
+  const state = currentResult().state;
+  const offer = state.battleOffers.find(({ id }) => id === offerId);
+  const fighter = state.fighters.find(({ id }) => id === offer?.assignedFighterId);
+  if (!offer || !fighter) return;
+  const token = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const storageKey = `${MANUAL_BATTLE_STORAGE_PREFIX}${token}`;
+  const payload = {
+    offerId: offer.id,
+    fighterId: fighter.id,
+    returnLabel: "Вернуться в школу",
+    input: createManualBattleInput(offer, fighter),
+    managementSession: currentResult(),
+  };
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  } catch (_error) {
+    return;
+  }
+  const arenaUrl = new URL("../battle-arena/index.html", window.location.href);
+  arenaUrl.searchParams.set("mobile", "1");
+  arenaUrl.searchParams.set("managementBattle", token);
+  activeManualBattle = { token, storageKey, offerId: offer.id, fighterId: fighter.id };
+  document.body.classList.add("phone-battle-active");
+  elements.battleOverlay.hidden = false;
+  elements.gameScreen.setAttribute("aria-hidden", "true");
+  elements.battleFrame.src = arenaUrl.href;
+  window.requestAnimationFrame(() => {
+    const phoneTop = elements.phone.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, phoneTop - 12), behavior: "auto" });
+  });
+};
+
+const closeManualBattleOverlay = () => {
+  document.body.classList.remove("phone-battle-active");
+  elements.battleOverlay.hidden = true;
+  elements.gameScreen.removeAttribute("aria-hidden");
+  elements.battleFrame.src = "about:blank";
+  activeManualBattle = null;
+};
+
+const acceptManualBattleResult = (message) => {
+  if (
+    !activeManualBattle
+    || message?.token !== activeManualBattle.token
+    || !["victory", "defeat", "draw"].includes(message.outcome)
+  ) return;
+  try {
+    engine.recordManualBattleResult(
+      activeManualBattle.offerId,
+      activeManualBattle.fighterId,
+      message.outcome,
+    );
+    localStorage.removeItem(activeManualBattle.storageKey);
+    localStorage.removeItem(`${activeManualBattle.storageKey}:result`);
+    closeManualBattleOverlay();
+    renderSnapshot(currentResult().snapshots.length - 1);
+    showBattlesView();
+  } catch (_error) {
+    closeManualBattleOverlay();
+  }
+};
+
+const showTurnSummary = (state) => {
+  const summary = state.lastTurn;
+  if (!summary) return;
+  const results = state.lastBattleResults || [];
+  elements.turnSummaryTitle.textContent = `ХОД ${summary.turn} ЗАВЕРШЁН`;
+  const battleCards = results.map((result) => {
+    const fighterWon = result.outcome === "victory";
+    const opponentWon = result.outcome === "defeat";
+    const condition = result.fighterCondition || { status: "healthy", label: "Без новых травм" };
+    const conditionStatus = ["healthy", "injured", "dead"].includes(condition.status)
+      ? condition.status
+      : "healthy";
+    return `
+      <article class="turn-summary-battle ${result.outcome}">
+        <div class="turn-summary-duel" aria-label="${escapeHTML(result.fighterName)} против ${escapeHTML(result.opponentName)}">
+          <span class="turn-summary-combatant is-player ${fighterWon ? "is-winner" : opponentWon ? "is-loser" : "is-draw"}">
+            <img class="turn-summary-avatar" src="${escapeHTML(result.fighterPortrait)}" alt="${escapeHTML(result.fighterName)}" />
+            ${opponentWon ? '<img class="turn-summary-defeated-mark" src="./assets/icons/defeated-blood-cross-v1.png" alt="Боец повержен" />' : ""}
+          </span>
+          <i class="turn-summary-cross">×</i>
+          <span class="turn-summary-combatant is-opponent ${opponentWon ? "is-winner" : fighterWon ? "is-loser" : "is-draw"}">
+            <img class="turn-summary-avatar" src="${escapeHTML(result.opponentPortrait)}" alt="${escapeHTML(result.opponentName)}" />
+            ${fighterWon ? '<img class="turn-summary-defeated-mark" src="./assets/icons/defeated-blood-cross-v1.png" alt="Соперник повержен" />' : ""}
+          </span>
+        </div>
+        <div class="turn-summary-result-copy">
+          <small>БОЙ</small>
+          <strong>${result.outcome === "victory" ? "ПОБЕДА" : result.outcome === "draw" ? "НИЧЬЯ" : "ПОРАЖЕНИЕ"}</strong>
+          <p>${escapeHTML(result.summary)}</p>
+          <em class="turn-summary-fighter-condition ${conditionStatus}">СОСТОЯНИЕ БОЙЦА: ${escapeHTML(condition.label)}</em>
+        </div>
+        <div class="turn-summary-rewards">
+          <b>+${money(result.reward)} HS</b>
+          <span>+${money(result.schoolProgress || 0)} ОПЫТА</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+  elements.turnSummaryContent.innerHTML = `
+    ${results.length ? `<section class="turn-summary-battles"><header><small>БОИ ПРОШЛОГО ХОДА</small><strong>${results.length}</strong></header>${battleCards}</section>` : ""}
+    ${results.length ? `
+      <section class="turn-summary-school-progress">
+        <header><small>ОПЫТ ШКОЛЫ</small><strong>+${money(summary.tierProgressGained || 0)}</strong></header>
+        <div><progress max="${state.tierProgressMax}" value="${summary.tierProgressAfter || 0}"></progress><b>${money(summary.tierProgressAfter || 0)}/${money(state.tierProgressMax)}</b></div>
+        <p>${summary.tierUpgradeAvailable
+          ? (state.treasury >= 0
+            ? `Доступно повышение до уровня ${toRoman(state.tier + 1)} за ${money(summary.tierUpgradeCost)} HS.`
+            : "Прогресс заполнен. Для повышения нужно выйти из долга.")
+          : `До следующего уровня осталось ${money(Math.max(0, state.tierProgressMax - (summary.tierProgressAfter || 0)))} опыта.`}</p>
+      </section>
+    ` : ""}
+    <section class="turn-summary-economy">
+      <header><small>ЭКОНОМИКА</small><strong>${signed(summary.net)} HS</strong></header>
+      <div><span>Заработано</span><b class="positive">+${money(summary.income)} HS</b></div>
+      <div><span>Потрачено</span><b class="negative">−${money(summary.expenses)} HS</b></div>
+      <div><span>Казна</span><b>${money(summary.balanceBefore)} → ${money(summary.balanceAfter)} HS</b></div>
+    </section>
+  `;
+  elements.turnSummaryModal.hidden = false;
+};
+
+const closeTurnSummary = () => {
+  elements.turnSummaryModal.hidden = true;
 };
 
 const renderMarketPage = (state) => {
@@ -585,41 +848,60 @@ const renderArmoryPage = (state) => {
 };
 
 const renderSchoolUpgradesPage = (state) => {
-  const catalog = currentResult().input.schoolUpgradeCatalog || [];
-  const orders = state.schoolUpgradeOrders || [];
-  elements.schoolUpgradesHomeCount.textContent = String(orders.length);
-  elements.schoolUpgradesSummary.textContent = String(orders.length);
+  const result = currentResult();
+  const maxTier = result.input.tierRules.maxTier || 3;
+  const currentTier = state.tier;
+  const nextTier = Math.min(maxTier, currentTier + 1);
+  const tierProgress = Math.min(state.tierProgress, state.tierProgressMax);
+  const progressPercent = Math.round(tierProgress / state.tierProgressMax * 100);
+  const remainingProgress = Math.max(0, state.tierProgressMax - tierProgress);
+  const price = Math.round(
+    result.input.tierRules.upgradeBaseCost
+    * (1 + (currentTier - 1) * result.input.tierRules.upgradeCostGrowth),
+  );
+  const atMaxTier = currentTier >= maxTier;
+  const displayedTierProgress = atMaxTier ? state.tierProgressMax : tierProgress;
+  const progressReady = tierProgress >= state.tierProgressMax;
+  const blockedByDebt = state.treasury < 0;
+  const disabled = atMaxTier || !progressReady || blockedByDebt || !isLatestSnapshot() || isEndingTurn;
+  const buttonLabel = atMaxTier
+    ? "ДОСТИГНУТ МАКСИМАЛЬНЫЙ УРОВЕНЬ"
+    : blockedByDebt
+      ? "НЕДОСТУПНО · ШКОЛА В ДОЛГУ"
+      : !progressReady
+        ? `НУЖНО ЕЩЁ ${remainingProgress} ОПЫТА`
+        : `ПОВЫСИТЬ ДО УРОВНЯ ${toRoman(nextTier)} · ${money(price)} HS`;
+  elements.schoolUpgradesHomeCount.textContent = toRoman(currentTier);
+  elements.schoolUpgradesSummary.textContent = toRoman(currentTier);
   elements.schoolUpgradesTreasury.textContent = `${money(state.treasury)} HS`;
-  elements.schoolUpgradesOrdersCount.textContent = String(orders.length);
-  elements.schoolUpgradeList.innerHTML = catalog.map((definition) => {
-    const currentLevel = state.schoolUpgrades?.[definition.id]?.level || 1;
-    const targetLevel = currentLevel + 1;
-    const price = Math.round(definition.basePrice * (1 + 0.65 * (currentLevel - 1)));
-    const turns = definition.baseTurns + currentLevel - 1;
-    const activeOrder = orders.find(({ definitionId }) => definitionId === definition.id);
-    const insufficient = state.treasury < price;
-    const disabled = activeOrder || insufficient || !isLatestSnapshot() || isEndingTurn;
-    return `
-      <article class="school-upgrade-card ${activeOrder ? "is-building" : ""}">
-        <span class="school-upgrade-art"><img src="${escapeHTML(definition.icon)}" alt="" /></span>
-        <div class="school-upgrade-copy">
-          <small>${escapeHTML(definition.latinName)}</small>
-          <strong>${escapeHTML(definition.name)}</strong>
-          <span class="school-upgrade-level">УРОВЕНЬ ${toRoman(currentLevel)} <i>→</i> ${toRoman(activeOrder?.targetLevel || targetLevel)}</span>
-          <p>${escapeHTML(definition.description)}</p>
-        </div>
-        <div class="school-upgrade-costs">
-          <span><small>ЦЕНА</small><b><img src="./assets/icons/coins-v1.png" alt="" />${money(activeOrder?.price || price)} HS</b></span>
-          <span><small>СРОК</small><b><img src="./assets/icons/hourglass-v1.png" alt="" />${activeOrder?.turnsRemaining || turns} ${((activeOrder?.turnsRemaining || turns) === 1) ? "ХОД" : "ХОДА"}</b></span>
-        </div>
-        ${activeOrder ? `
-          <div class="school-upgrade-progress"><span><i style="width:${Math.round((1 - activeOrder.turnsRemaining / activeOrder.totalTurns) * 100)}%"></i></span><b>СТРОИТСЯ · ${activeOrder.turnsRemaining} ${activeOrder.turnsRemaining === 1 ? "ХОД" : "ХОДА"}</b></div>
-        ` : `
-          <button type="button" data-start-school-upgrade="${escapeHTML(definition.id)}" ${disabled ? "disabled" : ""}>${insufficient ? "НЕ ХВАТАЕТ ДЕНЕГ" : `УЛУЧШИТЬ ДО УРОВНЯ ${toRoman(targetLevel)}`}</button>
+  elements.schoolUpgradesOrdersCount.textContent = toRoman(currentTier);
+  elements.schoolUpgradeList.innerHTML = `
+    <article class="school-upgrade-card school-tier-upgrade-card ${atMaxTier ? "is-max-tier" : ""}">
+      <div class="school-tier-special-mark"><img src="./assets/icons/school-tier-v1.png" alt="" /><span><small>ОСОБОЕ УЛУЧШЕНИЕ</small><strong>УРОВЕНЬ ВСЕЙ ШКОЛЫ</strong></span></div>
+      <div class="school-tier-transition" aria-label="${atMaxTier ? `Текущий максимальный уровень ${toRoman(currentTier)}` : `Переход с уровня ${toRoman(currentTier)} на уровень ${toRoman(nextTier)}`}">
+        <span class="school-tier-transition-current"><small>ТЕКУЩИЙ</small><b>${toRoman(currentTier)}</b></span>
+        ${atMaxTier ? '<i class="school-tier-max-mark">МАКСИМУМ</i>' : `
+          <i class="school-tier-transition-arrow" aria-hidden="true">→</i>
+          <span class="school-tier-transition-next"><small>СЛЕДУЮЩИЙ</small><b>${toRoman(nextTier)}</b></span>
         `}
-      </article>
-    `;
-  }).join("");
+      </div>
+      <div class="school-upgrade-copy school-tier-upgrade-copy">
+        <small>LUDUS MAGNUS</small>
+        <strong>${atMaxTier ? `ШКОЛА · УРОВЕНЬ ${toRoman(currentTier)}` : `ШКОЛА · ${toRoman(currentTier)} → ${toRoman(nextTier)}`}</strong>
+        <p>${atMaxTier ? "Школа достигла последнего доступного уровня прототипа." : "Главное развитие людуса: укрепляет школу и увеличивает вместимость состава."}</p>
+      </div>
+      <div class="school-tier-progress-block">
+        <span><small>ОПЫТ ШКОЛЫ</small><b>${atMaxTier ? "ЗАВЕРШЕНО" : `${tierProgress}/${state.tierProgressMax}`}</b></span>
+        <progress max="${state.tierProgressMax}" value="${displayedTierProgress}" aria-label="Опыт школы для повышения уровня"></progress>
+        <em>${atMaxTier ? "МАКСИМУМ" : progressReady ? "ГОТОВО К ПОВЫШЕНИЮ" : `${progressPercent}%`}</em>
+      </div>
+      <div class="school-upgrade-costs school-tier-upgrade-benefits">
+        <span><small>ЦЕНА ПЕРЕХОДА</small><b><img src="./assets/icons/coins-v1.png" alt="" />${atMaxTier ? "—" : `${money(price)} HS`}</b></span>
+        <span><small>ВМЕСТИМОСТЬ</small><b>${state.fighterCapacity}${atMaxTier ? "" : ` → ${state.fighterCapacity + result.input.tierRules.fighterCapacityPerTier}`}</b></span>
+      </div>
+      <button type="button" data-upgrade-school-tier ${disabled ? "disabled" : ""}>${buttonLabel}</button>
+    </article>
+  `;
 };
 
 const renderMedicinePage = (state) => {
@@ -881,6 +1163,10 @@ const renderSnapshot = (index, { animate = false } = {}) => {
   elements.turnNumber.textContent = `ХОД ${state.turn}`;
   elements.headerTierNumber.textContent = tierRoman;
   elements.sceneTierNumber.textContent = tierRoman;
+  const tierScene = SCHOOL_TIER_SCENES[Math.min(3, state.tier)] || SCHOOL_TIER_SCENES[3];
+  elements.schoolSceneImage.src = tierScene.src;
+  elements.schoolSceneImage.alt = tierScene.alt;
+  elements.schoolScene.setAttribute("aria-label", `Двор школы ${state.tier} уровня`);
   elements.treasury.textContent = money(state.treasury);
   elements.tierNumber.textContent = tierRoman;
   elements.tierProgress.max = state.tierProgressMax;
@@ -906,13 +1192,13 @@ const renderSnapshot = (index, { animate = false } = {}) => {
   elements.turnForecast.classList.toggle("is-debt", incomeKnown && economy.forecastTreasury < 0);
   elements.turnForecast.classList.toggle("is-unknown", !incomeKnown);
   elements.endTurn.disabled = isEndingTurn || index !== result.snapshots.length - 1;
-  elements.fightersSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
+  elements.fightersSection.disabled = true;
   elements.battlesSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
-  elements.marketSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
-  elements.armorySection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
+  elements.marketSection.disabled = true;
+  elements.armorySection.disabled = true;
   elements.upgradesSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
-  elements.medicineSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
-  elements.restSection.disabled = isEndingTurn || index !== result.snapshots.length - 1;
+  elements.medicineSection.disabled = true;
+  elements.restSection.disabled = true;
   if (!isEndingTurn) {
     elements.endTurnLabel.textContent = index === result.snapshots.length - 1
       ? "КОНЕЦ ХОДА"
@@ -1050,11 +1336,11 @@ elements.armoryCatalogList.addEventListener("click", (event) => {
 });
 
 elements.schoolUpgradeList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-start-school-upgrade]");
+  const button = event.target.closest("[data-upgrade-school-tier]");
   if (!button || button.disabled || !isLatestSnapshot() || isEndingTurn) return;
-  const upgrade = engine.startSchoolUpgrade(button.dataset.startSchoolUpgrade);
+  engine.upgradeTier();
   renderSnapshot(currentResult().snapshots.length - 1, { animate: true });
-  elements.schoolUpgradesNotice.textContent = `${upgrade.order.name}: строительство уровня ${toRoman(upgrade.order.targetLevel)} начато.`;
+  elements.schoolUpgradesNotice.textContent = `Школа повышена до уровня ${toRoman(currentResult().state.tier)}.`;
   elements.schoolUpgradesNotice.hidden = false;
 });
 
@@ -1108,6 +1394,12 @@ elements.restFighterList.addEventListener("click", (event) => {
 elements.battleOfferList.addEventListener("click", (event) => {
   if (isEndingTurn || !isLatestSnapshot()) return;
 
+  const manualBattle = event.target.closest("[data-manual-battle]");
+  if (manualBattle) {
+    if (!manualBattle.disabled) launchManualBattle(manualBattle.dataset.manualBattle);
+    return;
+  }
+
   const assignment = event.target.closest("[data-assign-offer-id]");
   if (assignment) {
     if (assignment.disabled) return;
@@ -1144,6 +1436,18 @@ elements.endTurn.addEventListener("click", async () => {
   engine.endTurn();
   setEndTurnLoading(false);
   renderSnapshot(currentResult().snapshots.length - 1, { animate: true });
+  showTurnSummary(currentResult().state);
+});
+
+elements.turnSummaryModal.addEventListener("click", (event) => {
+  if (event.target.closest("[data-close-turn-summary]")) closeTurnSummary();
+});
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.source !== elements.battleFrame.contentWindow) return;
+  if (event.data?.type !== "management-battle-result") return;
+  acceptManualBattleResult(event.data);
 });
 
 elements.snapshotSlider.addEventListener("input", () => {
@@ -1159,4 +1463,5 @@ elements.viewportPreset.addEventListener("change", () => {
   elements.phone.style.setProperty("--device-height", `${height}px`);
 });
 
-renderSnapshot(0);
+renderSnapshot(viewedSnapshotIndex);
+if (restoredManualBattle) showBattlesView();

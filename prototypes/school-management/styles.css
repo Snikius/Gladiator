@@ -30,6 +30,10 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+body.phone-battle-active {
+  padding-bottom: 120px;
+}
+
 button,
 input,
 select {
@@ -330,6 +334,29 @@ select {
     #0b0b0a;
 }
 
+.phone-battle-overlay[hidden] {
+  display: none;
+}
+
+.phone-battle-overlay {
+  position: absolute;
+  z-index: 80;
+  inset: 10px;
+  overflow: hidden;
+  border: 1px solid #2f2a21;
+  border-radius: 18px;
+  background: #090807;
+  box-shadow: inset 0 0 0 1px #0a0908;
+}
+
+.phone-battle-overlay iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #17120f;
+}
+
 .commerce-view,
 .armory-section,
 .armory-catalog-list,
@@ -584,6 +611,28 @@ select {
   font-weight: 750;
 }
 
+.tier-upgrade-action {
+  min-height: 22px;
+  margin-top: 3px;
+  padding: 3px 5px;
+  border: 1px solid #886638;
+  color: #e0c17d;
+  background: linear-gradient(#4a2e1b, #21150f);
+  font-size: 6px;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+  cursor: pointer;
+}
+
+.tier-upgrade-action[hidden] { display: none; }
+
+.tier-upgrade-action:disabled {
+  border-color: #4b4033;
+  color: #72685b;
+  background: #171411;
+  cursor: not-allowed;
+}
+
 .school-sections {
   padding: 6px;
   display: grid;
@@ -613,6 +662,30 @@ select {
   cursor: default;
 }
 
+.school-section-button:not(.battles):disabled {
+  border-color: #292927;
+  color: #5e5d59;
+  background: linear-gradient(145deg, #151514, #10100f);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.58;
+}
+
+.school-section-button:not(.battles):disabled .section-icon {
+  border-color: #393936;
+  background: #121211;
+}
+
+.school-section-button:not(.battles):disabled strong,
+.school-section-button:not(.battles):disabled small,
+.school-section-button:not(.battles):disabled .section-stat,
+.school-section-button:not(.battles):disabled .section-stat b {
+  color: #777671;
+  border-color: #454541;
+  background-color: #181817;
+}
+
 .school-section-button.people:not(:disabled) {
   cursor: pointer;
   border-color: #4d422f;
@@ -625,6 +698,24 @@ select {
 .school-section-button.rest:not(:disabled) {
   cursor: pointer;
   border-color: #4d422f;
+}
+
+.school-section-button.upgrades:not(:disabled) {
+  border-color: #8a6735;
+  background:
+    radial-gradient(circle at 22px 50%, rgba(209, 160, 70, .16), transparent 34px),
+    linear-gradient(145deg, #211a11, #11100d);
+  box-shadow: inset 0 0 0 1px rgba(226, 186, 103, .08), 0 0 12px rgba(128, 83, 25, .1);
+}
+
+.school-section-button.upgrades:not(:disabled)::after {
+  content: "◆";
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  color: #b98c42;
+  font-size: 7px;
+  text-shadow: 0 0 7px rgba(226, 174, 79, .48);
 }
 
 .school-section-button.market:not(:disabled):hover,
@@ -854,6 +945,28 @@ select {
   box-shadow: inset 3px 0 #855134;
 }
 
+.battle-offer-card.difficulty-low {
+  box-shadow: inset 3px 0 #66784e;
+}
+
+.battle-offer-card.difficulty-medium {
+  box-shadow: inset 3px 0 #9a723e;
+}
+
+.battle-offer-card.difficulty-high {
+  box-shadow: inset 3px 0 #8b4037;
+}
+
+.battle-offer-card.has-result.victory {
+  border-color: #607247;
+  box-shadow: inset 3px 0 #718653, 0 0 15px rgba(91, 120, 62, 0.12);
+}
+
+.battle-offer-card.has-result.defeat {
+  border-color: #713c35;
+  box-shadow: inset 3px 0 #8c4037, 0 0 15px rgba(128, 48, 39, 0.12);
+}
+
 .battle-offer-card > header {
   min-height: 26px;
   padding: 5px 8px;
@@ -887,6 +1000,7 @@ select {
 }
 
 .battle-opponent-portrait {
+  position: relative;
   width: 54px;
   height: 54px;
   overflow: hidden;
@@ -895,12 +1009,27 @@ select {
   box-shadow: inset 0 0 0 2px #15110d, 0 0 12px rgba(119, 68, 38, 0.18);
 }
 
-.battle-opponent-portrait img {
+.battle-opponent-image {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
   image-rendering: pixelated;
+}
+
+.battle-opponent-portrait.is-defeated .battle-opponent-image {
+  filter: grayscale(0.72) brightness(0.58) contrast(1.12);
+}
+
+.battle-opponent-portrait .battle-defeated-mark {
+  position: absolute;
+  z-index: 2;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .battle-versus-mark {
@@ -932,6 +1061,60 @@ select {
   font-size: 7px;
   font-style: normal;
   font-weight: 750;
+}
+
+.battle-offer-level {
+  padding: 8px 9px;
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid #30281f;
+  border-bottom: 1px solid #30281f;
+  background: #0f0e0c;
+}
+
+.battle-offer-level > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.battle-offer-level small {
+  color: #706758;
+  font-size: 6px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.battle-offer-level strong {
+  color: #b69b70;
+  font: 700 8px Georgia, serif;
+}
+
+.battle-offer-level > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.battle-offer-level i {
+  height: 4px;
+  border: 1px solid #3d3429;
+  background: #201c17;
+}
+
+.battle-offer-card.difficulty-low .battle-offer-level i.is-active {
+  border-color: #72825a;
+  background: #586b42;
+}
+
+.battle-offer-card.difficulty-medium .battle-offer-level i.is-active {
+  border-color: #a77d47;
+  background: #846037;
+}
+
+.battle-offer-card.difficulty-high .battle-offer-level i.is-active {
+  border-color: #a24d42;
+  background: #78352f;
 }
 
 .battle-reward-outcomes {
@@ -1175,6 +1358,60 @@ select {
   background: rgba(86, 101, 57, 0.1);
 }
 
+.battle-auto-note.is-result.victory {
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  border-left-color: #718a50;
+  color: #93a978;
+  background: rgba(74, 104, 48, 0.16);
+}
+
+.battle-auto-note.is-result.victory strong {
+  color: #8fbd68;
+  text-shadow: 0 0 10px rgba(100, 151, 65, 0.3);
+}
+
+.battle-auto-note.is-result.defeat {
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  border-left-color: #8d4138;
+  color: #ad7067;
+  background: rgba(116, 41, 34, 0.16);
+}
+
+.battle-auto-note.is-result.defeat strong {
+  color: #cf6658;
+  text-shadow: 0 0 10px rgba(171, 52, 42, 0.3);
+}
+
+.battle-auto-note.is-result.draw {
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  border-left-color: #907442;
+  color: #a68f68;
+  background: rgba(117, 86, 39, 0.14);
+}
+
+.battle-auto-note.is-result.draw strong {
+  color: #c5a465;
+}
+
+.battle-result-fighter-icon {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border: 1px solid #72543a;
+  background: #090807;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.battle-result-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
 .battle-auto-note strong {
   font: 600 9px Georgia, serif;
 }
@@ -1182,6 +1419,18 @@ select {
 .battle-auto-note span {
   font-size: 7px;
 }
+
+.battle-fighter-condition {
+  margin-top: 3px;
+  font-size: 6px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+}
+
+.battle-fighter-condition.healthy { color: #8fa774; }
+.battle-fighter-condition.injured { color: #c6975e; }
+.battle-fighter-condition.dead { color: #dc6252; }
 
 .manual-battle-button {
   width: calc(100% - 18px);
@@ -1195,12 +1444,314 @@ select {
   letter-spacing: 0.07em;
 }
 
+.manual-battle-button.is-active {
+  border-color: #8b6539;
+  color: #e1c27f;
+  background: linear-gradient(#442819, #20150f);
+  cursor: pointer;
+}
+
+.manual-battle-button.is-active:hover {
+  border-color: #bd8b49;
+  filter: brightness(1.1);
+}
+
 .manual-battle-note {
   padding: 5px 9px 8px;
   display: block;
   color: #5d574e;
   font-size: 6px;
   text-align: center;
+}
+
+.turn-summary-modal[hidden] {
+  display: none;
+}
+
+.turn-summary-modal {
+  position: absolute;
+  z-index: 90;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.turn-summary-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 3, 3, 0.84);
+  backdrop-filter: blur(2px);
+}
+
+.turn-summary-card {
+  position: relative;
+  width: calc(100% - 24px);
+  max-height: calc(100% - 36px);
+  overflow-y: auto;
+  border: 1px solid #765435;
+  background: linear-gradient(145deg, #1b1510, #0c0b09 65%);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.85), inset 0 0 0 2px #100d0a;
+}
+
+.turn-summary-card > header {
+  padding: 10px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #493624;
+  background: rgba(76, 39, 25, 0.18);
+}
+
+.turn-summary-card > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.turn-summary-card > header small,
+.turn-summary-battles header small,
+.turn-summary-economy header small {
+  color: #85735d;
+  font-size: 6px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.turn-summary-card > header strong {
+  color: #ddc498;
+  font: 700 14px Georgia, serif;
+}
+
+.turn-summary-card > header button {
+  width: 27px;
+  height: 27px;
+  border: 1px solid #4f3d2c;
+  color: #9e8565;
+  background: #15110e;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+#turn-summary-content {
+  padding: 9px;
+  display: grid;
+  gap: 9px;
+}
+
+.turn-summary-battles,
+.turn-summary-economy {
+  display: grid;
+  gap: 5px;
+}
+
+.turn-summary-battles > header,
+.turn-summary-economy > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.turn-summary-battles > header strong,
+.turn-summary-economy > header strong {
+  color: #c5a86f;
+  font: 700 10px Georgia, serif;
+}
+
+.turn-summary-battle {
+  padding: 6px;
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #3a3025;
+  background: #100f0d;
+}
+
+.turn-summary-battle.victory { border-left: 3px solid #71804f; }
+.turn-summary-battle.defeat { border-left: 3px solid #834238; }
+.turn-summary-battle.draw { border-left: 3px solid #8b744d; }
+
+.turn-summary-duel {
+  width: 94px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.turn-summary-combatant {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  transition: width 160ms ease, height 160ms ease;
+}
+
+.turn-summary-combatant.is-winner {
+  width: 46px;
+  height: 46px;
+  z-index: 2;
+}
+
+.turn-summary-combatant.is-loser {
+  width: 30px;
+  height: 30px;
+  opacity: 0.82;
+}
+
+.turn-summary-avatar {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 1px solid #59432d;
+  background: #080706;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.turn-summary-combatant.is-winner .turn-summary-avatar {
+  border-color: #917145;
+  box-shadow: 0 0 10px rgba(148, 112, 62, 0.25);
+}
+
+.turn-summary-combatant.is-loser .turn-summary-avatar {
+  filter: grayscale(0.72) brightness(0.58) contrast(1.1);
+}
+
+.turn-summary-defeated-mark {
+  position: absolute;
+  z-index: 3;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.turn-summary-cross {
+  flex: 0 0 auto;
+  color: #876747;
+  font: 700 12px Georgia, serif;
+  font-style: normal;
+}
+
+.turn-summary-result-copy { min-width: 0; display: grid; gap: 2px; }
+.turn-summary-battle small { color: #72695d; font-size: 5px; font-weight: 850; }
+.turn-summary-battle strong { color: #c4b090; font: 700 9px Georgia, serif; }
+.turn-summary-battle p { color: #766e62; font-size: 6px; line-height: 1.35; }
+
+.turn-summary-rewards {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.turn-summary-rewards b { color: #b9a06a; font: 700 8px Georgia, serif; }
+.turn-summary-rewards span { color: #8f805e; font-size: 5px; font-weight: 850; }
+
+.turn-summary-fighter-condition {
+  margin-top: 2px;
+  font-size: 5px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.turn-summary-fighter-condition.healthy { color: #849b6a; }
+.turn-summary-fighter-condition.injured { color: #bd8c55; }
+.turn-summary-fighter-condition.dead { color: #d55e50; }
+
+.turn-summary-school-progress {
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid #493c29;
+  background: linear-gradient(135deg, rgba(116, 88, 43, 0.13), #0e0d0b 65%);
+}
+
+.turn-summary-school-progress > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.turn-summary-school-progress > header small {
+  color: #928260;
+  font-size: 6px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.turn-summary-school-progress > header strong {
+  color: #d1b46e;
+  font: 700 10px Georgia, serif;
+}
+
+.turn-summary-school-progress > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.turn-summary-school-progress progress {
+  width: 100%;
+  height: 7px;
+  appearance: none;
+  border: 1px solid #4b3c27;
+  background: #080807;
+}
+
+.turn-summary-school-progress progress::-webkit-progress-bar { background: #080807; }
+.turn-summary-school-progress progress::-webkit-progress-value { background: #9a7a3d; }
+.turn-summary-school-progress progress::-moz-progress-bar { background: #9a7a3d; }
+.turn-summary-school-progress b { color: #94866e; font-size: 6px; }
+.turn-summary-school-progress p { color: #7f7564; font-size: 6px; line-height: 1.4; }
+
+.turn-summary-economy {
+  padding: 8px;
+  border: 1px solid #3b3228;
+  background: #0e0d0b;
+}
+
+.turn-summary-economy > div {
+  padding-top: 5px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #29241e;
+  color: #81786a;
+  font-size: 7px;
+}
+
+.turn-summary-economy b { color: #b9aa8f; }
+.turn-summary-economy b.positive { color: #91a36c; }
+.turn-summary-economy b.negative { color: #b16a59; }
+
+.turn-summary-no-battles {
+  padding: 12px 9px;
+  border: 1px solid #393128;
+  color: #877c6b;
+  background: #100f0d;
+  font-size: 7px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.turn-summary-continue {
+  width: calc(100% - 18px);
+  min-height: 34px;
+  margin: 0 9px 9px;
+  border: 1px solid #805b35;
+  color: #e0c386;
+  background: linear-gradient(#4b2b1b, #23160f);
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  cursor: pointer;
 }
 
 .battle-results-section {
@@ -2429,6 +2980,176 @@ button.economy-card {
   background:
     linear-gradient(135deg, rgba(142, 91, 37, .24), transparent 56%),
     #13110e;
+}
+
+.school-tier-upgrade-card {
+  grid-template-columns: 1fr;
+  gap: 7px;
+  padding: 7px;
+  border: 2px solid #8d6835;
+  background:
+    linear-gradient(145deg, rgba(164, 108, 37, .24), transparent 45%),
+    radial-gradient(circle at 80% 8%, rgba(231, 184, 88, .1), transparent 34%),
+    #11100d;
+  box-shadow:
+    inset 0 0 0 1px rgba(238, 203, 127, .1),
+    inset 0 0 22px rgba(128, 75, 22, .1),
+    0 5px 16px rgba(0, 0, 0, .42);
+}
+
+.school-tier-upgrade-card::before,
+.school-tier-upgrade-card::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c39950);
+}
+
+.school-tier-upgrade-card::before { left: 5px; }
+.school-tier-upgrade-card::after { right: 5px; transform: scaleX(-1); }
+
+.school-tier-special-mark {
+  min-height: 34px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #6e522d;
+  color: #d7b46f;
+  background: linear-gradient(90deg, rgba(82, 50, 20, .28), rgba(27, 19, 12, .8), rgba(82, 50, 20, .28));
+  text-align: left;
+}
+
+.school-tier-special-mark img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  filter: sepia(.25) brightness(1.06);
+}
+
+.school-tier-special-mark span { display: grid; gap: 1px; }
+.school-tier-special-mark small { color: #8e7954; font-size: 5px; font-weight: 850; letter-spacing: .18em; }
+.school-tier-special-mark strong { color: #e1c58d; font: 700 9px Georgia, serif; letter-spacing: .04em; }
+
+.school-tier-transition {
+  min-height: 112px;
+  padding: 10px 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid #76562f;
+  background:
+    radial-gradient(circle at 76% 50%, rgba(198, 139, 58, .17), transparent 34%),
+    linear-gradient(135deg, rgba(91, 57, 25, .28), transparent 48%),
+    #0b0a08;
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, .62);
+}
+
+.school-tier-transition > span {
+  min-width: 70px;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.school-tier-transition small {
+  color: #766b59;
+  font-size: 5px;
+  font-weight: 850;
+  letter-spacing: .16em;
+}
+
+.school-tier-transition b {
+  color: #8c7b5f;
+  font: 700 42px/.9 Georgia, serif;
+  text-shadow: 0 3px 8px rgba(0, 0, 0, .7);
+}
+
+.school-tier-transition-next b {
+  color: #e0bd74;
+  font-size: 58px;
+  text-shadow: 0 0 12px rgba(206, 145, 55, .28), 0 4px 9px rgba(0, 0, 0, .75);
+}
+
+.school-tier-transition-arrow {
+  color: #9e7c45;
+  font: 700 21px/1 Georgia, serif;
+  font-style: normal;
+}
+
+.school-tier-max-mark {
+  grid-column: 2 / 4;
+  padding: 6px 9px;
+  border: 1px solid #75603c;
+  color: #c9aa6d;
+  background: rgba(73, 51, 24, .25);
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: .16em;
+}
+
+.school-tier-upgrade-copy {
+  padding: 2px 3px 1px;
+}
+
+.school-tier-upgrade-card .school-tier-upgrade-copy > strong {
+  color: #e3c88f;
+  font-size: 17px;
+}
+
+.school-tier-progress-block {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 7px;
+  padding: 6px;
+  border: 1px solid #4f3e27;
+  background: rgba(7, 7, 6, .55);
+}
+
+.school-tier-progress-block > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.school-tier-progress-block small { color: #8d7958; font-size: 5px; font-weight: 850; letter-spacing: .12em; }
+.school-tier-progress-block b { color: #ddbb75; font: 700 8px Georgia, serif; }
+.school-tier-progress-block progress { grid-column: 1 / -1; width: 100%; height: 7px; accent-color: #bd813b; }
+.school-tier-progress-block em { grid-column: 1 / -1; color: #8c7d64; font-size: 5px; font-style: normal; font-weight: 850; letter-spacing: .1em; text-align: right; }
+
+.school-tier-upgrade-benefits b:last-child {
+  color: #d9b66d;
+}
+
+.school-upgrade-card.school-tier-upgrade-card > button {
+  min-height: 35px;
+  border-color: #a27739;
+  color: #f0d396;
+  background: linear-gradient(#57361c, #27180f);
+  box-shadow: inset 0 0 0 1px rgba(245, 202, 114, .08), 0 3px 10px rgba(0, 0, 0, .35);
+}
+
+.school-upgrade-card.school-tier-upgrade-card > button:disabled {
+  border-color: #4d4436;
+  color: #777064;
+  background: linear-gradient(#211d17, #151411);
+  box-shadow: none;
+}
+
+.school-tier-upgrade-card.is-max-tier {
+  border-color: #76674c;
+  background:
+    linear-gradient(145deg, rgba(123, 102, 63, .16), transparent 48%),
+    #11100e;
 }
 
 .school-upgrade-art {

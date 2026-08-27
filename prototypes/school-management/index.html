@@ -6,6 +6,8 @@
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — управление школой</title>
     <link rel="preload" as="image" href="./assets/school-tier-1-courtyard-v4.png" />
+    <link rel="preload" as="image" href="./assets/school-tier-2-courtyard-v1.png" />
+    <link rel="preload" as="image" href="./assets/school-tier-3-courtyard-v1.png" />
     <link rel="preload" as="image" href="./assets/icons/coins-v1.png" />
     <link rel="preload" as="image" href="./assets/icons/school-tier-v1.png" />
     <link rel="preload" as="image" href="./assets/icons/battles-v1.png" />
@@ -33,6 +35,7 @@
     <link rel="preload" as="image" href="./assets/icons/income-v1.png" />
     <link rel="preload" as="image" href="./assets/icons/hourglass-v1.png" />
     <link rel="preload" as="image" href="./assets/icons/experience-v1.png" />
+    <link rel="preload" as="image" href="./assets/icons/defeated-blood-cross-v1.png" />
     <link rel="preload" as="image" href="./assets/fighters/mark-murmillo-idle-v4.png" />
     <link rel="preload" as="image" href="./assets/fighters/lucius-retiarius-idle-v4.png" />
     <link rel="preload" as="image" href="./assets/fighters/mark-murmillo-v1.png" />
@@ -71,8 +74,8 @@
           </label>
           <label>
             <span>Уровень лагеря (Tier)</span>
-            <input id="initial-tier" type="number" min="1" step="1" value="1" inputmode="numeric" />
-            <small class="field-help">Tier только растёт; максимальный уровень в спеке не задан.</small>
+            <input id="initial-tier" type="number" min="1" max="3" step="1" value="1" inputmode="numeric" />
+            <small class="field-help">В прототипе доступны уровни I–III.</small>
           </label>
           <label>
             <span>Вместимость бойцов</span>
@@ -104,7 +107,7 @@
             <span>02</span>
             <div>
               <h2>Мобильный экран</h2>
-              <p>Рабочий цикл управления школой первого уровня.</p>
+              <p>Рабочий цикл управления школой уровней I–III.</p>
             </div>
           </div>
           <label class="viewport-picker">
@@ -131,8 +134,8 @@
               </header>
 
               <div id="school-home-view">
-              <section class="school-scene" aria-label="Двор школы первого уровня">
-                <img src="./assets/school-tier-1-courtyard-v4.png" alt="Взрослые гладиаторы в простых туниках тренируются во дворе школы" />
+              <section class="school-scene" id="school-scene" aria-label="Двор школы первого уровня">
+                <img id="school-scene-image" src="./assets/school-tier-1-courtyard-v4.png" alt="Скромный двор школы гладиаторов первого уровня" />
                 <div class="sun-flicker"></div>
                 <div class="scene-caption"><span></span> ШКОЛА <b id="scene-tier-number">I</b> УРОВНЯ</div>
               </section>
@@ -170,7 +173,7 @@
                   </span>
                   <small>ПРЕДЛОЖЕНИЯ</small>
                 </button>
-                <button class="school-section-button armory" id="armory-section-button" type="button">
+                <button class="school-section-button armory" id="armory-section-button" type="button" disabled title="Раздел пока недоступен" aria-label="Оружейня — пока недоступно">
                   <span class="section-icon" aria-hidden="true">
                     <img src="./assets/icons/armory-v1.png" alt="" />
                   </span>
@@ -183,10 +186,10 @@
                     <img src="./assets/icons/school-upgrade-v1.png" alt="" />
                   </span>
                   <strong>Улучшение школы</strong>
-                  <span class="section-stat"><span>В РАБОТЕ</span><b id="school-upgrades-home-count">0</b></span>
-                  <small>РАЗВИТИЕ</small>
+                  <span class="section-stat"><span>УРОВЕНЬ</span><b id="school-upgrades-home-count">I</b></span>
+                  <small>ГЛАВНОЕ РАЗВИТИЕ</small>
                 </button>
-                <button class="school-section-button market" id="market-section-button" type="button">
+                <button class="school-section-button market" id="market-section-button" type="button" disabled title="Раздел пока недоступен" aria-label="Рынок бойцов — пока недоступно">
                   <span class="section-icon" aria-hidden="true">
                     <img src="./assets/icons/fighter-market-v1.png" alt="" />
                   </span>
@@ -194,7 +197,7 @@
                   <span class="section-stat"><span>КАНДИДАТОВ</span><b id="market-offers-count">0</b></span>
                   <small>ТОРГИ</small>
                 </button>
-                <button class="school-section-button people" id="fighters-section-button" type="button">
+                <button class="school-section-button people" id="fighters-section-button" type="button" disabled title="Раздел пока недоступен" aria-label="Наставники и бойцы — пока недоступно">
                   <span class="section-icon" aria-hidden="true">
                     <img src="./assets/icons/mentors-fighters-v1.png" alt="" />
                   </span>
@@ -205,7 +208,7 @@
                   </span>
                   <small>СОСТАВ</small>
                 </button>
-                <button class="school-section-button medicine" id="medicine-section-button" type="button">
+                <button class="school-section-button medicine" id="medicine-section-button" type="button" disabled title="Раздел пока недоступен" aria-label="Саниарий — пока недоступно">
                   <span class="section-icon" aria-hidden="true">
                     <img src="./assets/icons/medicine-v1.png" alt="" />
                   </span>
@@ -213,7 +216,7 @@
                   <span class="section-stat"><span>РАНЕНЫ</span><b id="medicine-home-count">0</b></span>
                   <small>САНИАРИЙ</small>
                 </button>
-                <button class="school-section-button rest" id="rest-section-button" type="button">
+                <button class="school-section-button rest" id="rest-section-button" type="button" disabled title="Раздел пока недоступен" aria-label="Отдых — пока недоступно">
                   <span class="section-icon" aria-hidden="true">
                     <img src="./assets/icons/rest-v1.png" alt="" />
                   </span>
@@ -347,15 +350,15 @@
               <section class="upgrades-view commerce-view" id="upgrades-view" aria-labelledby="upgrades-view-title" hidden>
                 <header class="subpage-header">
                   <button class="subpage-back" id="upgrades-back-home" type="button" aria-label="Назад к школе">‹</button>
-                  <div><small>СТРОИТЕЛЬСТВО</small><strong id="upgrades-view-title">УЛУЧШЕНИЕ ШКОЛЫ</strong></div>
-                  <span id="school-upgrades-summary">0</span>
+                  <div><small>ГЛАВНОЕ РАЗВИТИЕ</small><strong id="upgrades-view-title">УЛУЧШЕНИЕ ШКОЛЫ</strong></div>
+                  <span id="school-upgrades-summary">I</span>
                 </header>
                 <section class="commerce-summary">
                   <div><small>КАЗНА</small><strong id="school-upgrades-treasury">0 HS</strong></div>
-                  <div><small>В РАБОТЕ</small><strong id="school-upgrades-orders-count">0</strong></div>
+                  <div><small>ТЕКУЩИЙ УРОВЕНЬ</small><strong id="school-upgrades-orders-count">I</strong></div>
                 </section>
                 <div class="commerce-notice" id="school-upgrades-notice" hidden></div>
-                <p class="commerce-intro">Цена списывается при начале строительства. Каждый конец хода уменьшает оставшийся срок на один.</p>
+                <p class="commerce-intro">Опыт школы приходит после боёв. Заполните шкалу и оплатите переход — уровень не повышается автоматически.</p>
                 <div class="school-upgrade-list" id="school-upgrade-list"></div>
               </section>
 
@@ -422,21 +425,21 @@
                   <figcaption><small>MUNERA</small><strong>ПРЕДЛОЖЕНИЯ АРЕН</strong></figcaption>
                 </figure>
 
-                <section class="battle-round-summary" aria-label="Назначения текущего хода">
+                <section class="battle-round-summary" aria-label="Предложения текущего хода">
                   <div>
                     <small>ТЕКУЩИЙ ХОД</small>
                     <strong id="battle-current-turn">1</strong>
                   </div>
                   <div>
-                    <small>НАЗНАЧЕНО</small>
-                    <strong id="battle-assigned-summary">0 / 0</strong>
+                    <small>ПОДБОР БОЙЦА</small>
+                    <strong id="battle-assigned-summary">0 / 3</strong>
                   </div>
-                  <p>Назначенные бои автоматически пройдут при завершении хода.</p>
+                  <p>Назначенные бои рассчитаются в конце хода, если вы не проведёте их раньше.</p>
                 </section>
 
                 <div class="battle-offer-list" id="battle-offer-list"></div>
 
-                <section class="battle-results-section">
+                <section class="battle-results-section" hidden>
                   <header>
                     <small>ПРОШЛЫЙ ХОД</small>
                     <strong>РЕЗУЛЬТАТЫ БОЁВ</strong>
@@ -444,7 +447,22 @@
                   <div class="battle-results-list" id="battle-results-list"></div>
                 </section>
               </section>
+
+              <div class="turn-summary-modal" id="turn-summary-modal" role="dialog" aria-modal="true" aria-labelledby="turn-summary-title" hidden>
+                <div class="turn-summary-backdrop" data-close-turn-summary></div>
+                <section class="turn-summary-card">
+                  <header>
+                    <div><small>ИТОГИ РАСЧЁТНОГО ХОДА</small><strong id="turn-summary-title">ХОД ЗАВЕРШЁН</strong></div>
+                    <button type="button" data-close-turn-summary aria-label="Закрыть итоги хода">×</button>
+                  </header>
+                  <div id="turn-summary-content"></div>
+                  <button class="turn-summary-continue" type="button" data-close-turn-summary>ПРОДОЛЖИТЬ</button>
+                </section>
+              </div>
             </div>
+            <section class="phone-battle-overlay" id="phone-battle-overlay" aria-label="Бой" hidden>
+              <iframe id="phone-battle-frame" title="Боевая арена" src="about:blank"></iframe>
+            </section>
           </article>
         </div>
 

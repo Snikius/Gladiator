@@ -12,8 +12,18 @@ const DEFAULT_INPUT = Object.freeze({
   incomePerTurn: 38,
   battleOffersEnabled: true,
   battleRules: {
-    offersPerTurn: 2,
+    offersPerTurn: 3,
     lossRewardRate: 0.45,
+    defeatDeathChance: 0.3,
+  },
+  tierRules: {
+    maxTier: 3,
+    baseProgressPerBattle: 20,
+    defeatProgressRate: 0.5,
+    drawProgressRate: 0.75,
+    upgradeBaseCost: 100,
+    upgradeCostGrowth: 0.5,
+    fighterCapacityPerTier: 1,
   },
   marketEnabled: true,
   marketRules: {
@@ -81,11 +91,32 @@ const DEFAULT_INPUT = Object.freeze({
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-const BATTLE_OFFER_CATALOG = Object.freeze([
-  { opponentName: "Кассий Фракиец", opponentClass: "Фракиец", opponentPortrait: "./assets/opponents/cassius-thraex-v1.png", arena: "Малая арена", rewardBonus: 0, experienceReward: 18, difficulty: "Равный бой", winChance: 0.66 },
-  { opponentName: "Тит Секутор", opponentClass: "Секутор", opponentPortrait: "./assets/opponents/titus-secutor-v1.png", arena: "Городские игры", rewardBonus: 14, experienceReward: 24, difficulty: "Тяжёлый бой", winChance: 0.48 },
-  { opponentName: "Децим Гопломах", opponentClass: "Гопломах", opponentPortrait: "./assets/opponents/decimus-hoplomachus-v1.png", arena: "Военный праздник", rewardBonus: 8, experienceReward: 21, difficulty: "Равный бой", winChance: 0.6 },
-  { opponentName: "Гай Мурмиллон", opponentClass: "Мурмиллон", opponentPortrait: "./assets/opponents/gaius-murmillo-v1.png", arena: "Вечерние игры", rewardBonus: 20, experienceReward: 28, difficulty: "Опасный бой", winChance: 0.42 },
+const BATTLE_OPPONENT_CATALOG = Object.freeze([
+  { id: "aulus-retiarius", opponentName: "Авл Ретиарий", opponentClass: "Ретиарий", combatArchetype: "retiarius", opponentPortrait: "./assets/opponents/aulus-retiarius-v1.png" },
+  { id: "quintus-retiarius", opponentName: "Квинт Ретиарий", opponentClass: "Ретиарий", combatArchetype: "retiarius", opponentPortrait: "./assets/opponents/quintus-retiarius-v1.png" },
+  { id: "gaius-swordsman", opponentName: "Гай Мечник", opponentClass: "Мечник", combatArchetype: "swordsman", opponentPortrait: "./assets/opponents/gaius-murmillo-v1.png" },
+  { id: "publius-swordsman", opponentName: "Публий Мечник", opponentClass: "Мечник", combatArchetype: "swordsman", opponentPortrait: "./assets/opponents/publius-swordsman-v1.png" },
+  { id: "sextus-swordsman", opponentName: "Секст Мечник", opponentClass: "Мечник", combatArchetype: "swordsman", opponentPortrait: "./assets/opponents/sextus-swordsman-v1.png" },
+]);
+
+const BATTLE_DIFFICULTY_CATALOG = Object.freeze([
+  { id: "low", level: 1, label: "Лёгкий бой", rewardBonus: 0, experienceReward: 18, winChance: 0.66 },
+  { id: "medium", level: 2, label: "Равный бой", rewardBonus: 10, experienceReward: 23, winChance: 0.56 },
+  { id: "high", level: 3, label: "Тяжёлый бой", rewardBonus: 20, experienceReward: 28, winChance: 0.44 },
+]);
+
+const BATTLE_INJURY_POOL = Object.freeze([
+  "Рассечение",
+  "Ушиб рёбер",
+  "Повреждение руки",
+  "Повреждение ноги",
+]);
+
+const BATTLE_ARENA_CATALOG = Object.freeze([
+  "Малая арена",
+  "Городские игры",
+  "Вечерние игры",
+  "Военный праздник",
 ]);
 
 const MARKET_CANDIDATE_CATALOG = Object.freeze([
@@ -240,13 +271,17 @@ const normalizeManagementInput = (rawInput = {}) => {
   const fighters = fighterSource.map(normalizeFighter);
   const saleRules = { ...DEFAULT_INPUT.saleRules, ...(rawInput.saleRules || {}) };
   const battleRules = { ...DEFAULT_INPUT.battleRules, ...(rawInput.battleRules || {}) };
+  const tierRules = { ...DEFAULT_INPUT.tierRules, ...(rawInput.tierRules || {}) };
   const marketRules = { ...DEFAULT_INPUT.marketRules, ...(rawInput.marketRules || {}) };
 
   return {
     schemaVersion: 1,
     rulesetVersion: String(input.rulesetVersion || DEFAULT_INPUT.rulesetVersion),
     initialTreasury: asInteger(input.initialTreasury, DEFAULT_INPUT.initialTreasury),
-    tier: asInteger(input.tier, DEFAULT_INPUT.tier, 1),
+    tier: Math.min(
+      asInteger(input.tier, DEFAULT_INPUT.tier, 1),
+      asInteger(tierRules.maxTier, DEFAULT_INPUT.tierRules.maxTier, 1),
+    ),
     tierProgress: asInteger(input.tierProgress, DEFAULT_INPUT.tierProgress),
     tierProgressMax: asInteger(input.tierProgressMax, DEFAULT_INPUT.tierProgressMax, 1),
     fighterCapacity: Math.max(
@@ -260,6 +295,47 @@ const normalizeManagementInput = (rawInput = {}) => {
     battleRules: {
       offersPerTurn: asInteger(battleRules.offersPerTurn, DEFAULT_INPUT.battleRules.offersPerTurn, 1),
       lossRewardRate: asNumber(battleRules.lossRewardRate, DEFAULT_INPUT.battleRules.lossRewardRate, 0, 1),
+      defeatDeathChance: asNumber(
+        battleRules.defeatDeathChance,
+        DEFAULT_INPUT.battleRules.defeatDeathChance,
+        0,
+        1,
+      ),
+    },
+    tierRules: {
+      maxTier: asInteger(
+        tierRules.maxTier,
+        DEFAULT_INPUT.tierRules.maxTier,
+        1,
+      ),
+      baseProgressPerBattle: asInteger(
+        tierRules.baseProgressPerBattle,
+        DEFAULT_INPUT.tierRules.baseProgressPerBattle,
+      ),
+      defeatProgressRate: asNumber(
+        tierRules.defeatProgressRate,
+        DEFAULT_INPUT.tierRules.defeatProgressRate,
+        0,
+        1,
+      ),
+      drawProgressRate: asNumber(
+        tierRules.drawProgressRate,
+        DEFAULT_INPUT.tierRules.drawProgressRate,
+        0,
+        1,
+      ),
+      upgradeBaseCost: asInteger(
+        tierRules.upgradeBaseCost,
+        DEFAULT_INPUT.tierRules.upgradeBaseCost,
+      ),
+      upgradeCostGrowth: asNumber(
+        tierRules.upgradeCostGrowth,
+        DEFAULT_INPUT.tierRules.upgradeCostGrowth,
+      ),
+      fighterCapacityPerTier: asInteger(
+        tierRules.fighterCapacityPerTier,
+        DEFAULT_INPUT.tierRules.fighterCapacityPerTier,
+      ),
     },
     marketEnabled: Boolean(
       rawInput.marketEnabled ?? (useDefaults ? DEFAULT_INPUT.marketEnabled : false)
@@ -299,6 +375,22 @@ const normalizeManagementInput = (rawInput = {}) => {
 };
 
 class SchoolManagementEngine {
+  static fromResult(serializedResult) {
+    if (!serializedResult?.input || !serializedResult?.state) {
+      throw new Error("MANAGEMENT_SESSION_INVALID");
+    }
+    const engine = Object.create(SchoolManagementEngine.prototype);
+    engine.input = normalizeManagementInput(serializedResult.input);
+    engine.events = clone(serializedResult.events || []);
+    engine.snapshots = clone(serializedResult.snapshots || []);
+    engine.state = clone(serializedResult.state);
+    engine.sequence = engine.events.reduce(
+      (maximum, event) => Math.max(maximum, asInteger(event.sequence, 0)),
+      0,
+    );
+    return engine;
+  }
+
   constructor(rawInput = {}) {
     this.input = normalizeManagementInput(rawInput);
     this.sequence = 0;
@@ -337,17 +429,45 @@ class SchoolManagementEngine {
   }
 
   createBattleOffers(turn) {
+    const difficultyOrder = BATTLE_DIFFICULTY_CATALOG
+      .map((difficulty) => ({
+        difficulty,
+        order: stableHash(`battle:difficulty:${turn}:${difficulty.id}`),
+      }))
+      .sort((left, right) => left.order - right.order)
+      .map(({ difficulty }) => difficulty);
+    const firstArchetype = stableHash(`battle:archetype:${turn}`) % 2 === 0
+      ? "retiarius"
+      : "swordsman";
+
     return Array.from({ length: this.input.battleRules.offersPerTurn }, (_, index) => {
-      const catalogIndex = (turn * 2 + index - 2) % BATTLE_OFFER_CATALOG.length;
-      const definition = BATTLE_OFFER_CATALOG[catalogIndex];
+      const combatArchetype = index % 2 === 0
+        ? firstArchetype
+        : (firstArchetype === "retiarius" ? "swordsman" : "retiarius");
+      const opponents = BATTLE_OPPONENT_CATALOG
+        .filter((opponent) => opponent.combatArchetype === combatArchetype);
+      const opponentIndex = (
+        stableHash(`battle:opponent:${turn}:${combatArchetype}`) + Math.floor(index / 2)
+      ) % opponents.length;
+      const opponent = opponents[opponentIndex];
+      const difficulty = difficultyOrder[index % difficultyOrder.length];
+      const arena = BATTLE_ARENA_CATALOG[
+        stableHash(`battle:arena:${turn}:${index}`) % BATTLE_ARENA_CATALOG.length
+      ];
       return {
         id: `turn-${turn}-offer-${index + 1}`,
         turn,
-        ...clone(definition),
-        victoryReward: this.input.incomePerTurn + definition.rewardBonus,
-        victoryExperience: definition.experienceReward,
-        defeatExperience: Math.max(1, Math.round(definition.experienceReward * 0.5)),
+        ...clone(opponent),
+        arena,
+        difficultyId: difficulty.id,
+        difficultyLevel: difficulty.level,
+        difficulty: difficulty.label,
+        victoryReward: this.input.incomePerTurn + difficulty.rewardBonus,
+        victoryExperience: difficulty.experienceReward,
+        defeatExperience: Math.max(1, Math.round(difficulty.experienceReward * 0.5)),
+        winChance: difficulty.winChance,
         assignedFighterId: null,
+        manualResult: null,
       };
     });
   }
@@ -767,14 +887,128 @@ class SchoolManagementEngine {
       });
     }
     offer.assignedFighterId = fighterId || null;
+    offer.manualResult = null;
     const fighter = this.state.fighters.find(({ id }) => id === fighterId);
     return this.captureSnapshot(
       fighter ? `${fighter.name} назначен на бой` : "Назначение на бой снято",
     );
   }
 
+  recordManualBattleResult(offerId, fighterId, outcome) {
+    const offer = this.state.battleOffers.find(({ id }) => id === offerId);
+    if (!offer) throw new Error("BATTLE_OFFER_NOT_FOUND");
+    if (!offer.assignedFighterId || offer.assignedFighterId !== fighterId) {
+      throw new Error("BATTLE_FIGHTER_ASSIGNMENT_CHANGED");
+    }
+    if (!["victory", "defeat", "draw"].includes(outcome)) {
+      throw new Error("BATTLE_OUTCOME_INVALID");
+    }
+    const fighter = this.state.fighters.find(({ id }) => id === fighterId);
+    offer.manualResult = {
+      outcome,
+      recordedTurn: this.state.turn,
+      fighterCondition: this.createBattleFighterCondition(offer, fighter, outcome),
+    };
+    return this.captureSnapshot(`Бой завершён: ${fighter?.name || "боец"}`);
+  }
+
+  createBattleFighterCondition(offer, fighter, outcome) {
+    if (outcome !== "defeat") {
+      return {
+        status: "healthy",
+        label: fighter.injuries.length
+          ? `Без новых травм · ${fighter.injuries.join(", ")}`
+          : "Без новых травм",
+        injury: null,
+        deathChance: 0,
+      };
+    }
+    const deathChance = this.input.battleRules.defeatDeathChance;
+    const deathRoll = (stableHash(`battle-death:${offer.id}:${fighter.id}`) % 10000) / 10000;
+    if (deathRoll < deathChance) {
+      return {
+        status: "dead",
+        label: "Погиб на арене",
+        injury: null,
+        deathChance,
+      };
+    }
+    const injuryIndex = stableHash(`battle-injury:${offer.id}:${fighter.id}`) % BATTLE_INJURY_POOL.length;
+    const orderedInjuries = BATTLE_INJURY_POOL.map((_, offset) => (
+      BATTLE_INJURY_POOL[(injuryIndex + offset) % BATTLE_INJURY_POOL.length]
+    ));
+    const injury = orderedInjuries.find((candidate) => !fighter.injuries.includes(candidate))
+      || orderedInjuries[0];
+    return {
+      status: "injured",
+      label: `Травма: ${injury}`,
+      injury,
+      deathChance,
+    };
+  }
+
   get fighterUpkeep() {
     return this.state.fighters.reduce((sum, fighter) => sum + fighter.upkeep, 0);
+  }
+
+  get tierUpgradeCost() {
+    return Math.round(
+      this.input.tierRules.upgradeBaseCost
+      * (1 + (this.state.tier - 1) * this.input.tierRules.upgradeCostGrowth),
+    );
+  }
+
+  get canUpgradeTier() {
+    return this.state.tier < this.input.tierRules.maxTier
+      && this.state.tierProgress >= this.state.tierProgressMax
+      && this.state.treasury >= 0;
+  }
+
+  applyTierProgress(battleResults) {
+    const progressBefore = this.state.tierProgress;
+    if (this.state.tier >= this.input.tierRules.maxTier) {
+      battleResults.forEach((result) => { result.schoolProgress = 0; });
+      return { before: progressBefore, after: progressBefore, gained: 0 };
+    }
+    battleResults.forEach((result) => {
+      const multiplier = result.outcome === "victory"
+        ? 1
+        : result.outcome === "draw"
+          ? this.input.tierRules.drawProgressRate
+          : this.input.tierRules.defeatProgressRate;
+      const calculatedProgress = Math.round(this.input.tierRules.baseProgressPerBattle * multiplier);
+      const availableProgress = Math.max(0, this.state.tierProgressMax - this.state.tierProgress);
+      result.schoolProgress = Math.min(calculatedProgress, availableProgress);
+      this.state.tierProgress += result.schoolProgress;
+    });
+    return {
+      before: progressBefore,
+      after: this.state.tierProgress,
+      gained: this.state.tierProgress - progressBefore,
+    };
+  }
+
+  upgradeTier() {
+    if (this.state.tier >= this.input.tierRules.maxTier) {
+      throw new Error("TIER_MAX_REACHED");
+    }
+    if (this.state.tierProgress < this.state.tierProgressMax) {
+      throw new Error("TIER_PROGRESS_REQUIRED");
+    }
+    if (this.state.treasury < 0) throw new Error("TIER_UPGRADE_BLOCKED_BY_DEBT");
+    const cost = this.tierUpgradeCost;
+    const previousTier = this.state.tier;
+    this.applyTransaction(
+      "tier.upgraded",
+      `Повышение школы до уровня ${previousTier + 1}`,
+      -cost,
+      { previousTier, nextTier: previousTier + 1, cost },
+    );
+    this.state.tier += 1;
+    this.state.tierProgress = 0;
+    this.state.fighterCapacity += this.input.tierRules.fighterCapacityPerTier;
+    this.state.status = this.state.treasury < 0 ? "debt" : "normal";
+    return this.captureSnapshot(`Школа повышена до уровня ${this.state.tier}`);
   }
 
   get expenses() {
@@ -841,21 +1075,36 @@ class SchoolManagementEngine {
 
   resolveAssignedBattles() {
     const results = [];
+    const deadFighterIds = new Set();
     let income = 0;
     this.state.battleOffers.forEach((offer) => {
       if (!offer.assignedFighterId) return;
       const fighter = this.state.fighters.find(({ id }) => id === offer.assignedFighterId);
       if (!fighter) return;
       const roll = (stableHash(`${offer.id}:${fighter.id}`) % 1000) / 1000;
-      const outcome = roll < offer.winChance ? "victory" : "defeat";
+      const outcome = offer.manualResult?.outcome
+        || (roll < offer.winChance ? "victory" : "defeat");
       const reward = outcome === "victory"
         ? offer.victoryReward
         : Math.round(offer.victoryReward * this.input.battleRules.lossRewardRate);
       const experience = outcome === "victory"
         ? offer.victoryExperience
         : offer.defeatExperience;
+      const fighterCondition = clone(
+        offer.manualResult?.fighterCondition
+        || this.createBattleFighterCondition(offer, fighter, outcome),
+      );
       if (outcome === "victory") fighter.wins += 1;
       fighter.experience += experience;
+      if (fighterCondition.status === "dead") {
+        fighter.condition = "Погиб на арене";
+        deadFighterIds.add(fighter.id);
+      } else if (fighterCondition.injury) {
+        if (!fighter.injuries.includes(fighterCondition.injury)) {
+          fighter.injuries.push(fighterCondition.injury);
+        }
+        fighter.condition = fighterCondition.label;
+      }
       const result = {
         id: `result-${offer.id}`,
         turn: this.state.turn,
@@ -863,17 +1112,21 @@ class SchoolManagementEngine {
         fighterId: fighter.id,
         fighterName: fighter.name,
         fighterClass: fighter.classLabel,
-        fighterPortrait: fighter.portrait,
+        fighterPortrait: fighter.rosterPortrait || fighter.portrait,
         opponentName: offer.opponentName,
         opponentClass: offer.opponentClass,
         opponentPortrait: offer.opponentPortrait,
         arena: offer.arena,
         outcome,
+        resolutionMode: offer.manualResult ? "manual" : "automatic",
+        fighterCondition,
         reward,
         experience,
         summary: outcome === "victory"
-          ? `${fighter.name} одержал победу над ${offer.opponentName}.`
-          : `${fighter.name} уступил ${offer.opponentName}, но школа получила часть награды.`,
+          ? `${fighter.name} победил в бою против ${offer.opponentName}.`
+          : outcome === "draw"
+            ? `Бой ${fighter.name} против ${offer.opponentName} завершился без победителя.`
+            : `${fighter.name} проиграл бой против ${offer.opponentName}, но школа получила часть награды.`,
       };
       results.push(result);
       income += reward;
@@ -884,6 +1137,11 @@ class SchoolManagementEngine {
         { offerId: offer.id, fighterId: fighter.id, outcome },
       );
     });
+    if (deadFighterIds.size) {
+      this.state.fighters = this.state.fighters.filter(({ id }) => !deadFighterIds.has(id));
+      this.state.treatmentOrders = this.state.treatmentOrders.filter(({ fighterId }) => !deadFighterIds.has(fighterId));
+      this.state.restOrders = this.state.restOrders.filter(({ fighterId }) => !deadFighterIds.has(fighterId));
+    }
     return { results, income };
   }
 
@@ -908,6 +1166,7 @@ class SchoolManagementEngine {
     const turnExpenses = this.expenses;
     let income = this.input.incomePerTurn;
     let battleResults = [];
+    const tierProgressBefore = this.state.tierProgress;
 
     if (this.input.battleOffersEnabled) {
       const resolution = this.resolveAssignedBattles();
@@ -931,6 +1190,7 @@ class SchoolManagementEngine {
     this.advanceRestOrders();
 
     this.state.status = this.state.treasury < 0 ? "debt" : "normal";
+    const tierProgress = this.applyTierProgress(battleResults);
     this.state.lastBattleResults = clone(battleResults);
     this.state.battleHistory.push(...clone(battleResults));
     this.state.lastTurn = {
@@ -940,6 +1200,11 @@ class SchoolManagementEngine {
       expenses: turnExpenses.reduce((sum, expense) => sum + expense.amount, 0),
       net: income - turnExpenses.reduce((sum, expense) => sum + expense.amount, 0),
       balanceAfter: this.state.treasury,
+      tierProgressBefore,
+      tierProgressAfter: tierProgress.after,
+      tierProgressGained: tierProgress.gained,
+      tierUpgradeAvailable: this.canUpgradeTier,
+      tierUpgradeCost: this.tierUpgradeCost,
     };
     this.state.turn += 1;
     this.state.battleOffers = this.input.battleOffersEnabled

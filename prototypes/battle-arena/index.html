@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Gladiator — прототип боевой арены</title>
-    <link rel="stylesheet" href="./styles.css?v=59" />
+    <link rel="stylesheet" href="./styles.css?v=63" />
     <!-- Активные слои мобильной покадровой сцены: Canvas загружает их по
          этим же путям, а preload исключает пустой первый кадр. -->
     <link rel="preload" as="image" href="./assets/unified-swordsman-grid-v21.png" />
@@ -235,8 +235,11 @@
               <button id="mobile-start-battle" type="button">▶ Начать бой</button>
             </nav>
             <header id="mobile-arena-header" class="mobile-arena-header" aria-label="Участники боя">
-              <div class="mobile-arena-title"><b>АРЕНА</b><span>Подготовка боя</span></div>
-              <div class="mobile-versus-placeholder">БОЙЦЫ ЗАГРУЖАЮТСЯ</div>
+              <div class="mobile-arena-title">
+                <div class="mobile-arena-title-copy"><b>АРЕНА</b><span id="mobile-arena-subtitle">Подготовка боя</span></div>
+                <span class="management-battle-return-slot" data-management-return-slot></span>
+              </div>
+              <div id="mobile-versus" class="mobile-versus-placeholder">БОЙЦЫ ЗАГРУЖАЮТСЯ</div>
             </header>
             <div class="mobile-arena-stage">
               <canvas id="mobile-arena-canvas" width="360" height="300" aria-label="Покадровая боевая сцена"></canvas>
@@ -352,6 +355,6 @@
     <script src="./sprite-library.js?v=43"></script>
     <script src="./visual-engine.js?v=48"></script>
     <script src="./battle-story.js?v=6"></script>
-    <script src="./app.js?v=78"></script>
+    <script src="./app.js?v=87"></script>
   </body>
 </html>

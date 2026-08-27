@@ -89,7 +89,7 @@ const battleEngine = new SchoolManagementEngine({
   initialTreasury: 100,
   incomePerTurn: 40,
   battleOffersEnabled: true,
-  battleRules: { offersPerTurn: 2, lossRewardRate: 0.5 },
+  battleRules: { offersPerTurn: 2, lossRewardRate: 0.5, defeatDeathChance: 0 },
   expenses: [{ id: "food", label: "Еда", amount: 5 }],
   fighters: [
     {
@@ -125,9 +125,25 @@ assert.throws(() => battleEngine.sellFighter("battle-fighter-1"), /FIGHTER_ASSIG
 
 battleState = battleEngine.result().state;
 assert.equal(battleState.battleOffers.every(({ opponentPortrait }) => opponentPortrait.endsWith(".png")), true);
+assert.deepEqual(
+  [...new Set(battleState.battleOffers.map(({ combatArchetype }) => combatArchetype))].sort(),
+  ["retiarius", "swordsman"],
+);
+assert.equal(
+  battleState.battleOffers.every(({ difficultyId }) => ["low", "medium", "high"].includes(difficultyId)),
+  true,
+);
 assert.equal(battleState.battleOffers.every(({ victoryExperience, defeatExperience }) => victoryExperience > defeatExperience), true);
 const experienceBeforeBattles = battleState.fighters.reduce((sum, fighter) => sum + fighter.experience, 0);
 battleEngine.assignFighterToBattle(battleState.battleOffers[1].id, "battle-fighter-2");
+battleEngine.recordManualBattleResult(battleState.battleOffers[0].id, "battle-fighter-1", "victory");
+const restoredBattleEngine = SchoolManagementEngine.fromResult(battleEngine.result());
+assert.deepEqual(restoredBattleEngine.result().state, battleEngine.result().state);
+assert.deepEqual(restoredBattleEngine.result().events, battleEngine.result().events);
+assert.throws(
+  () => battleEngine.recordManualBattleResult(battleState.battleOffers[1].id, "battle-fighter-1", "victory"),
+  /BATTLE_FIGHTER_ASSIGNMENT_CHANGED/,
+);
 battleEngine.endTurn();
 battleState = battleEngine.result().state;
 assert.equal(battleState.turn, 2);
@@ -139,10 +155,163 @@ assert.equal(battleEngine.result().events.filter(({ type }) => type === "battle.
 assert.equal(battleState.lastTurn.income, battleState.lastBattleResults.reduce((sum, result) => sum + result.reward, 0));
 assert.equal(battleState.lastBattleResults.every(({ experience }) => experience > 0), true);
 assert.equal(
+  battleState.tierProgress,
+  battleState.lastBattleResults.reduce((sum, result) => sum + result.schoolProgress, 0),
+);
+assert.equal(battleState.lastTurn.tierProgressGained, battleState.tierProgress);
+assert.equal(battleState.lastBattleResults.find(({ fighterId }) => fighterId === "battle-fighter-1").resolutionMode, "manual");
+assert.equal(battleState.lastBattleResults.find(({ fighterId }) => fighterId === "battle-fighter-1").outcome, "victory");
+assert.equal(battleState.lastBattleResults.find(({ fighterId }) => fighterId === "battle-fighter-1").fighterCondition.status, "healthy");
+assert.equal(battleState.lastBattleResults.find(({ fighterId }) => fighterId === "battle-fighter-2").resolutionMode, "automatic");
+assert.equal(battleState.lastBattleResults.every(({ fighterCondition }) => typeof fighterCondition.label === "string"), true);
+assert.equal(
   battleState.fighters.reduce((sum, fighter) => sum + fighter.experience, 0),
   experienceBeforeBattles + battleState.lastBattleResults.reduce((sum, result) => sum + result.experience, 0),
 );
 assert.equal(battleState.treasury, 100 + battleState.lastTurn.income - 5);
+
+const generatedBattleEngine = new SchoolManagementEngine({
+  initialTreasury: 0,
+  incomePerTurn: 0,
+  battleOffersEnabled: true,
+  battleRules: { offersPerTurn: 3 },
+  expenses: [],
+  fighters: [],
+});
+assert.equal(generatedBattleEngine.result().input.battleRules.defeatDeathChance, 0.3);
+const sameGeneratedBattleEngine = new SchoolManagementEngine({
+  initialTreasury: 0,
+  incomePerTurn: 0,
+  battleOffersEnabled: true,
+  battleRules: { offersPerTurn: 3 },
+  expenses: [],
+  fighters: [],
+});
+const firstGeneratedOffers = generatedBattleEngine.result().state.battleOffers;
+assert.equal(firstGeneratedOffers.length, 3);
+assert.equal(new Set(firstGeneratedOffers.map(({ difficultyLevel }) => difficultyLevel)).size, 3);
+assert.equal(new Set(firstGeneratedOffers.map(({ combatArchetype }) => combatArchetype)).size, 2);
+assert.deepEqual(firstGeneratedOffers, sameGeneratedBattleEngine.result().state.battleOffers);
+generatedBattleEngine.endTurn();
+assert.notDeepEqual(
+  generatedBattleEngine.result().state.battleOffers.map(({ opponentName, difficultyId, arena }) => ({ opponentName, difficultyId, arena })),
+  firstGeneratedOffers.map(({ opponentName, difficultyId, arena }) => ({ opponentName, difficultyId, arena })),
+);
+
+const fatalBattleEngine = new SchoolManagementEngine({
+  initialTreasury: 0,
+  incomePerTurn: 0,
+  battleOffersEnabled: true,
+  battleRules: { offersPerTurn: 1, defeatDeathChance: 1 },
+  expenses: [],
+  fighters: [{
+    id: "doomed-fighter",
+    name: "Обречённый боец",
+    fighterClass: "murmillo",
+    classLabel: "Мурмиллон",
+    upkeep: 0,
+  }],
+});
+let fatalBattleState = fatalBattleEngine.result().state;
+fatalBattleEngine.assignFighterToBattle(fatalBattleState.battleOffers[0].id, "doomed-fighter");
+fatalBattleEngine.recordManualBattleResult(fatalBattleState.battleOffers[0].id, "doomed-fighter", "defeat");
+fatalBattleState = fatalBattleEngine.result().state;
+assert.equal(fatalBattleState.battleOffers[0].manualResult.fighterCondition.status, "dead");
+fatalBattleEngine.endTurn();
+fatalBattleState = fatalBattleEngine.result().state;
+assert.equal(fatalBattleState.lastBattleResults[0].fighterCondition.label, "Погиб на арене");
+assert.equal(fatalBattleState.fighters.length, 0);
+
+const injuredBattleEngine = new SchoolManagementEngine({
+  initialTreasury: 0,
+  incomePerTurn: 0,
+  battleOffersEnabled: true,
+  battleRules: { offersPerTurn: 1, defeatDeathChance: 0 },
+  expenses: [],
+  fighters: [{
+    id: "injured-fighter",
+    name: "Раненый боец",
+    fighterClass: "retiarius",
+    classLabel: "Ретиарий",
+    upkeep: 0,
+  }],
+});
+let injuredBattleState = injuredBattleEngine.result().state;
+injuredBattleEngine.assignFighterToBattle(injuredBattleState.battleOffers[0].id, "injured-fighter");
+injuredBattleEngine.recordManualBattleResult(injuredBattleState.battleOffers[0].id, "injured-fighter", "defeat");
+injuredBattleEngine.endTurn();
+injuredBattleState = injuredBattleEngine.result().state;
+assert.equal(injuredBattleState.lastBattleResults[0].fighterCondition.status, "injured");
+assert.equal(injuredBattleState.fighters[0].injuries.length, 1);
+
+const defeatProgressEngine = new SchoolManagementEngine({
+  initialTreasury: 100,
+  incomePerTurn: 0,
+  battleOffersEnabled: true,
+  battleRules: { offersPerTurn: 1, lossRewardRate: 0.2, defeatDeathChance: 0 },
+  tierRules: { baseProgressPerBattle: 20, defeatProgressRate: 0.5 },
+  expenses: [],
+  fighters: [{
+    id: "progress-fighter",
+    name: "Боец прогресса",
+    fighterClass: "murmillo",
+    classLabel: "Мурмиллон",
+    upkeep: 0,
+  }],
+});
+let defeatProgressState = defeatProgressEngine.result().state;
+defeatProgressEngine.assignFighterToBattle(defeatProgressState.battleOffers[0].id, "progress-fighter");
+defeatProgressEngine.recordManualBattleResult(defeatProgressState.battleOffers[0].id, "progress-fighter", "defeat");
+defeatProgressEngine.endTurn();
+defeatProgressState = defeatProgressEngine.result().state;
+assert.equal(defeatProgressState.tierProgress, 10);
+assert.equal(defeatProgressState.lastBattleResults[0].schoolProgress, 10);
+
+const tierUpgradeEngine = new SchoolManagementEngine({
+  initialTreasury: 200,
+  tier: 1,
+  tierProgress: 100,
+  tierProgressMax: 100,
+  fighterCapacity: 4,
+  tierRules: { upgradeBaseCost: 100, upgradeCostGrowth: 0.5, fighterCapacityPerTier: 1 },
+  expenses: [],
+});
+assert.equal(tierUpgradeEngine.canUpgradeTier, true);
+assert.equal(tierUpgradeEngine.tierUpgradeCost, 100);
+tierUpgradeEngine.upgradeTier();
+const upgradedTierState = tierUpgradeEngine.result().state;
+assert.equal(upgradedTierState.tier, 2);
+assert.equal(upgradedTierState.tierProgress, 0);
+assert.equal(upgradedTierState.fighterCapacity, 5);
+assert.equal(upgradedTierState.treasury, 100);
+assert.equal(tierUpgradeEngine.tierUpgradeCost, 150);
+assert.equal(tierUpgradeEngine.result().events.at(-1).type, "tier.upgraded");
+
+const maxTierEngine = new SchoolManagementEngine({
+  initialTreasury: 500,
+  tier: 3,
+  tierProgress: 100,
+  tierProgressMax: 100,
+  tierRules: { maxTier: 3 },
+  expenses: [],
+});
+assert.equal(maxTierEngine.canUpgradeTier, false);
+assert.throws(() => maxTierEngine.upgradeTier(), /TIER_MAX_REACHED/);
+const maxTierBattle = [{ outcome: "victory" }];
+assert.deepEqual(maxTierEngine.applyTierProgress(maxTierBattle), { before: 100, after: 100, gained: 0 });
+assert.equal(maxTierBattle[0].schoolProgress, 0);
+assert.equal(new SchoolManagementEngine({ tier: 4, tierRules: { maxTier: 3 } }).result().state.tier, 3);
+
+const debtTierEngine = new SchoolManagementEngine({
+  initialTreasury: 0,
+  incomePerTurn: 0,
+  tierProgress: 100,
+  tierProgressMax: 100,
+  expenses: [{ id: "debt", label: "Долг", amount: 1 }],
+});
+debtTierEngine.endTurn();
+assert.equal(debtTierEngine.canUpgradeTier, false);
+assert.throws(() => debtTierEngine.upgradeTier(), /TIER_UPGRADE_BLOCKED_BY_DEBT/);
 
 const commerceEngine = new SchoolManagementEngine({
   initialTreasury: 500,

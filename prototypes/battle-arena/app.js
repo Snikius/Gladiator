@@ -32,6 +32,22 @@ const mobilePageParams = new URLSearchParams(window.location.search);
 let isMobileFullscreenMode = mobilePageParams.get("mobile") === "1";
 document.body.classList.toggle("mobile-fullscreen-mode", isMobileFullscreenMode);
 
+const managementBattleToken = mobilePageParams.get("managementBattle");
+const managementBattleStorageKey = managementBattleToken
+  ? `gladiator-management-battle:${managementBattleToken}`
+  : null;
+let managementBattlePayload = null;
+let managementBattleResultPublished = false;
+let managementReturnButton = null;
+let managementBattleResultDialog = null;
+if (managementBattleStorageKey) {
+  try {
+    managementBattlePayload = JSON.parse(localStorage.getItem(managementBattleStorageKey) || "null");
+  } catch (_error) {
+    managementBattlePayload = null;
+  }
+}
+
 const elements = {
   form: document.querySelector("#setup-form"),
   startButton: document.querySelector('#setup-form button[type="submit"]'),
@@ -50,6 +66,8 @@ const elements = {
   mobileNativeFullscreen: document.querySelector("#mobile-native-fullscreen"),
   mobileStartButton: document.querySelector("#mobile-start-battle"),
   mobileArenaHeader: document.querySelector("#mobile-arena-header"),
+  mobileArenaSubtitle: document.querySelector("#mobile-arena-subtitle"),
+  mobileVersus: document.querySelector("#mobile-versus"),
   mobileSpectacleVerdict: document.querySelector("#mobile-spectacle-verdict"),
   mobileBattleStory: document.querySelector(".mobile-battle-story"),
   mobileBattleFeed: document.querySelector("#mobile-battle-feed"),
@@ -112,6 +130,31 @@ const spriteVisualEngine = BattleVisualEngine && elements.spriteVisualCanvas
 const spriteRendererButtons = [...document.querySelectorAll("[data-renderer-mode]")];
 const MOBILE_ARENA_BASE_HEIGHT = 300;
 const MOBILE_ARENA_MAX_EXTRA_HEIGHT = 24;
+
+const managementBattleOutcome = () => {
+  if (!currentResult) return null;
+  if (currentResult.outcome?.type === "draw") return "draw";
+  return currentResult.outcome?.winnerId === currentResult.input.fighters[0].id
+    ? "victory"
+    : "defeat";
+};
+
+const showManagementBattleResult = () => {
+  if (!managementBattlePayload || !managementBattleResultDialog || !currentResult) return;
+  const outcome = managementBattleOutcome();
+  if (!outcome) return;
+  const labels = { victory: "ПОБЕДА", draw: "НИЧЬЯ", defeat: "ПОРАЖЕНИЕ" };
+  const exitConfirmation = elements.mobileDevice?.querySelector(".management-exit-confirmation");
+  if (exitConfirmation) exitConfirmation.hidden = true;
+  managementBattleResultDialog.dataset.outcome = outcome;
+  managementBattleResultDialog.querySelector("[data-management-result-label]").textContent = labels[outcome];
+  managementBattleResultDialog.hidden = false;
+  managementBattleResultDialog.querySelector("[data-return-after-battle]")?.focus();
+};
+
+const hideManagementBattleResult = () => {
+  if (managementBattleResultDialog) managementBattleResultDialog.hidden = true;
+};
 
 const mobileArenaHeightForViewport = (width, height) => {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0) return MOBILE_ARENA_BASE_HEIGHT;
@@ -1269,12 +1312,12 @@ const renderMobileBattleUi = (snapshot, input) => {
       </article>
     `;
   });
-  elements.mobileArenaHeader.innerHTML = `
-    <div class="mobile-arena-title">
-      <b>АРЕНА</b>
-      <span>${escapeHtml(arena)} · раунд ${formatNumber(snapshot.step)}</span>
-    </div>
-    <div class="mobile-versus">
+  if (elements.mobileArenaSubtitle) {
+    elements.mobileArenaSubtitle.textContent = `${arena} · раунд ${formatNumber(snapshot.step)}`;
+  }
+  if (elements.mobileVersus) {
+    elements.mobileVersus.className = "mobile-versus";
+    elements.mobileVersus.innerHTML = `
       ${fighters[0]}
       <div class="mobile-versus-center">
         <strong class="mobile-vs">VS</strong>
@@ -1283,8 +1326,8 @@ const renderMobileBattleUi = (snapshot, input) => {
       <span class="mobile-spectacle-meter" aria-label="Зрелищность: ${spectacle.score}, ${escapeHtml(spectacleLevel.label)}" title="${escapeHtml(spectacleLevel.label)}">
         ${SPECTACLE_ICON}<b>${spectacle.score}</b>
       </span>
-    </div>
-  `;
+    `;
+  }
   if (elements.mobileSpectacleVerdict) {
     elements.mobileSpectacleVerdict.hidden = !isFinalSpectacle;
     elements.mobileSpectacleVerdict.innerHTML = isFinalSpectacle ? `
@@ -1440,6 +1483,7 @@ const completePlayback = () => {
   elements.playPause.textContent = "↻";
   elements.playPause.title = "Повторить бой";
   renderBattleReport();
+  showManagementBattleResult();
 };
 
 const scheduleNextSnapshot = (delay = randomPlaybackDelay()) => {
@@ -1480,6 +1524,7 @@ const pauseAndRender = (index) => {
   if (currentResult && currentSnapshotIndex === currentResult.snapshots.length - 1) {
     renderBattleReport();
     elements.playPause.textContent = "↻";
+    showManagementBattleResult();
   }
 };
 
@@ -1658,6 +1703,7 @@ const startBattle = (event) => {
     elements.slider.max = currentResult.snapshots.length - 1;
     elements.slider.value = 0;
     hideBattleReport();
+    hideManagementBattleResult();
     setBattleStartLabels("↻ Запустить заново", "↻ Новый бой");
     playBattle({ restart: true });
   } catch (error) {
@@ -1667,8 +1713,35 @@ const startBattle = (event) => {
   }
 };
 
+const publishManagementBattleResult = (forcedOutcome = null) => {
+  if (!managementBattleToken || !managementBattlePayload || managementBattleResultPublished) return;
+  if (!forcedOutcome && !currentResult) return;
+  const outcome = forcedOutcome || managementBattleOutcome();
+  const steps = currentResult?.steps || currentSnapshotIndex || 0;
+  managementBattleResultPublished = true;
+  const resultKey = `gladiator-management-battle:${managementBattleToken}:result`;
+  localStorage.setItem(resultKey, JSON.stringify({
+    offerId: managementBattlePayload.offerId,
+    fighterId: managementBattlePayload.fighterId,
+    outcome,
+    steps,
+  }));
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: "management-battle-result",
+      token: managementBattleToken,
+      outcome,
+      steps,
+    }, window.location.origin === "null" ? "*" : window.location.origin);
+    return;
+  }
+  const returnUrl = new URL("../school-management/index.html", window.location.href);
+  returnUrl.searchParams.set("manualBattleResult", managementBattleToken);
+  window.location.assign(returnUrl);
+};
+
 populateMenus();
-setFormFromInput(createSimulatorDefaultInput());
+setFormFromInput(managementBattlePayload?.input || createSimulatorDefaultInput());
 applyMobileViewportPreset();
 renderPreview();
 
@@ -1738,6 +1811,95 @@ elements.mobileExitFullscreen?.addEventListener("click", (event) => {
 });
 elements.mobileNativeFullscreen?.addEventListener("click", requestNativeFullscreen);
 elements.mobileStartButton?.addEventListener("click", () => elements.form.requestSubmit());
+if (managementBattlePayload) {
+  document.body.classList.add("management-battle-mode");
+  const returnButton = document.createElement("button");
+  returnButton.className = "management-battle-return";
+  returnButton.type = "button";
+  returnButton.dataset.managementReturn = "";
+  returnButton.title = managementBattlePayload.returnLabel || "Вернуться в школу";
+  returnButton.setAttribute("aria-label", managementBattlePayload.returnLabel || "Вернуться в школу");
+  returnButton.innerHTML = `
+    <span class="management-return-house" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M3 11.2 12 3l9 8.2M5.5 9.5V21h13V9.5M9.5 21v-6h5v6" /></svg>
+    </span>
+    <span class="management-return-exit" aria-hidden="true">
+      <svg viewBox="0 0 18 24"><path d="M2 4h7v16H2M7 12h9M12 8l4 4-4 4" /></svg>
+    </span>
+  `;
+
+  const exitConfirmation = document.createElement("div");
+  exitConfirmation.className = "management-exit-confirmation";
+  exitConfirmation.hidden = true;
+  exitConfirmation.innerHTML = `
+    <div class="management-exit-backdrop" data-cancel-management-exit></div>
+    <section class="management-exit-dialog" role="dialog" aria-modal="true" aria-labelledby="management-exit-title">
+      <small>ДОСРОЧНЫЙ ВЫХОД</small>
+      <strong id="management-exit-title">ПОКИНУТЬ АРЕНУ?</strong>
+      <p>Если уйти до окончания боя, школа получит поражение.</p>
+      <div>
+        <button type="button" data-cancel-management-exit>ОСТАТЬСЯ</button>
+        <button class="is-danger" type="button" data-confirm-management-exit>УЙТИ · ПОРАЖЕНИЕ</button>
+      </div>
+    </section>
+  `;
+
+  const resultDialog = document.createElement("div");
+  resultDialog.className = "management-battle-result";
+  resultDialog.hidden = true;
+  resultDialog.innerHTML = `
+    <div class="management-result-backdrop"></div>
+    <section class="management-result-dialog" role="dialog" aria-modal="true" aria-labelledby="management-result-title">
+      <small>БОЙ ЗАВЕРШЁН</small>
+      <span class="management-result-emblem" aria-hidden="true">⚔</span>
+      <strong id="management-result-title" data-management-result-label>ПОБЕДА</strong>
+      <p>${escapeHtml(managementBattlePayload.input?.fighters?.[0]?.name || "Ваш боец")} · ${escapeHtml(managementBattlePayload.input?.fighters?.[1]?.name || "Соперник")}</p>
+      <button type="button" data-return-after-battle>
+        <span aria-hidden="true">
+          <svg class="result-return-house" viewBox="0 0 24 24"><path d="M3 11.2 12 3l9 8.2M5.5 9.5V21h13V9.5M9.5 21v-6h5v6" /></svg>
+          <svg class="result-return-exit" viewBox="0 0 18 24"><path d="M2 4h7v16H2M7 12h9M12 8l4 4-4 4" /></svg>
+        </span>
+        ВЕРНУТЬСЯ В ШКОЛУ
+      </button>
+    </section>
+  `;
+  managementReturnButton = returnButton;
+  managementBattleResultDialog = resultDialog;
+  elements.mobileArenaHeader.querySelector("[data-management-return-slot]")?.append(returnButton);
+  const closeExitConfirmation = () => { exitConfirmation.hidden = true; };
+  const requestManagementExit = () => {
+    const battleFinished = Boolean(currentResult)
+      && !isPlaying
+      && currentSnapshotIndex >= currentResult.snapshots.length - 1;
+    if (battleFinished) {
+      showManagementBattleResult();
+      return;
+    }
+    exitConfirmation.hidden = false;
+    exitConfirmation.querySelector("[data-cancel-management-exit]")?.focus();
+  };
+  returnButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    requestManagementExit();
+  });
+  exitConfirmation.addEventListener("click", (event) => {
+    if (event.target.closest("[data-confirm-management-exit]")) {
+      publishManagementBattleResult("defeat");
+      return;
+    }
+    if (event.target.closest("[data-cancel-management-exit]")) closeExitConfirmation();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !exitConfirmation.hidden) closeExitConfirmation();
+  });
+  resultDialog.querySelector("[data-return-after-battle]")?.addEventListener("click", () => {
+    publishManagementBattleResult();
+  });
+  elements.mobileDevice.append(exitConfirmation);
+  elements.mobileDevice.append(resultDialog);
+  window.requestAnimationFrame(() => elements.form.requestSubmit());
+}
 elements.mobileBuffTrigger?.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "mouse") return;
   event.preventDefault();
